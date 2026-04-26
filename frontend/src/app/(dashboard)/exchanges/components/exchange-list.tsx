@@ -8,8 +8,8 @@ import { formatDate } from "@lib/date";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import {
-    ArrowLeftRight, Bike, Car, TrendingUp, ExternalLink, CheckCircle2,
-    Clock, IndianRupee, AlertCircle, Filter, RefreshCw, Store, Package
+    ArrowLeftRight, Car, ExternalLink, CheckCircle2,
+    Clock, IndianRupee, AlertCircle, Filter, RefreshCw, Store
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -253,7 +253,7 @@ export default function ExchangeList() {
 
             {/* Stats Cards */}
             {stats && (
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <StatCard
                         label="Total Exchanges"
                         value={stats.totalExchanges.toString()}

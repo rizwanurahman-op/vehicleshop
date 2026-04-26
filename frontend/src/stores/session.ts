@@ -25,6 +25,10 @@ export const useSessionStore = create<SessionStore>()(
         }),
         {
             name: "vb-session",
+            // Only persist the user profile — NOT the accessToken.
+            // The accessToken lives in the httpOnly cookie (for SSR) and the js-cookie (for CSR).
+            // Storing it in localStorage creates stale-token bugs and is a security risk.
+            partialize: state => ({ user: state.user }),
         }
     )
 );

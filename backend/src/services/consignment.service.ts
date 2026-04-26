@@ -43,6 +43,30 @@ const syncCostFieldsFromBreakdowns = (vehicle: IConsignmentVehicle) => {
 // ── CRUD ──────────────────────────────────────────────────────────
 
 export const createConsignment = async (data: Partial<IConsignmentVehicle>): Promise<IConsignmentVehicle> => {
+    // Prevent duplicate — check if this reg. number already exists in Phase 2 (purchased vehicles)
+    if (data.registrationNo) {
+        const existsInVehicles = await Vehicle.findOne({
+            registrationNo: data.registrationNo,
+            isActive: true,
+        }).lean();
+        if (existsInVehicles) {
+            throw new Error(
+                `Vehicle with registration ${data.registrationNo} already exists in Purchased Vehicles (${(existsInVehicles as any).vehicleId}). ` +
+                `Cannot add to consignment inventory.`
+            );
+        }
+        // Also check within consignment collection itself
+        const existsInConsignments = await ConsignmentVehicle.findOne({
+            registrationNo: data.registrationNo,
+            isActive: true,
+        }).lean();
+        if (existsInConsignments) {
+            throw new Error(
+                `Vehicle with registration ${data.registrationNo} already exists in Consignment Inventory (${(existsInConsignments as any).consignmentId}).`
+            );
+        }
+    }
+
     const consignmentId = await getNextId("consignment");
     const vehicle = new ConsignmentVehicle({ ...data, consignmentId });
     await vehicle.save();
@@ -297,7 +321,9 @@ export const addBuyerPayment = async (id: string, payment: {
     let exchangeVehicle = null;
 
     // Auto-create exchange vehicle
-    if (payment.type === "exchange" && payment.exchangeVehicleMake && payment.createExchangeAs && payment.createExchangeAs !== "skip") {
+    // Default: exchange vehicles go to purchased inventory (phase2_purchase)
+    const exchangeTarget = payment.createExchangeAs || (payment.type === "exchange" ? "phase2_purchase" : "skip");
+    if (payment.type === "exchange" && payment.exchangeVehicleMake && exchangeTarget !== "skip") {
         const regNo = payment.exchangeVehicleRegNo || `EXCH-${Date.now()}`;
         const vType = (payment.exchangeVehicleType || "two_wheeler") as "two_wheeler" | "four_wheeler";
         // Split combined "Make Model" string correctly
@@ -305,13 +331,44 @@ export const addBuyerPayment = async (id: string, payment: {
         const exMake = makeParts[0] || payment.exchangeVehicleMake || "Unknown";
         const exModel = makeParts.slice(1).join(" ") || exMake;
 
-        if (payment.createExchangeAs === "phase2_purchase") {
+        // ── Smart duplicate resolution ─────────────────────────────
+        // Rule 1: If regNo exists in Purchased Vehicles → hard block (true duplicate)
+        const existsInVehicles = await Vehicle.findOne({ registrationNo: regNo, isActive: true }).lean();
+        if (existsInVehicles) {
+            throw new Error(
+                `Vehicle with registration ${regNo} already exists in Purchased Vehicles (${(existsInVehicles as any).vehicleId}). Cannot create exchange vehicle.`
+            );
+        }
+
+        // Rule 2: If regNo exists in Consignment and target is phase2_purchase →
+        //   Migrate: soft-delete the consignment and create a new Vehicle entry.
+        // Rule 3: If regNo exists in Consignment and target is also consignment → hard block
+        const existsInConsignments = await ConsignmentVehicle.findOne({ registrationNo: regNo, isActive: true });
+        if (existsInConsignments) {
+            if (exchangeTarget !== "phase2_purchase") {
+                throw new Error(
+                    `Vehicle with registration ${regNo} already exists in Consignment Inventory (${existsInConsignments.consignmentId}). Cannot add again as consignment.`
+                );
+            }
+            // Migrate from Consignment → Purchased
+            existsInConsignments.isActive = false;
+            existsInConsignments.activityLog.push({
+                action: "migrated",
+                description: `Migrated to Purchased Inventory via exchange (from sale of ${vehicle.make} ${vehicle.model} ${vehicle.registrationNo})`,
+                date: new Date(),
+            });
+            await existsInConsignments.save();
+        }
+
+        if (exchangeTarget === "phase2_purchase") {
             const newVehicleId = await getNextId("vehicle");
+            const sourceConsignment = existsInConsignments;
             const exVehicle = new Vehicle({
                 vehicleId: newVehicleId,
-                vehicleType: vType,
-                make: exMake,
-                model: exModel,
+                vehicleType: sourceConsignment?.vehicleType || vType,
+                make: sourceConsignment?.make || exMake,
+                model: sourceConsignment?.model || exModel,
+                year: sourceConsignment?.year,
                 registrationNo: regNo,
                 purchasedFrom: vehicle.soldTo || "Exchange",
                 datePurchased: new Date(payment.date),
@@ -320,16 +377,31 @@ export const addBuyerPayment = async (id: string, payment: {
                 isFromExchange: true,
                 exchangeSourceRef: vehicle._id as mongoose.Types.ObjectId,
                 exchangeSourceCollection: "consignmentVehicles",
-                exchangeDetails: `Exchange from ${vehicle.make} ${vehicle.model} (${vehicle.registrationNo})`,
+                exchangeDetails: sourceConsignment
+                    ? `Migrated from Consignment (${sourceConsignment.consignmentId}) via exchange from ${vehicle.make} ${vehicle.model} (${vehicle.registrationNo})`
+                    : `Exchange from ${vehicle.make} ${vehicle.model} (${vehicle.registrationNo})`,
                 status: "in_stock",
+                purchasePayments: [{
+                    _id: new mongoose.Types.ObjectId(),
+                    date: new Date(payment.date),
+                    amount: payment.amount,
+                    mode: "Cash" as const,
+                    notes: `Paid via exchange (trade-in from ${vehicle.make} ${vehicle.model} sale)`,
+                }],
             });
             await exVehicle.save();
             paymentEntry.exchangeCreatedRef = exVehicle._id as mongoose.Types.ObjectId;
             paymentEntry.exchangeCreatedIn = "vehicles";
-            exchangeVehicle = { vehicleId: exVehicle.vehicleId, collection: "vehicles", make: exVehicle.make, registrationNo: exVehicle.registrationNo, message: "Created as Phase 2 purchase" };
+            exchangeVehicle = {
+                vehicleId: exVehicle.vehicleId, collection: "vehicles",
+                make: exVehicle.make, registrationNo: exVehicle.registrationNo,
+                message: sourceConsignment
+                    ? `Migrated from Consignment (${sourceConsignment.consignmentId}) to Purchased Inventory`
+                    : "Created as Phase 2 purchase",
+            };
         } else {
             // phase3_park_sale or phase3_finance_sale
-            const saleType = payment.createExchangeAs === "phase3_park_sale" ? "park_sale" : "finance_sale";
+            const saleType = exchangeTarget === "phase3_park_sale" ? "park_sale" : "finance_sale";
             const newConsignmentId = await getNextId("consignment");
             const exConsignment = new ConsignmentVehicle({
                 consignmentId: newConsignmentId,
@@ -351,9 +423,14 @@ export const addBuyerPayment = async (id: string, payment: {
             await exConsignment.save();
             paymentEntry.exchangeCreatedRef = exConsignment._id as mongoose.Types.ObjectId;
             paymentEntry.exchangeCreatedIn = "consignmentVehicles";
-            exchangeVehicle = { consignmentId: exConsignment.consignmentId, collection: "consignmentVehicles", make: exConsignment.make, registrationNo: exConsignment.registrationNo, message: `Created as Phase 3 ${saleType.replace("_", " ")}` };
+            exchangeVehicle = {
+                consignmentId: exConsignment.consignmentId, collection: "consignmentVehicles",
+                make: exConsignment.make, registrationNo: exConsignment.registrationNo,
+                message: `Created as Phase 3 ${saleType.replace("_", " ")}`,
+            };
         }
     }
+
 
     vehicle.buyerPayments.push(paymentEntry);
     vehicle.activityLog.push({ action: "buyer_payment", description: `Buyer payment received: ₹${payment.amount.toLocaleString("en-IN")} via ${payment.mode}${payment.type === "exchange" ? " (exchange)" : ""}`, amount: payment.amount, date: new Date() });

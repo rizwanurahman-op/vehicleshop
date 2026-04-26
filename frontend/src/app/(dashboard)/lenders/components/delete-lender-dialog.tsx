@@ -49,7 +49,7 @@ const DeleteLenderDialog = ({ lender, open, onOpenChange }: DeleteLenderDialogPr
                     </div>
                     <div>
                         <AlertDialogTitle className="text-lg font-bold text-foreground">
-                            Deactivate "{lender.name}"?
+                            Deactivate &ldquo;{lender.name}&rdquo;?
                         </AlertDialogTitle>
                         <AlertDialogDescription className="mt-2 text-sm text-muted-foreground">
                             This lender will be marked as inactive. All investments and repayments linked to this lender will remain intact and can be reactivated later.

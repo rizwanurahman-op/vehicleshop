@@ -98,11 +98,16 @@ const logout = async (userId: string): Promise<void> => {
     await User.findByIdAndUpdate(userId, { refreshToken: null });
 };
 
+// Revoke session by refreshToken — used during logout when access token may be expired
+const logoutByRefreshToken = async (refreshToken: string): Promise<void> => {
+    await User.findOneAndUpdate({ refreshToken }, { refreshToken: null });
+};
+
 const getMe = async (userId: string): Promise<IUser> => {
     const user = await User.findById(userId).select("-passwordHash -refreshToken");
     if (!user) throw new NotFoundError("User");
     return user;
 };
 
-const authService = { register, login, refreshAccessToken, logout, getMe };
+const authService = { register, login, refreshAccessToken, logout, logoutByRefreshToken, getMe };
 export default authService;

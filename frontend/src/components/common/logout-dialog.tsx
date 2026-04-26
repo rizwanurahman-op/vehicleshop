@@ -3,14 +3,12 @@
 import { useState } from "react";
 import axios from "@config/axios";
 import { toast } from "sonner";
-import { AxiosError } from "axios";
 import { Loader2, LogOut, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogContent, AlertDialogTitle, AlertDialogDescription } from "@/components/ui/alert-dialog";
 import { useSessionStore } from "@stores/session";
 import { clearClientSession } from "@/lib/auth";
 import { useRouter } from "next/navigation";
-import Cookies from "js-cookie";
 
 type LogoutDialogProps = {
     open: boolean;
@@ -26,18 +24,20 @@ const LogoutDialog = ({ open, onOpenChange }: LogoutDialogProps) => {
         setIsPending(true);
         const toastId = toast.loading("Signing out…", { description: "Please wait." });
         try {
+            // Best-effort — the backend will revoke the refresh token from the httpOnly cookie.
+            // If this fails (network error etc.) we still clear the frontend state.
             await axios.post("/auth/logout");
-        } catch (error: unknown) {
-            const err = error as AxiosError;
-            console.error("Logout error:", err.message);
+        } catch {
+            // Intentionally swallowed — frontend cleanup always runs
         } finally {
-            clearClientSession();
-            Cookies.remove("vb_access_token");
-            clearSession();
-            toast.success("Signed out!", { id: toastId, description: "You have been signed out successfully." });
-            router.push("/auth/login");
-            setIsPending(false);
+            clearClientSession();   // removes the vb_access_token cookie
+            clearSession();         // clears Zustand + localStorage
             onOpenChange(false);
+            toast.success("Signed out!", { id: toastId, description: "You have been signed out successfully." });
+            // push first, then refresh so Next.js middleware picks up the cleared cookie
+            router.push("/auth/login");
+            router.refresh();
+            setIsPending(false);
         }
     };
 

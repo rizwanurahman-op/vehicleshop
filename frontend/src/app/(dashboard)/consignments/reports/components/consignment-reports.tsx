@@ -6,7 +6,7 @@ import { useState } from "react";
 import { formatCurrency } from "@lib/currency";
 import { formatDate } from "@lib/date";
 import { cn } from "@/lib/utils";
-import { TrendingUp, TrendingDown, Store, CreditCard, PieChart, Clock, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
+import { TrendingUp, TrendingDown, Store, CreditCard, PieChart, Clock, AlertCircle, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -29,17 +29,15 @@ const StatCard = ({ label, value, sub, color }: { label: string; value: string; 
 export const ConsignmentReports = () => {
     const [saleType, setSaleType] = useState<string>("all");
 
-    const { data, isLoading } = useQuery<{ data: ReportData } | null>({
+    const { data: report, isLoading } = useQuery<ReportData | null>({
         queryKey: ["consignment-reports", saleType],
         queryFn: async () => {
             const params: Record<string, string> = {};
             if (saleType !== "all") params.saleType = saleType;
             const res = await axios.get<ApiResponse<ReportData>>("/consignments/reports", { params });
-            return res.data ?? null;
+            return res.data.data ?? null;
         },
     });
-
-    const report = data?.data;
 
     const totalRevenue = report?.profitLoss.reduce((s, v) => s + (v.soldPrice || 0), 0) ?? 0;
     const totalNetProfit = report?.profitLoss.reduce((s, v) => s + v.netProfit, 0) ?? 0;
@@ -72,7 +70,7 @@ export const ConsignmentReports = () => {
             ) : (
                 <>
                     {/* Summary Stats */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                         <StatCard label="Total Revenue" value={formatCurrency(totalRevenue)} sub={`${report?.profitLoss.length ?? 0} vehicles sold`} />
                         <StatCard label="Net Profit" value={formatCurrency(Math.abs(totalNetProfit))} sub={totalNetProfit >= 0 ? "Profitable" : "Loss"} color={totalNetProfit >= 0 ? "text-emerald-400" : "text-red-400"} />
                         <StatCard label="Profitable Deals" value={String(profitableCount)} sub={`of ${report?.profitLoss.length ?? 0} sold`} />

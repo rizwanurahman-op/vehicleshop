@@ -56,7 +56,8 @@ export const addSalePaymentSchema = z.object({
     exchangeVehicleMake: z.string().optional(),
     exchangeVehicleRegNo: z.string().optional(),
     exchangeVehicleType: z.enum(["two_wheeler", "four_wheeler"]).optional(),
-    createExchangeAs: z.enum(["phase2_purchase", "phase3_park_sale", "phase3_finance_sale", "skip"]).optional().default("skip"),
+    createExchangeAs: z.enum(["phase2_purchase", "phase3_park_sale", "phase3_finance_sale", "skip"]).optional().default("phase2_purchase"),
+    addToInventory: z.boolean().optional().default(true),
     referenceNo: z.string().optional(),
     notes: z.string().optional(),
 });

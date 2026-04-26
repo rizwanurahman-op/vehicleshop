@@ -13,8 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
     Plus, Search, Store, CreditCard, Bike, Car, Loader2,
-    TrendingUp, TrendingDown, Package, IndianRupee, AlertCircle,
-    CheckCircle2, Clock, RotateCcw, Filter, ArrowLeftRight
+    TrendingUp, TrendingDown, Package, AlertCircle,
+    CheckCircle2, Clock, Filter, ArrowLeftRight
 } from "lucide-react";
 import Link from "next/link";
 import { useDebounce } from "@hooks/use-debounce";
@@ -41,7 +41,7 @@ const StatusBadge = ({ status, settlement }: { status: ConsignmentStatus; settle
         return (
             <div className="flex flex-col gap-0.5">
                 <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[10px]"><CheckCircle2 className="mr-1 h-2.5 w-2.5" />Sold</Badge>
-                {settlement !== "buyer_settled" && settlement !== "fully_closed" && (
+                {settlement !== "buyer_settled" && (
                     <Badge className="bg-orange-500/10 text-orange-400 border-orange-500/20 text-[10px]"><AlertCircle className="mr-1 h-2.5 w-2.5" />Pending</Badge>
                 )}
             </div>
@@ -104,7 +104,7 @@ export const ConsignmentList = ({ initialData }: { initialData: ConsignmentPagin
             </div>
 
             {/* Quick Stats */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <QuickStat label="Total" value={String(data?.total ?? 0)} />
                 <QuickStat label="In Shop" value={String(inShop)} color="text-yellow-400" />
                 <QuickStat label="Sold" value={String(sold)} color="text-emerald-400" />
@@ -114,7 +114,7 @@ export const ConsignmentList = ({ initialData }: { initialData: ConsignmentPagin
             {/* Filters */}
             <div className="flex flex-wrap gap-3 items-center">
                 {/* Sale Type Tabs */}
-                <div className="flex gap-1 bg-muted rounded-lg p-1">
+                <div className="flex flex-wrap gap-1 bg-muted rounded-lg p-1 w-full sm:w-auto">
                     {[
                         { value: "all", label: "All" },
                         { value: "park_sale", label: "🏪 Park Sale", icon: Store },
@@ -161,89 +161,159 @@ export const ConsignmentList = ({ initialData }: { initialData: ConsignmentPagin
                     </div>
                 ) : (
                     <>
-                        {/* Table Header */}
-                        <div className="hidden sm:grid grid-cols-[auto_1fr_auto_auto_auto] gap-4 px-5 py-3 border-b border-border bg-muted/30">
-                            <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground w-6"></div>
-                            <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Vehicle</p>
-                            <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Received</p>
-                            <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Investment</p>
-                            <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Status</p>
+                        {/* Mobile Cards View (< md) */}
+                        <div className="grid grid-cols-1 gap-4 p-4 md:hidden bg-muted/10">
+                            {vehicles.map((v) => {
+                                const VehicleIcon = v.vehicleType === "two_wheeler" ? Bike : Car;
+                                const isSold = !!(v.dateSold && v.soldPrice);
+                                const isProfit = v.netProfit >= 0;
+
+                                return (
+                                    <div key={v._id} onClick={() => router.push(`/consignments/${v._id}`)} className="group relative flex flex-col rounded-2xl border border-border/60 bg-gradient-to-b from-card to-muted/10 p-5 shadow-sm hover:shadow-md hover:border-primary/30 transition-all overflow-hidden cursor-pointer">
+                                        {/* Decorative background glow */}
+                                        <div className="absolute top-0 right-0 -mt-4 -mr-4 h-24 w-24 rounded-full bg-primary/10 blur-2xl opacity-50 group-hover:opacity-100 transition-opacity pointer-events-none" />
+
+                                        {/* Header: Date & Status */}
+                                        <div className="relative flex items-center justify-between mb-4">
+                                            <div className="flex items-center gap-2 text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
+                                                <span className={cn("flex items-center justify-center h-6 w-6 rounded", v.saleType === "park_sale" ? "bg-violet-500/10 text-violet-400" : "bg-blue-500/10 text-blue-400")}>
+                                                    <VehicleIcon className="h-3.5 w-3.5" />
+                                                </span>
+                                                {formatDate(v.dateReceived)}
+                                            </div>
+                                            <StatusBadge status={v.status} settlement={v.settlementStatus} />
+                                        </div>
+
+                                        {/* Vehicle & Seller */}
+                                        <div className="relative mb-5 flex flex-col items-start">
+                                            <p className="text-lg font-bold text-foreground tracking-tight leading-none mb-1.5 group-hover:text-primary transition-colors">{v.make} {v.model}</p>
+                                            <div className="flex flex-wrap items-center gap-2 mb-3">
+                                                <span className="text-[11px] font-medium text-muted-foreground">REG: <span className="text-foreground">{v.registrationNo}</span></span>
+                                                <span className="text-[10px] text-muted-foreground font-mono bg-muted/50 px-1 rounded">{v.consignmentId}</span>
+                                                <SaleTypeBadge type={v.saleType} />
+                                                {v.isExchange && (
+                                                    <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-orange-500/10 text-orange-400 border border-orange-500/20">
+                                                        <ArrowLeftRight className="h-2 w-2" />Exchange Sale
+                                                    </span>
+                                                )}
+                                                {v.isFromExchange && (
+                                                    <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                                        <ArrowLeftRight className="h-2 w-2" />Exchanged In
+                                                    </span>
+                                                )}
+                                            </div>
+                                            
+                                            <div className="inline-flex items-center gap-2 rounded-lg bg-muted/40 px-2.5 py-1.5 border border-border/50">
+                                                <span className="text-[10px] font-medium text-muted-foreground">Owner: <span className="text-xs font-medium text-foreground truncate max-w-[150px] inline-block align-bottom">{v.previousOwner}</span></span>
+                                                {v.daysInShop != null && <span className="text-[10px] text-muted-foreground ml-1 shrink-0 flex items-center gap-1">· <Clock className="h-2.5 w-2.5" />{v.daysInShop}d</span>}
+                                            </div>
+                                        </div>
+
+                                        {/* Financial Section */}
+                                        <div className="relative mt-auto pt-4 border-t border-border/60 border-dashed">
+                                            <div className="flex items-end justify-between">
+                                                <div>
+                                                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Total Invested</p>
+                                                    <p className="text-xl font-bold text-foreground tabular-nums leading-none tracking-tight">{formatCurrency(v.totalInvestment)}</p>
+                                                </div>
+                                                <div className="text-right">
+                                                    {isSold ? (
+                                                        <>
+                                                            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Net Profit</p>
+                                                            <span className={cn("inline-flex items-center justify-end gap-1 font-bold text-base tabular-nums leading-none", isProfit ? "text-emerald-500" : "text-red-500")}>
+                                                                {isProfit ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+                                                                {isProfit ? "+" : ""}{formatCurrency(v.netProfit)}
+                                                            </span>
+                                                        </>
+                                                    ) : (
+                                                        <div className="flex flex-col items-end h-full justify-end">
+                                                            <span className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground/50 border border-border/40 rounded px-2 py-1">Unrealized</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
 
-                        {/* Rows */}
-                        {vehicles.map((v, i) => {
-                            const VehicleIcon = v.vehicleType === "two_wheeler" ? Bike : Car;
-                            const isSold = !!(v.dateSold && v.soldPrice);
-                            const isProfit = v.netProfit >= 0;
+                        {/* Desktop Table View (>= md) */}
+                        <div className="hidden md:block">
+                            {/* Table Header */}
+                            <div className="grid grid-cols-[auto_1fr_auto_auto_auto] gap-4 px-5 py-3 border-b border-border bg-muted/30">
+                                <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground w-6"></div>
+                                <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Vehicle</p>
+                                <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Received</p>
+                                <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Investment</p>
+                                <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Status</p>
+                            </div>
 
-                            return (
-                                <div key={v._id}
-                                    className={cn("grid sm:grid-cols-[auto_1fr_auto_auto_auto] gap-2 sm:gap-4 px-5 py-4 cursor-pointer hover:bg-muted/30 transition-colors", i > 0 ? "border-t border-border" : "")}
-                                    onClick={() => router.push(`/consignments/${v._id}`)}>
+                            {/* Rows */}
+                            {vehicles.map((v, i) => {
+                                const VehicleIcon = v.vehicleType === "two_wheeler" ? Bike : Car;
+                                const isSold = !!(v.dateSold && v.soldPrice);
+                                const isProfit = v.netProfit >= 0;
 
-                                    <div className="flex items-center">
-                                        <div className={cn("flex h-8 w-8 items-center justify-center rounded-lg shadow-sm", v.saleType === "park_sale" ? "bg-violet-500/10" : "bg-blue-500/10")}>
-                                            <VehicleIcon className={cn("h-4 w-4", v.saleType === "park_sale" ? "text-violet-400" : "text-blue-400")} />
-                                        </div>
-                                    </div>
+                                return (
+                                    <div key={v._id}
+                                        className={cn("grid grid-cols-[auto_1fr_auto_auto_auto] gap-4 px-5 py-4 cursor-pointer hover:bg-muted/30 transition-colors", i > 0 ? "border-t border-border" : "")}
+                                        onClick={() => router.push(`/consignments/${v._id}`)}>
 
-                                    <div className="min-w-0">
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                            <span className="font-semibold text-foreground text-sm">{v.make} {v.model}</span>
-                                            <SaleTypeBadge type={v.saleType} />
-                                            <span className="text-xs font-mono text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">{v.consignmentId}</span>
-                                            {v.isExchange && (
-                                                <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-orange-500/10 text-orange-400 border border-orange-500/20">
-                                                    <ArrowLeftRight className="h-2.5 w-2.5" />Sold via Exchange
-                                                </span>
-                                            )}
-                                            {v.isFromExchange && (
-                                                <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                                                    <ArrowLeftRight className="h-2.5 w-2.5" />From Exchange
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground flex-wrap">
-                                            <span className="font-mono">{v.registrationNo}</span>
-                                            <span>•</span>
-                                            <span>{v.previousOwner}</span>
-                                            {v.daysInShop != null && (
-                                                <><span>•</span><span className="flex items-center gap-1"><Clock className="h-3 w-3" />{v.daysInShop}d</span></>
-                                            )}
-                                        </div>
-                                        {/* Mobile: sold price + profit */}
-                                        {isSold && (
-                                            <div className="flex items-center gap-2 mt-1 sm:hidden text-xs">
-                                                <span className="text-muted-foreground">{formatCurrency(v.soldPrice!)}</span>
-                                                <span className={isProfit ? "text-emerald-400" : "text-red-400"}>
-                                                    {isProfit ? <TrendingUp className="inline h-3 w-3" /> : <TrendingDown className="inline h-3 w-3" />}
-                                                    {formatCurrency(Math.abs(v.netProfit))}
-                                                </span>
+                                        <div className="flex items-center">
+                                            <div className={cn("flex h-8 w-8 items-center justify-center rounded-lg shadow-sm", v.saleType === "park_sale" ? "bg-violet-500/10" : "bg-blue-500/10")}>
+                                                <VehicleIcon className={cn("h-4 w-4", v.saleType === "park_sale" ? "text-violet-400" : "text-blue-400")} />
                                             </div>
-                                        )}
-                                    </div>
+                                        </div>
 
-                                    <div className="hidden sm:flex items-center text-xs text-muted-foreground">
-                                        {formatDate(v.dateReceived)}
-                                    </div>
+                                        <div className="min-w-0">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="font-semibold text-foreground text-sm">{v.make} {v.model}</span>
+                                                <SaleTypeBadge type={v.saleType} />
+                                                <span className="text-xs font-mono text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">{v.consignmentId}</span>
+                                                {v.isExchange && (
+                                                    <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-orange-500/10 text-orange-400 border border-orange-500/20">
+                                                        <ArrowLeftRight className="h-2.5 w-2.5" />Sold via Exchange
+                                                    </span>
+                                                )}
+                                                {v.isFromExchange && (
+                                                    <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                                        <ArrowLeftRight className="h-2.5 w-2.5" />From Exchange
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground flex-wrap">
+                                                <span className="font-mono">{v.registrationNo}</span>
+                                                <span>•</span>
+                                                <span>{v.previousOwner}</span>
+                                                {v.daysInShop != null && (
+                                                    <><span>•</span><span className="flex items-center gap-1"><Clock className="h-3 w-3" />{v.daysInShop}d</span></>
+                                                )}
+                                            </div>
+                                        </div>
 
-                                    <div className="hidden sm:flex items-center">
-                                        <div className="text-right">
-                                            <p className="text-sm font-semibold text-foreground">{formatCurrency(v.totalInvestment)}</p>
-                                            {isSold && (
-                                                <p className={cn("text-[11px]", isProfit ? "text-emerald-400" : "text-red-400")}>
-                                                    {isProfit ? "+" : ""}{formatCurrency(v.netProfit)}
-                                                </p>
-                                            )}
+                                        <div className="flex items-center text-xs text-muted-foreground">
+                                            {formatDate(v.dateReceived)}
+                                        </div>
+
+                                        <div className="flex items-center">
+                                            <div className="text-right">
+                                                <p className="text-sm font-semibold text-foreground">{formatCurrency(v.totalInvestment)}</p>
+                                                {isSold && (
+                                                    <p className={cn("text-[11px]", isProfit ? "text-emerald-400" : "text-red-400")}>
+                                                        {isProfit ? "+" : ""}{formatCurrency(v.netProfit)}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center">
+                                            <StatusBadge status={v.status} settlement={v.settlementStatus} />
                                         </div>
                                     </div>
-
-                                    <div className="flex items-center">
-                                        <StatusBadge status={v.status} settlement={v.settlementStatus} />
-                                    </div>
-                                </div>
-                            );
-                        })}
+                                );
+                            })}
+                        </div>
 
                         {/* Footer pagination info */}
                         {(data?.total ?? 0) > 20 && (

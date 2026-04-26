@@ -21,8 +21,8 @@ export const createVehicle = async (req: Request, res: Response): Promise<void> 
 };
 
 export const getVehicles = async (req: Request, res: Response): Promise<void> => {
-    const { vehicleType, status, saleStatus, fundingSource, search, dateFrom, dateTo, page = "1", limit = "20" } = req.query as Record<string, string>;
-    const result = await vs.getVehicles({ vehicleType, status, saleStatus, fundingSource, search, dateFrom, dateTo, page: +page, limit: +limit });
+    const { vehicleType, status, saleStatus, fundingSource, isFromExchange, search, dateFrom, dateTo, page = "1", limit = "20" } = req.query as Record<string, string>;
+    const result = await vs.getVehicles({ vehicleType, status, saleStatus, fundingSource, isFromExchange, search, dateFrom, dateTo, page: +page, limit: +limit });
     res.json({ success: true, statusCode: 200, message: "Vehicles fetched", data: result });
 };
 

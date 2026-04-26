@@ -51,6 +51,24 @@ export const COST_CATEGORIES = [
 export const PURCHASE_PAYMENT_MODES = ["Cash", "Online", "Cheque", "UPI", "Bank Transfer"] as const;
 export const SALE_PAYMENT_MODES = ["Cash", "Online", "Cheque", "UPI", "GPay", "Finance", "Bank Transfer"] as const;
 
+/**
+ * Unified payment methods for sale/buyer payment dialogs.
+ * Replaces the confusing Mode + Type two-field pattern.
+ * Each method maps to backend `mode` and `type` fields.
+ */
+export const SALE_PAYMENT_METHODS = [
+    { value: "Cash",          label: "Cash",          icon: "💵", backendMode: "Cash",          backendType: "cash" as const },
+    { value: "UPI",           label: "UPI",           icon: "📱", backendMode: "UPI",           backendType: "cash" as const },
+    { value: "GPay",          label: "GPay",          icon: "📱", backendMode: "GPay",          backendType: "cash" as const },
+    { value: "Online",        label: "Online",        icon: "💻", backendMode: "Online",        backendType: "cash" as const },
+    { value: "Bank Transfer", label: "Bank Transfer", icon: "🏦", backendMode: "Bank Transfer", backendType: "cash" as const },
+    { value: "Cheque",        label: "Cheque",        icon: "✅", backendMode: "Cheque",        backendType: "cash" as const },
+    { value: "Finance",       label: "Finance",       icon: "💳", backendMode: "Finance",       backendType: "cash" as const },
+    { value: "Exchange",      label: "Exchange Vehicle", icon: "🔄", backendMode: "Cash",       backendType: "exchange" as const },
+] as const;
+
+export type SalePaymentMethodValue = typeof SALE_PAYMENT_METHODS[number]["value"];
+
 export const FUNDING_SOURCES = [
     { value: "own", label: "Own Money", icon: "👤", description: "Shop owner's personal capital" },
     { value: "investor", label: "Investor", icon: "🏦", description: "Borrowed from a single investor" },

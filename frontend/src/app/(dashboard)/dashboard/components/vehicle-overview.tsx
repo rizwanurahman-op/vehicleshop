@@ -37,7 +37,7 @@ const VehicleOverview = () => {
         {
             label: "Total Invested",
             value: formatCurrency(combined?.totalInvested ?? 0),
-            sub: `${combined?.sold ?? 0} sold`,
+            sub: `${combined?.total ?? 0} vehicles`,
             icon: Bike,
             color: "text-foreground",
             bg: "bg-muted/40",
@@ -45,7 +45,7 @@ const VehicleOverview = () => {
         {
             label: "Total Revenue",
             value: formatCurrency(combined?.totalRevenue ?? 0),
-            sub: "from all sales",
+            sub: `${(combined?.sold ?? 0) + (combined?.soldPending ?? 0)} sold`,
             icon: Car,
             color: "text-emerald-400",
             bg: "bg-emerald-500/10",
@@ -53,7 +53,7 @@ const VehicleOverview = () => {
         {
             label: "Net Profit",
             value: formatCurrency(Math.abs(combined?.netProfit ?? 0)),
-            sub: `${(combined?.avgMargin ?? 0).toFixed(1)}% avg margin`,
+            sub: `${(combined?.avgMargin ?? 0).toFixed(1)}% margin (sold only)`,
             icon: isProfit ? TrendingUp : TrendingDown,
             color: isProfit ? "text-emerald-400" : "text-red-400",
             bg: isProfit ? "bg-emerald-500/10" : "bg-red-500/10",
@@ -108,7 +108,7 @@ const VehicleOverview = () => {
 
             {/* 2W vs 4W quick split */}
             {!isLoading && stats && (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {[
                         { label: "Two Wheelers 🏍️", href: "/vehicles?type=two_wheeler", data: stats.twoWheelers },
                         { label: "Four Wheelers 🚗", href: "/vehicles?type=four_wheeler", data: stats.fourWheelers },

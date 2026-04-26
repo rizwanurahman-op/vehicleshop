@@ -42,55 +42,89 @@ const RecentTransactions = ({ initialData }: RecentTransactionsProps) => {
                 ) : transactions.length === 0 ? (
                     <div className="py-12 text-center text-sm text-muted-foreground">No transactions yet</div>
                 ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead>
-                                <tr className="border-b border-border">
-                                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Date</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Lender</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Type</th>
-                                    <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">Amount</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Mode</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {transactions.map((tx, i) => (
-                                    <tr key={i} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                                        <td className="px-4 py-3 text-sm text-muted-foreground whitespace-nowrap">{formatDate(tx.date)}</td>
-                                        <td className="px-4 py-3">
-                                            <div className="text-sm font-medium text-foreground">{tx.lenderName}</div>
-                                            <div className="font-mono-id text-muted-foreground">{tx.lenderId}</div>
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            <Badge
-                                                variant="outline"
-                                                className={cn(
-                                                    "text-[11px] font-semibold gap-1",
-                                                    tx.type === "investment"
-                                                        ? "bg-primary/10 text-primary border-primary/20"
-                                                        : "bg-success/10 text-success border-success/20"
-                                                )}
-                                            >
-                                                {tx.type === "investment" ? <ArrowDownLeft size={10} /> : <ArrowUpRight size={10} />}
-                                                {tx.type === "investment" ? "Investment" : "Repayment"}
-                                            </Badge>
-                                        </td>
-                                        <td className="px-4 py-3 text-right">
-                                            <span className={cn(
-                                                "font-mono text-sm font-semibold tabular-nums",
-                                                tx.type === "investment" ? "text-primary" : "text-success"
-                                            )}>
-                                                {formatINR(tx.amount)}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            <Badge variant="outline" className="text-[11px]">{tx.mode}</Badge>
-                                        </td>
+                    <>
+                        {/* Mobile List (< md) */}
+                        <div className="grid grid-cols-1 gap-3 p-3 md:hidden bg-muted/5">
+                            {transactions.map((tx, i) => (
+                                <div key={i} className="flex flex-col rounded-xl border border-border/60 bg-card p-4 shadow-sm hover:border-primary/30 transition-all">
+                                    <div className="flex items-start justify-between mb-3">
+                                        <div className="flex items-center gap-2">
+                                            <div className={cn("flex h-8 w-8 items-center justify-center rounded-lg shadow-sm shrink-0", tx.type === "investment" ? "bg-primary/10 text-primary" : "bg-emerald-500/10 text-emerald-500")}>
+                                                {tx.type === "investment" ? <ArrowDownLeft className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
+                                            </div>
+                                            <div className="min-w-0 pr-2">
+                                                <p className="text-sm font-bold text-foreground leading-none truncate">{tx.lenderName}</p>
+                                                <p className="text-[10px] text-muted-foreground mt-1">{formatDate(tx.date)}</p>
+                                            </div>
+                                        </div>
+                                        <Badge variant="outline" className={cn("text-[10px] font-semibold gap-1 shrink-0 px-1.5 py-0 border-transparent", tx.type === "investment" ? "text-primary bg-primary/10" : "text-emerald-500 bg-emerald-500/10")}>
+                                            {tx.type === "investment" ? "Invested" : "Repaid"}
+                                        </Badge>
+                                    </div>
+                                    <div className="flex items-end justify-between pt-3 border-t border-border/50 border-dashed">
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                            <Badge variant="outline" className="text-[10px] bg-muted/50 px-1.5 py-0">{tx.mode}</Badge>
+                                            <span className="text-[10px] text-muted-foreground font-mono">{tx.lenderId}</span>
+                                        </div>
+                                        <p className={cn("text-base font-bold tabular-nums leading-none tracking-tight shrink-0 ml-2", tx.type === "investment" ? "text-primary" : "text-emerald-500")}>
+                                            {formatINR(tx.amount)}
+                                        </p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Desktop Table (>= md) */}
+                        <div className="hidden md:block overflow-x-auto">
+                            <table className="w-full min-w-[600px]">
+                                <thead>
+                                    <tr className="border-b border-border bg-muted/30">
+                                        <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Date</th>
+                                        <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Lender</th>
+                                        <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Type</th>
+                                        <th className="px-4 py-3 text-right text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Amount</th>
+                                        <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Mode</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                                </thead>
+                                <tbody>
+                                    {transactions.map((tx, i) => (
+                                        <tr key={i} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                                            <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{formatDate(tx.date)}</td>
+                                            <td className="px-4 py-3">
+                                                <div className="text-sm font-semibold text-foreground">{tx.lenderName}</div>
+                                                <div className="text-[10px] font-mono text-muted-foreground">{tx.lenderId}</div>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <Badge
+                                                    variant="outline"
+                                                    className={cn(
+                                                        "text-[10px] font-bold gap-1 px-1.5 py-0",
+                                                        tx.type === "investment"
+                                                            ? "bg-primary/5 text-primary border-primary/20"
+                                                            : "bg-emerald-500/5 text-emerald-500 border-emerald-500/20"
+                                                    )}
+                                                >
+                                                    {tx.type === "investment" ? <ArrowDownLeft size={10} /> : <ArrowUpRight size={10} />}
+                                                    {tx.type === "investment" ? "Investment" : "Repayment"}
+                                                </Badge>
+                                            </td>
+                                            <td className="px-4 py-3 text-right">
+                                                <span className={cn(
+                                                    "font-mono text-sm font-bold tabular-nums",
+                                                    tx.type === "investment" ? "text-primary" : "text-emerald-500"
+                                                )}>
+                                                    {formatINR(tx.amount)}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-muted/50">{tx.mode}</Badge>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </>
                 )}
             </CardContent>
         </Card>

@@ -12,7 +12,6 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { formatApiErrors } from "@/lib/formatApiErrors";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { createLenderSchema } from "@schemas/lender";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Users, X, Plus, Phone, MapPin, Sparkles, Loader2, FileText } from "lucide-react";

@@ -5,7 +5,7 @@ import { useState, Suspense } from "react";
 import { Car, ChevronLeft, ChevronRight } from "lucide-react";
 import { SidebarNav } from "./sidebar-nav";
 
-const SidebarFallback = ({ collapsed }: { collapsed: boolean }) => (
+const SidebarFallback = ({ collapsed: _collapsed }: { collapsed: boolean }) => (
     <div className="flex-1 overflow-y-auto p-3 space-y-2">
         <div className="h-8 w-full animate-pulse rounded-md bg-muted" />
         <div className="h-8 w-full animate-pulse rounded-md bg-muted" />

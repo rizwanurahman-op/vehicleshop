@@ -10,7 +10,6 @@ import { z } from "zod";
 import { toast } from "sonner";
 import { AxiosError } from "axios";
 import { formatApiErrors } from "@lib/formatApiErrors";
-import { cn } from "@/lib/utils";
 import { createVehicleOwnerSchema } from "@schemas/consignment";
 
 import { Button } from "@/components/ui/button";

@@ -16,7 +16,6 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { loginSchema } from "@schemas/login";
 import { useSessionStore } from "@stores/session";
 import { setClientSession } from "@/lib/auth";
-import Cookies from "js-cookie";
 
 type LoginFormData = z.infer<typeof loginSchema>;
 
@@ -39,7 +38,6 @@ const LoginForm = () => {
             const res = await axios.post<ApiResponse<{ user: AuthSession; accessToken: string }>>("/auth/login", values);
             const { user, accessToken } = res.data.data!;
             setClientSession(accessToken);
-            Cookies.set("vb_access_token", accessToken, { expires: 1 / 96, sameSite: "strict" });
             setSession(user, accessToken);
             toast.success("Welcome back!", { id: toastId, description: `Logged in as ${user.username}` });
             const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";

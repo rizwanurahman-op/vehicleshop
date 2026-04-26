@@ -7,12 +7,10 @@ import { useRouter } from "next/navigation";
 import { Users, Search, Download, Eye, Edit, ToggleLeft } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreateLenderDialog, DeleteLenderDialog, UpdateLenderDialog } from ".";
 import { EmptyState, TableSkeleton, StatusBadge, CurrencyDisplay } from "@components/shared";
-import { cn } from "@/lib/utils";
 import { useDebounce } from "@hooks/use-debounce";
 
 const fetchLenders = async (search: string, status: string): Promise<ILenderWithSummary[]> => {

@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Plus, ArrowDownLeft, ArrowUpRight, Bike, Car } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Bike, Car } from "lucide-react";
 
 const QuickActions = () => {
     return (
-        <div className="flex flex-wrap gap-3">
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-3">
             <Button asChild className="bg-gradient-brand text-white shadow-md hover:opacity-90 cursor-pointer">
                 <Link href="/vehicles/new">
                     <Bike size={16} className="mr-2" /> Add 2W

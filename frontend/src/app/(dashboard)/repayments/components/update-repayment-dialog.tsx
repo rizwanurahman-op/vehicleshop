@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { formatApiErrors } from "@/lib/formatApiErrors";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { updateRepaymentSchema } from "@schemas/repayment";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowUpRight, X, Save, Calendar, Loader2, IndianRupee } from "lucide-react";

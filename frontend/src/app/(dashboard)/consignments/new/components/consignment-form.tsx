@@ -21,11 +21,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import {
     Store, CreditCard, Bike, Car, ArrowLeft, ArrowRight, Check,
-    IndianRupee, User, Calendar, FileText, ChevronDown, ChevronUp
+    IndianRupee, User, FileText, ChevronDown, ChevronUp
 } from "lucide-react";
 import Link from "next/link";
 
-type FormData = z.infer<typeof createConsignmentSchema>;
+type FormData = z.input<typeof createConsignmentSchema>;
 
 const COST_FIELDS = [
     { key: "workshopRepairCost", label: "Workshop / Repair" },
@@ -38,7 +38,6 @@ const COST_FIELDS = [
     { key: "otherExpenses", label: "Other Expenses" },
 ] as const;
 
-const SOURCE_TYPES = ["friend", "customer", "agent", "owner", "other"] as const;
 
 // ── Type Selector ─────────────────────────────────────────────────
 const TypeSelector = ({ onSelect }: { onSelect: (type: SaleType) => void }) => (
@@ -54,7 +53,8 @@ const TypeSelector = ({ onSelect }: { onSelect: (type: SaleType) => void }) => (
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-2xl">
             {/* Park Sale */}
-            <button onClick={() => onSelect("park_sale")}
+            {/* type="button" is critical — these are outside the form but setting it is best practice */}
+            <button type="button" onClick={() => onSelect("park_sale")}
                 className="group rounded-2xl border-2 border-border bg-card p-6 text-left hover:border-violet-500/60 hover:bg-violet-500/5 transition-all duration-200 shadow-sm hover:shadow-md">
                 <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-500/10 mb-5 group-hover:bg-violet-500/20 transition-colors">
                     <Store className="h-7 w-7 text-violet-400" />
@@ -68,7 +68,7 @@ const TypeSelector = ({ onSelect }: { onSelect: (type: SaleType) => void }) => (
                 </div>
             </button>
             {/* Finance Sale */}
-            <button onClick={() => onSelect("finance_sale")}
+            <button type="button" onClick={() => onSelect("finance_sale")}
                 className="group rounded-2xl border-2 border-border bg-card p-6 text-left hover:border-blue-500/60 hover:bg-blue-500/5 transition-all duration-200 shadow-sm hover:shadow-md">
                 <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-500/10 mb-5 group-hover:bg-blue-500/20 transition-colors">
                     <CreditCard className="h-7 w-7 text-blue-400" />
@@ -141,6 +141,7 @@ const OwnerSearch = ({ value, onChange }: { value: string; onChange: (id: string
 
     return (
         <div className="relative">
+            {/* MUST be type="button" — default is type="submit" which submits the form on click */}
             <button type="button" onClick={() => setOpen(!open)}
                 className="w-full h-9 border border-border bg-muted/50 rounded-md px-3 text-sm text-left flex items-center justify-between">
                 <span className={value ? "text-foreground" : "text-muted-foreground"}>{value || "Select from owner registry..."}</span>
@@ -155,6 +156,7 @@ const OwnerSearch = ({ value, onChange }: { value: string; onChange: (id: string
                         {owners.length === 0 ? (
                             <p className="py-4 text-center text-xs text-muted-foreground">No owners found</p>
                         ) : owners.map(o => (
+                            // type="button" is critical — default is type="submit" which submits the form
                             <button key={o._id} type="button"
                                 className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors flex items-center justify-between"
                                 onClick={() => { onChange(o._id, o.name); setOpen(false); }}>
@@ -198,7 +200,7 @@ export const ConsignmentForm = () => {
         },
         onSuccess: (res) => {
             toast.success("Consignment registered!", { id: tid });
-            router.push(`/consignments/${res.data.data._id}`);
+            router.push(`/consignments/${res.data.data?._id}`);
         },
         onError: (err: unknown) => {
             const e = (err as AxiosError)?.response?.data as ErrorData;
@@ -227,7 +229,7 @@ export const ConsignmentForm = () => {
             <Stepper step={step} saleType={saleType} />
 
             <Form {...form}>
-                <form onSubmit={form.handleSubmit((v) => mutate(v))} className="space-y-5">
+                <form onSubmit={(e) => e.preventDefault()} className="space-y-5">
 
                     {/* ── Step 0: Vehicle & Source ── */}
                     {step === 0 && (
@@ -239,7 +241,7 @@ export const ConsignmentForm = () => {
                                 </div>
                             </div>
                             <div className="p-5 space-y-4">
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <FormField control={form.control} name="vehicleType" render={({ field }) => (
                                         <FormItem>
                                             <FormLabel className="text-xs font-semibold">Vehicle Type *</FormLabel>
@@ -264,7 +266,7 @@ export const ConsignmentForm = () => {
                                         </FormItem>
                                     )} />
                                 </div>
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <FormField control={form.control} name="make" render={({ field }) => (
                                         <FormItem>
                                             <FormLabel className="text-xs font-semibold">Make *</FormLabel>
@@ -287,7 +289,7 @@ export const ConsignmentForm = () => {
                                         <FormMessage />
                                     </FormItem>
                                 )} />
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <FormField control={form.control} name="color" render={({ field }) => (
                                         <FormItem>
                                             <FormLabel className="text-xs font-semibold">Color</FormLabel>
@@ -325,7 +327,7 @@ export const ConsignmentForm = () => {
                                         <p className="text-[11px] text-muted-foreground">Or type a name below manually</p>
                                     </div>
                                 )}
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <FormField control={form.control} name="previousOwner" render={({ field }) => (
                                         <FormItem>
                                             <FormLabel className="text-xs font-semibold">{saleType === "park_sale" ? "Owner Name" : "Previous Owner"} *</FormLabel>
@@ -363,7 +365,7 @@ export const ConsignmentForm = () => {
                                 {saleType === "park_sale" && (
                                     <div className="rounded-xl border border-dashed border-border p-4 space-y-3">
                                         <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Owner Agreement (Optional)</p>
-                                        <div className="grid grid-cols-2 gap-3">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                             <FormField control={form.control} name="expectedPrice" render={({ field }) => (
                                                 <FormItem>
                                                     <FormLabel className="text-xs font-semibold">Expected Price (₹)</FormLabel>
@@ -476,7 +478,7 @@ export const ConsignmentForm = () => {
                             <ArrowLeft className="mr-2 h-4 w-4" /> Previous
                         </Button>
                         {step < 2 ? (
-                            <Button type="button"
+                            <Button key="next-btn" type="button"
                                 className={cn("text-white", accentColor === "violet" ? "bg-violet-600 hover:bg-violet-700" : "bg-blue-600 hover:bg-blue-700")}
                                 onClick={async () => {
                                     // Validate step 0 fields before moving to step 1
@@ -489,7 +491,8 @@ export const ConsignmentForm = () => {
                                 Next <ArrowRight className="ml-2 h-4 w-4" />
                             </Button>
                         ) : (
-                            <Button type="submit" disabled={isPending}
+                            <Button key="submit-btn" type="button" disabled={isPending}
+                                onClick={() => form.handleSubmit((v) => mutate(v))()} 
                                 className={cn("text-white", accentColor === "violet" ? "bg-violet-600 hover:bg-violet-700" : "bg-blue-600 hover:bg-blue-700")}>
                                 {isPending ? "Registering..." : "Register Consignment"}
                                 {!isPending && <Check className="ml-2 h-4 w-4" />}

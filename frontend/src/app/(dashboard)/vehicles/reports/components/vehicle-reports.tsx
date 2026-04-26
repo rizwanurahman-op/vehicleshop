@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import axios from "@config/axios";
 import { formatCurrency } from "@lib/currency";
 import { cn } from "@/lib/utils";
-import { TrendingUp, TrendingDown, Package, DollarSign, BarChart3, AlertTriangle, Bike, Car, ShoppingCart, ExternalLink } from "lucide-react";
+import { TrendingUp, TrendingDown, Package, DollarSign, BarChart3, AlertTriangle, ShoppingCart, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { formatDate } from "@lib/date";
 
@@ -107,8 +107,8 @@ const VehicleReports = () => {
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                         <StatCard label="Total Vehicles" value={combined?.total?.toString() || "0"} sub={`${combined?.inStock || 0} in stock`} icon={Package} />
                         <StatCard label="Total Invested" value={formatCurrency(combined?.totalInvested || 0)} sub="All purchases + costs" icon={DollarSign} />
-                        <StatCard label="Total Revenue" value={formatCurrency(combined?.totalRevenue || 0)} sub={`${combined?.sold || 0} sold`} icon={TrendingUp} color="text-emerald-400" />
-                        <StatCard label="Net Profit" value={formatCurrency(combined?.netProfit || 0)} sub={`${(combined?.avgMargin || 0).toFixed(1)}% avg margin`} icon={BarChart3} color={(combined?.netProfit || 0) >= 0 ? "text-emerald-400" : "text-red-400"} />
+                        <StatCard label="Total Revenue" value={formatCurrency(combined?.totalRevenue || 0)} sub={`${(combined?.sold || 0) + (combined?.soldPending || 0)} sold`} icon={TrendingUp} color="text-emerald-400" />
+                        <StatCard label="Net Profit" value={formatCurrency(combined?.netProfit || 0)} sub={`${(combined?.avgMargin || 0).toFixed(1)}% margin (sold only)`} icon={BarChart3} color={(combined?.netProfit || 0) >= 0 ? "text-emerald-400" : "text-red-400"} />
                     </div>
                 )}
             </div>
@@ -165,37 +165,39 @@ const VehicleReports = () => {
                     </div>
                 ) : (
                     <div className="rounded-xl border border-border bg-card overflow-hidden">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-border bg-muted/30">
-                                    {["Vehicle", "Reg. No.", "Seller", "Purchased On", "Purchase Price", "Amount Due", "Status"].map((h) => (
-                                        <th key={h} className={cn("px-4 py-3 text-xs font-bold text-muted-foreground uppercase tracking-wider",
-                                            ["Purchase Price", "Amount Due"].includes(h) ? "text-right" : "text-left")}>{h}</th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border">
-                                {purchaseDue.map((v) => (
-                                    <tr key={v._id} className="hover:bg-muted/10 transition-colors">
-                                        <td className="px-4 py-3">
-                                            <p className="font-semibold text-foreground">{v.make} {v.model}</p>
-                                            <p className="text-xs text-muted-foreground">{v.vehicleId}</p>
-                                        </td>
-                                        <td className="px-4 py-3 text-xs font-mono text-foreground">{v.registrationNo}</td>
-                                        <td className="px-4 py-3 text-sm text-foreground">{v.purchasedFrom}</td>
-                                        <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{formatDate(v.datePurchased)}</td>
-                                        <td className="px-4 py-3 text-right text-sm font-medium text-foreground">{formatCurrency(v.purchasePrice)}</td>
-                                        <td className="px-4 py-3 text-right text-sm font-bold text-red-400">{formatCurrency(v.purchasePendingAmount)}</td>
-                                        <td className="px-4 py-3">
-                                            <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full",
-                                                v.purchasePaymentStatus === "partial" ? "bg-orange-500/15 text-orange-400" : "bg-red-500/15 text-red-400")}>
-                                                {v.purchasePaymentStatus === "partial" ? "Partial" : "Not Paid"}
-                                            </span>
-                                        </td>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm min-w-[600px]">
+                                <thead>
+                                    <tr className="border-b border-border bg-muted/30">
+                                        {["Vehicle", "Reg. No.", "Seller", "Purchased On", "Purchase Price", "Amount Due", "Status"].map((h) => (
+                                            <th key={h} className={cn("px-4 py-3 text-xs font-bold text-muted-foreground uppercase tracking-wider whitespace-nowrap",
+                                                ["Purchase Price", "Amount Due"].includes(h) ? "text-right" : "text-left")}>{h}</th>
+                                        ))}
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody className="divide-y divide-border">
+                                    {purchaseDue.map((v) => (
+                                        <tr key={v._id} className="hover:bg-muted/10 transition-colors">
+                                            <td className="px-4 py-3">
+                                                <p className="font-semibold text-foreground whitespace-nowrap">{v.make} {v.model}</p>
+                                                <p className="text-xs text-muted-foreground">{v.vehicleId}</p>
+                                            </td>
+                                            <td className="px-4 py-3 text-xs font-mono text-foreground whitespace-nowrap">{v.registrationNo}</td>
+                                            <td className="px-4 py-3 text-sm text-foreground whitespace-nowrap">{v.purchasedFrom}</td>
+                                            <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{formatDate(v.datePurchased)}</td>
+                                            <td className="px-4 py-3 text-right text-sm font-medium text-foreground whitespace-nowrap">{formatCurrency(v.purchasePrice)}</td>
+                                            <td className="px-4 py-3 text-right text-sm font-bold text-red-400 whitespace-nowrap">{formatCurrency(v.purchasePendingAmount)}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap">
+                                                <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full",
+                                                    v.purchasePaymentStatus === "partial" ? "bg-orange-500/15 text-orange-400" : "bg-red-500/15 text-red-400")}>
+                                                    {v.purchasePaymentStatus === "partial" ? "Partial" : "Not Paid"}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 )}
             </div>
@@ -212,37 +214,39 @@ const VehicleReports = () => {
                     <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground text-sm">No pending items 🎉</div>
                 ) : (
                     <div className="rounded-xl border border-border bg-card overflow-hidden">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-border bg-muted/30">
-                                    {["Vehicle", "Reg. No.", "Buyer", "Sale Status", "Balance Due", "NOC Status"].map((h) => (
-                                        <th key={h} className="px-4 py-3 text-left text-xs font-bold text-muted-foreground uppercase tracking-wider">{h}</th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border">
-                                {pending.map((v) => (
-                                    <tr key={v._id} className="hover:bg-muted/10 transition-colors">
-                                        <td className="px-4 py-3">
-                                            <p className="font-semibold text-foreground">{v.make} {v.model}</p>
-                                            <p className="text-xs text-muted-foreground">{v.vehicleId}</p>
-                                        </td>
-                                        <td className="px-4 py-3 text-xs font-mono text-foreground">{v.registrationNo}</td>
-                                        <td className="px-4 py-3 text-sm text-foreground">{v.soldTo || "—"}</td>
-                                        <td className="px-4 py-3">
-                                            {v.saleStatus ? (
-                                                <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full",
-                                                    v.saleStatus === "fully_received" ? "bg-emerald-500/15 text-emerald-400" : "bg-orange-500/15 text-orange-400")}>
-                                                    {v.saleStatus.replace(/_/g, " ")}
-                                                </span>
-                                            ) : "—"}
-                                        </td>
-                                        <td className="px-4 py-3 text-sm font-bold text-red-400">{formatCurrency(v.balanceAmount)}</td>
-                                        <td className="px-4 py-3 text-xs text-muted-foreground">{v.nocStatus.replace(/_/g, " ")}</td>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm min-w-[600px]">
+                                <thead>
+                                    <tr className="border-b border-border bg-muted/30">
+                                        {["Vehicle", "Reg. No.", "Buyer", "Sale Status", "Balance Due", "NOC Status"].map((h) => (
+                                            <th key={h} className="px-4 py-3 text-left text-xs font-bold text-muted-foreground uppercase tracking-wider whitespace-nowrap">{h}</th>
+                                        ))}
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody className="divide-y divide-border">
+                                    {pending.map((v) => (
+                                        <tr key={v._id} className="hover:bg-muted/10 transition-colors">
+                                            <td className="px-4 py-3">
+                                                <p className="font-semibold text-foreground whitespace-nowrap">{v.make} {v.model}</p>
+                                                <p className="text-xs text-muted-foreground">{v.vehicleId}</p>
+                                            </td>
+                                            <td className="px-4 py-3 text-xs font-mono text-foreground whitespace-nowrap">{v.registrationNo}</td>
+                                            <td className="px-4 py-3 text-sm text-foreground whitespace-nowrap">{v.soldTo || "—"}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap">
+                                                {v.saleStatus ? (
+                                                    <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full",
+                                                        v.saleStatus === "fully_received" ? "bg-emerald-500/15 text-emerald-400" : "bg-orange-500/15 text-orange-400")}>
+                                                        {v.saleStatus.replace(/_/g, " ")}
+                                                    </span>
+                                                ) : "—"}
+                                            </td>
+                                            <td className="px-4 py-3 text-sm font-bold text-red-400 whitespace-nowrap">{formatCurrency(v.balanceAmount)}</td>
+                                            <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{v.nocStatus.replace(/_/g, " ")}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 )}
             </div>

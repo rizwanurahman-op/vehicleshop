@@ -19,18 +19,17 @@ export const SIDEBAR_MENU: MenuItem[] = [
     { label: "Repayments", href: "/repayments", icon: ArrowUpRight, phase: 1, group: "Investors" },
     { label: "Summary", href: "/summary", icon: BarChart3, phase: 1, group: "Investors" },
 
-    // Phase 2 - Vehicle Management
-    { label: "Vehicles", href: "/vehicles", icon: Car, phase: 2, group: "Vehicles" },
-    { label: "Purchases", href: "/purchases", icon: ShoppingCart, phase: 2, group: "Vehicles" },
-    { label: "Sales", href: "/sales", icon: DollarSign, phase: 2, group: "Vehicles" },
-    { label: "Reports", href: "/vehicles/reports", icon: TrendingUp, phase: 2, group: "Vehicles" },
+    // Phase 2 - Purchased Vehicles (own inventory)
+    { label: "Vehicles", href: "/vehicles", icon: Car, phase: 2, group: "Purchased Vehicles" },
+    { label: "Purchases", href: "/purchases", icon: ShoppingCart, phase: 2, group: "Purchased Vehicles" },
+    { label: "Sales", href: "/sales", icon: DollarSign, phase: 2, group: "Purchased Vehicles" },
+    { label: "Reports", href: "/vehicles/reports", icon: TrendingUp, phase: 2, group: "Purchased Vehicles" },
+
+    // Phase 3 - Park & Finance Sale (Consignment)
+    { label: "Inventory", href: "/consignments", icon: Store, phase: 3, group: "Park & Finance" },
+    { label: "Owners", href: "/vehicle-owners", icon: UserCheck, phase: 3, group: "Park & Finance" },
+    { label: "Reports", href: "/consignments/reports", icon: PieChart, phase: 3, group: "Park & Finance" },
 
     // Exchanges — cross-module (spans Phase 2 & Phase 3)
     { label: "Exchanges", href: "/exchanges", icon: ArrowLeftRight, group: "Exchanges" },
-
-    // Phase 3 - Park & Sell (Consignment)
-    { label: "Inventory", href: "/consignments", icon: Store, phase: 3, group: "Park & Sell" },
-    { label: "Owners", href: "/vehicle-owners", icon: UserCheck, phase: 3, group: "Park & Sell" },
-    { label: "Reports", href: "/consignments/reports", icon: PieChart, phase: 3, group: "Park & Sell" },
 ];
-

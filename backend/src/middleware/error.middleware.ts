@@ -13,6 +13,16 @@ export const errorHandler = (err: unknown, _req: Request, res: Response, _next: 
         return;
     }
 
+    // Service-layer duplicate / business-rule errors (e.g. duplicate registration)
+    if (err instanceof Error && err.message.includes("already exists")) {
+        res.status(409).json({
+            success: false,
+            statusCode: 409,
+            message: err.message,
+        });
+        return;
+    }
+
     // MongoDB duplicate key error
     if (typeof err === "object" && err !== null && "code" in err && (err as { code: number }).code === 11000) {
         res.status(409).json({

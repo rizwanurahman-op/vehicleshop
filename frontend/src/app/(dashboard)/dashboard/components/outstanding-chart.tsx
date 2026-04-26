@@ -53,15 +53,17 @@ const OutstandingChart = ({ initialData }: OutstandingChartProps) => {
                         No outstanding balances
                     </div>
                 ) : (
-                    <ResponsiveContainer width="100%" height={200}>
-                        <BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 20, top: 0, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
-                            <XAxis type="number" tickFormatter={v => formatINRCompact(v)} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
-                            <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
-                            <Tooltip content={<CustomTooltip />} cursor={{ fill: "hsl(var(--muted) / 0.5)" }} />
-                            <Bar dataKey="balance" fill="hsl(38, 92%, 50%)" radius={[0, 4, 4, 0]} maxBarSize={24} />
-                        </BarChart>
-                    </ResponsiveContainer>
+                    <div className="h-[250px] w-full min-w-0">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 20, top: 0, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
+                                <XAxis type="number" tickFormatter={v => formatINRCompact(v)} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
+                                <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
+                                <Tooltip content={<CustomTooltip />} cursor={{ fill: "hsl(var(--muted) / 0.5)" }} />
+                                <Bar dataKey="balance" fill="hsl(38, 92%, 50%)" radius={[0, 4, 4, 0]} maxBarSize={24} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
                 )}
             </CardContent>
         </Card>

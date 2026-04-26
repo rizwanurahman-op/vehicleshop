@@ -8,7 +8,7 @@ import { VehicleDetail } from "./components";
 type Props = { params: Promise<{ id: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-    const { id } = await params;
+    const { id: _id } = await params;
     return { title: `${APP_NAME} | Vehicle Details` };
 }
 

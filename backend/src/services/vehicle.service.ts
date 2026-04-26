@@ -8,6 +8,7 @@ interface VehicleQuery {
     status?: string;
     saleStatus?: string;
     fundingSource?: string;
+    isFromExchange?: string;
     search?: string;
     dateFrom?: string;
     dateTo?: string;
@@ -16,6 +17,18 @@ interface VehicleQuery {
 }
 
 export const createVehicle = async (data: Partial<IVehicle>): Promise<IVehicle> => {
+    // Prevent duplicate registration numbers across all inventory
+    if (data.registrationNo) {
+        const existsInVehicles = await Vehicle.findOne({ registrationNo: data.registrationNo, isActive: true }).lean();
+        if (existsInVehicles) {
+            throw new Error(`Vehicle with registration ${data.registrationNo} already exists (${(existsInVehicles as any).vehicleId}).`);
+        }
+        const existsInConsignments = await ConsignmentVehicle.findOne({ registrationNo: data.registrationNo, isActive: true }).lean();
+        if (existsInConsignments) {
+            throw new Error(`Vehicle with registration ${data.registrationNo} already exists in Consignment Inventory (${(existsInConsignments as any).consignmentId}).`);
+        }
+    }
+
     const vehicleId = await getNextId("vehicle");
     const vehicle = new Vehicle({ ...data, vehicleId });
     await vehicle.save();
@@ -25,13 +38,15 @@ export const createVehicle = async (data: Partial<IVehicle>): Promise<IVehicle> 
 };
 
 export const getVehicles = async (query: VehicleQuery) => {
-    const { vehicleType, status, saleStatus, fundingSource, search, dateFrom, dateTo, page = 1, limit = 20 } = query;
+    const { vehicleType, status, saleStatus, fundingSource, isFromExchange, search, dateFrom, dateTo, page = 1, limit = 20 } = query;
     const filter: Record<string, unknown> = { isActive: true };
 
     if (vehicleType) filter.vehicleType = vehicleType;
     if (status) filter.status = status;
     if (saleStatus) filter.saleStatus = saleStatus;
     if (fundingSource) filter.fundingSource = fundingSource;
+    if (isFromExchange === "true") filter.isFromExchange = true;
+    if (isFromExchange === "false") filter.isFromExchange = { $ne: true };
     if (dateFrom || dateTo) {
         const dateFilter: Record<string, Date> = {};
         if (dateFrom) dateFilter.$gte = new Date(dateFrom);
@@ -79,16 +94,19 @@ export const getVehicleStats = async () => {
                 soldPending: { $sum: { $cond: [{ $eq: ["$status", "sold_pending"] }, 1, 0] } },
                 exchanged: { $sum: { $cond: [{ $eq: ["$status", "exchanged"] }, 1, 0] } },
                 totalInvested: { $sum: "$totalInvestment" },
-                totalRevenue: { $sum: { $ifNull: ["$soldPrice", 0] } },
+                // Only count revenue & investment from actually-sold vehicles
+                // Note: $gt null correctly handles both null AND undefined/missing fields in MongoDB
+                totalRevenue: { $sum: { $cond: [{ $gt: ["$dateSold", null] }, { $ifNull: ["$soldPrice", 0] }, 0] } },
+                soldInvested: { $sum: { $cond: [{ $gt: ["$dateSold", null] }, "$totalInvestment", 0] } },
                 totalReceived: { $sum: "$receivedAmount" },
                 totalBalancePending: { $sum: "$balanceAmount" },
-                netProfit: { $sum: { $cond: [{ $ne: ["$dateSold", null] }, "$profitLoss", 0] } },
+                netProfit: { $sum: { $cond: [{ $gt: ["$dateSold", null] }, "$profitLoss", 0] } },
             },
         },
     ]);
 
-    const twoWheeler = stats.find((s) => s._id === "two_wheeler") ?? { total: 0, inStock: 0, sold: 0, soldPending: 0, exchanged: 0, totalInvested: 0, totalRevenue: 0, totalReceived: 0, totalBalancePending: 0, netProfit: 0 };
-    const fourWheeler = stats.find((s) => s._id === "four_wheeler") ?? { total: 0, inStock: 0, sold: 0, soldPending: 0, exchanged: 0, totalInvested: 0, totalRevenue: 0, totalReceived: 0, totalBalancePending: 0, netProfit: 0 };
+    const twoWheeler = stats.find((s) => s._id === "two_wheeler") ?? { total: 0, inStock: 0, sold: 0, soldPending: 0, exchanged: 0, totalInvested: 0, totalRevenue: 0, soldInvested: 0, totalReceived: 0, totalBalancePending: 0, netProfit: 0 };
+    const fourWheeler = stats.find((s) => s._id === "four_wheeler") ?? { total: 0, inStock: 0, sold: 0, soldPending: 0, exchanged: 0, totalInvested: 0, totalRevenue: 0, soldInvested: 0, totalReceived: 0, totalBalancePending: 0, netProfit: 0 };
 
     const combined = {
         total: twoWheeler.total + fourWheeler.total,
@@ -103,7 +121,10 @@ export const getVehicleStats = async () => {
         netProfit: twoWheeler.netProfit + fourWheeler.netProfit,
         avgMargin: 0,
     };
-    combined.avgMargin = combined.totalInvested > 0 ? parseFloat(((combined.netProfit / combined.totalInvested) * 100).toFixed(2)) : 0;
+    // Margin based on sold vehicles' investment, not ALL vehicles
+    const soldInvested = twoWheeler.soldInvested + fourWheeler.soldInvested;
+    combined.avgMargin = soldInvested > 0 ? parseFloat(((combined.netProfit / soldInvested) * 100).toFixed(2)) : 0;
+
 
     const pendingItems = await Vehicle.aggregate([
         { $match: { isActive: true } },
@@ -273,8 +294,10 @@ export const addSalePayment = async (id: string, payment: {
     let exchangeVehicle = null;
 
     // Auto-create exchange vehicle in the appropriate collection
+    // Default: exchange vehicles go to purchased inventory (phase2_purchase)
+    const exchangeTarget = payment.createExchangeAs || (payment.type === "exchange" ? "phase2_purchase" : "skip");
     if (payment.type === "exchange" && payment.exchangeVehicleMake &&
-        payment.createExchangeAs && payment.createExchangeAs !== "skip") {
+        exchangeTarget !== "skip") {
 
         const regNo = payment.exchangeVehicleRegNo || `EXCH-${Date.now()}`;
         const vType = (payment.exchangeVehicleType || "two_wheeler") as "two_wheeler" | "four_wheeler";
@@ -283,13 +306,47 @@ export const addSalePayment = async (id: string, payment: {
         const exMake = makeParts[0] || payment.exchangeVehicleMake || "Unknown";
         const exModel = makeParts.slice(1).join(" ") || exMake;
 
-        if (payment.createExchangeAs === "phase2_purchase") {
+        // ── Smart duplicate resolution ─────────────────────────────
+        // Rule 1: If regNo exists in Purchased Vehicles → hard block (true duplicate)
+        const existsInVehicles = await Vehicle.findOne({ registrationNo: regNo, isActive: true }).lean();
+        if (existsInVehicles) {
+            throw new Error(
+                `Vehicle with registration ${regNo} already exists in Purchased Vehicles (${(existsInVehicles as any).vehicleId}). Cannot create exchange vehicle.`
+            );
+        }
+
+        // Rule 2: If regNo exists in Consignment and target is phase2_purchase →
+        //   Migrate: soft-delete the consignment and create a new Vehicle entry.
+        //   This is the "park sale / finance sale vehicle exchanged into purchased inventory" flow.
+        // Rule 3: If regNo exists in Consignment and target is also consignment → hard block
+        const existsInConsignments = await ConsignmentVehicle.findOne({ registrationNo: regNo, isActive: true });
+        if (existsInConsignments) {
+            if (exchangeTarget !== "phase2_purchase") {
+                // Would create a second consignment record — block it
+                throw new Error(
+                    `Vehicle with registration ${regNo} already exists in Consignment Inventory (${existsInConsignments.consignmentId}). Cannot add again as consignment.`
+                );
+            }
+            // Migrate from Consignment → Purchased: soft-delete the consignment first
+            existsInConsignments.isActive = false;
+            existsInConsignments.activityLog.push({
+                action: "migrated",
+                description: `Migrated to Purchased Inventory via exchange (from sale of ${vehicle.make} ${vehicle.model} ${vehicle.registrationNo})`,
+                date: new Date(),
+            });
+            await existsInConsignments.save();
+        }
+
+        if (exchangeTarget === "phase2_purchase") {
             const newVehicleId = await getNextId("vehicle");
+            // If migrating from consignment, carry over its details
+            const sourceConsignment = existsInConsignments;
             const exVehicle = new Vehicle({
                 vehicleId: newVehicleId,
-                vehicleType: vType,
-                make: exMake,
-                model: exModel,
+                vehicleType: sourceConsignment?.vehicleType || vType,
+                make: sourceConsignment?.make || exMake,
+                model: sourceConsignment?.model || exModel,
+                year: sourceConsignment?.year,
                 registrationNo: regNo,
                 purchasedFrom: vehicle.soldTo || "Exchange",
                 datePurchased: new Date(payment.date),
@@ -298,8 +355,18 @@ export const addSalePayment = async (id: string, payment: {
                 isFromExchange: true,
                 exchangeSourceRef: vehicle._id as mongoose.Types.ObjectId,
                 exchangeSourceCollection: "vehicles",
-                exchangeDetails: `Exchange from ${vehicle.make} ${vehicle.model} (${vehicle.registrationNo})`,
+                exchangeDetails: sourceConsignment
+                    ? `Migrated from Consignment (${sourceConsignment.consignmentId}) via exchange from ${vehicle.make} ${vehicle.model} (${vehicle.registrationNo})`
+                    : `Exchange from ${vehicle.make} ${vehicle.model} (${vehicle.registrationNo})`,
                 status: "in_stock",
+                // Auto-record purchase payment — exchange vehicles are "paid" via trade-in
+                purchasePayments: [{
+                    _id: new mongoose.Types.ObjectId(),
+                    date: new Date(payment.date),
+                    amount: payment.amount,
+                    mode: "Cash" as const,
+                    notes: `Paid via exchange (trade-in from ${vehicle.make} ${vehicle.model} sale)`,
+                }],
             });
             await exVehicle.save();
             paymentEntry.exchangeCreatedRef = exVehicle._id as mongoose.Types.ObjectId;
@@ -309,14 +376,17 @@ export const addSalePayment = async (id: string, payment: {
             exchangeVehicle = {
                 id: exVehicle._id, vehicleId: exVehicle.vehicleId,
                 make: exVehicle.make, registrationNo: exVehicle.registrationNo,
-                collection: "vehicles", message: "Created as Phase 2 purchase",
+                collection: "vehicles",
+                message: sourceConsignment
+                    ? `Migrated from Consignment (${sourceConsignment.consignmentId}) to Purchased Inventory`
+                    : "Created as Phase 2 purchase",
             };
         } else {
             // phase3_park_sale or phase3_finance_sale
-            const { ConsignmentVehicle } = await import("../models/consignment-vehicle.model");
-            const saleType = payment.createExchangeAs === "phase3_park_sale" ? "park_sale" : "finance_sale";
+            const { ConsignmentVehicle: CV } = await import("../models/consignment-vehicle.model");
+            const saleType = exchangeTarget === "phase3_park_sale" ? "park_sale" : "finance_sale";
             const newConsignmentId = await getNextId("consignment");
-            const exConsignment = new ConsignmentVehicle({
+            const exConsignment = new CV({
                 consignmentId: newConsignmentId,
                 saleType,
                 vehicleType: vType,
@@ -346,6 +416,7 @@ export const addSalePayment = async (id: string, payment: {
             };
         }
     }
+
 
     vehicle.salePayments.push(paymentEntry);
     vehicle.activityLog.push({

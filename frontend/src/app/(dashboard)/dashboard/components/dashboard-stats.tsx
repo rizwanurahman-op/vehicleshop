@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import axios from "@config/axios";
-import { formatINR, formatINRCompact } from "@/lib/currency";
+import { formatINRCompact } from "@/lib/currency";
 import { Card, CardContent } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, Users, Wallet, ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -100,7 +100,7 @@ const DashboardStats = ({ initialData }: DashboardStatsProps) => {
     ];
 
     return (
-        <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 xl:grid-cols-4">
             {stats.map(s => (
                 <StatCard key={s.title} {...s} />
             ))}

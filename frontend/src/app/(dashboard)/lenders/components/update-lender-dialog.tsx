@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { formatApiErrors } from "@/lib/formatApiErrors";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { updateLenderSchema } from "@schemas/lender";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Users, X, Save, Phone, MapPin, FileText, Loader2 } from "lucide-react";

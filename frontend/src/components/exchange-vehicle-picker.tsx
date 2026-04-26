@@ -5,7 +5,6 @@ import { useQuery } from "@tanstack/react-query";
 import axios from "@config/axios";
 import { cn } from "@/lib/utils";
 import { Loader2, Search, X, CheckCircle2, AlertTriangle, Bike, Car } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 
 // ── Types ─────────────────────────────────────────────────────────
 export interface ExchangeLookupResult {

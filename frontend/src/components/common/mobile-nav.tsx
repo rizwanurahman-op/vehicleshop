@@ -26,8 +26,8 @@ const MobileNav = () => {
     return (
         <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
-                <button className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground md:hidden transition-colors">
-                    <Menu className="h-5 w-5" />
+                <button onClick={() => setOpen(true)} className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground md:hidden transition-colors cursor-pointer">
+                    <Menu className="h-5 w-5 pointer-events-none" />
                     <span className="sr-only">Toggle Navigation</span>
                 </button>
             </SheetTrigger>

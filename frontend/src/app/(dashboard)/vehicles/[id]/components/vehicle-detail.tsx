@@ -3,7 +3,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "@config/axios";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { AxiosError } from "axios";
 import { formatApiErrors } from "@lib/formatApiErrors";
@@ -29,7 +28,7 @@ import {
 import Link from "next/link";
 import VehicleStatusBadge from "../../components/vehicle-status-badge";
 import CostsTab from "./costs-tab";
-import { PURCHASE_PAYMENT_MODES, SALE_PAYMENT_MODES, NOC_STATUSES } from "@data/vehicle-constants";
+import { PURCHASE_PAYMENT_MODES, SALE_PAYMENT_METHODS, NOC_STATUSES } from "@data/vehicle-constants";
 import { recordSaleSchema, addPurchasePaymentSchema, addSalePaymentSchema } from "@schemas/vehicle";
 import { ExchangeVehiclePicker } from "@/components/exchange-vehicle-picker";
 
@@ -96,7 +95,7 @@ const RecordSaleDialog = ({ vehicle }: { vehicle: IVehicle }) => {
                     <form id="record-sale-form" onSubmit={form.handleSubmit((v) => mutate(v))} className="flex flex-col flex-1 overflow-hidden min-h-0">
                         <div className="flex-1 overflow-y-auto">
                             <div className="p-5 space-y-4">
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <FormField control={form.control} name="dateSold" render={({ field }) => (
                                         <FormItem>
                                             <FormLabel className="font-semibold text-foreground text-xs">Date Sold <span className="text-destructive">*</span></FormLabel>
@@ -210,7 +209,7 @@ const AddPurchasePaymentDialog = ({ vehicle }: { vehicle: IVehicle }) => {
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit((v) => mutate(v))} className="flex flex-col flex-1 overflow-hidden min-h-0">
                         <div className="flex-1 overflow-y-auto p-5 space-y-4">
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <FormField control={form.control} name="date" render={({ field }) => (
                                     <FormItem><FormLabel className="text-xs font-semibold text-foreground">Date *</FormLabel>
                                         <FormControl><Input type="date" className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl><FormMessage /></FormItem>
@@ -249,7 +248,7 @@ const AddPurchasePaymentDialog = ({ vehicle }: { vehicle: IVehicle }) => {
     );
 };
 
-// ── Add Sale Payment Dialog — With Full Exchange Support ──────────
+// ── Add Sale Payment Dialog — Unified Payment Method ──────────────
 const AddSalePaymentDialog = ({ vehicle }: { vehicle: IVehicle }) => {
     const [open, setOpen] = useState(false);
     const [tid, setTid] = useState<string | number | undefined>();
@@ -266,23 +265,50 @@ const AddSalePaymentDialog = ({ vehicle }: { vehicle: IVehicle }) => {
             exchangeVehicleRegNo: "",
             exchangeVehicleType: "two_wheeler" as const,
             exchangeDetails: "",
-            createExchangeAs: "skip" as const,
+            createExchangeAs: "phase2_purchase" as const,
+            addToInventory: true,
             referenceNo: "",
             notes: "",
         },
     });
 
-    const paymentType = form.watch("type");
+    // Unified payment method state (replaces mode + type)
+    const [paymentMethod, setPaymentMethod] = useState<string>("Cash");
+    const isExchange = paymentMethod === "Exchange";
+
+    const handleMethodChange = (method: string) => {
+        setPaymentMethod(method);
+        const found = SALE_PAYMENT_METHODS.find(m => m.value === method);
+        if (found) {
+            form.setValue("mode", found.backendMode as z.infer<typeof addSalePaymentSchema>["mode"]);
+            form.setValue("type", found.backendType);
+        }
+        // Reset exchange fields when switching away from exchange
+        if (method !== "Exchange") {
+            form.setValue("exchangeVehicleMake", "");
+            form.setValue("exchangeVehicleRegNo", "");
+            form.setValue("exchangeDetails", "");
+        }
+    };
+
+    const addToInventory = form.watch("addToInventory");
 
     const { mutate, isPending } = useMutation({
         mutationFn: async (values: z.infer<typeof addSalePaymentSchema>) => {
             setTid(toast.loading("Recording payment..."));
-            return axios.post<ApiResponse<{ vehicle: IVehicle; exchangeVehicle?: { vehicleId?: string; consignmentId?: string; make: string; registrationNo: string; collection: string; message: string } }>>(`/vehicles/${vehicle._id}/sale-payments`, values);
+            // Map addToInventory checkbox → createExchangeAs
+            const payload = { ...values };
+            if (values.type === "exchange") {
+                payload.createExchangeAs = values.addToInventory ? "phase2_purchase" : "skip";
+            } else {
+                payload.createExchangeAs = "skip";
+            }
+            return axios.post<ApiResponse<{ vehicle: IVehicle; exchangeVehicle?: { vehicleId?: string; consignmentId?: string; make: string; registrationNo: string; collection: string; message: string } }>>(`/vehicles/${vehicle._id}/sale-payments`, payload);
         },
         onSuccess: (res) => {
             const ev = res.data?.data?.exchangeVehicle;
             if (ev) {
-                toast.success(`Payment recorded! Exchange vehicle created: ${ev.make} (${ev.registrationNo}) — ${ev.message}`, { id: tid, duration: 6000 });
+                toast.success(`Payment recorded! Exchange vehicle created: ${ev.make} (${ev.registrationNo}) → Purchased Inventory`, { id: tid, duration: 6000 });
             } else {
                 toast.success("Payment recorded!", { id: tid });
             }
@@ -290,6 +316,7 @@ const AddSalePaymentDialog = ({ vehicle }: { vehicle: IVehicle }) => {
             queryClient.invalidateQueries({ queryKey: ["vehicles"] });
             queryClient.invalidateQueries({ queryKey: ["consignments"] });
             form.reset();
+            setPaymentMethod("Cash");
             setOpen(false);
         },
         onError: (err: unknown) => {
@@ -299,13 +326,13 @@ const AddSalePaymentDialog = ({ vehicle }: { vehicle: IVehicle }) => {
     });
 
     return (
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setPaymentMethod("Cash"); } }}>
             <DialogTrigger asChild>
                 <Button size="sm" className="bg-gradient-success text-white hover:opacity-90 cursor-pointer">
                     <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Payment
                 </Button>
             </DialogTrigger>
-            <DialogContent className="overflow-hidden p-0 sm:max-w-sm max-h-[90vh] flex flex-col bg-card border-border">
+            <DialogContent className="overflow-hidden p-0 sm:max-w-md max-h-[90vh] flex flex-col bg-card border-border">
                 <div className="glass-header relative p-5">
                     <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-success shadow-lg"><DollarSign className="h-4 w-4 text-white" /></div>
@@ -318,51 +345,61 @@ const AddSalePaymentDialog = ({ vehicle }: { vehicle: IVehicle }) => {
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit((v) => mutate(v))} className="flex flex-col flex-1 overflow-hidden min-h-0">
                         <div className="flex-1 overflow-y-auto p-5 space-y-4">
-                            <div className="grid grid-cols-2 gap-3">
+                            {/* Date + Amount */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <FormField control={form.control} name="date" render={({ field }) => (
                                     <FormItem><FormLabel className="text-xs font-semibold text-foreground">Date *</FormLabel>
                                         <FormControl><Input type="date" className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl><FormMessage /></FormItem>
                                 )} />
                                 <FormField control={form.control} name="amount" render={({ field }) => (
-                                    <FormItem><FormLabel className="text-xs font-semibold text-foreground">Amount &#8377; *</FormLabel>
-                                        <FormControl><Input type="number" min="0" className="h-9 bg-muted/50 border-border text-sm" value={field.value || ""} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} /></FormControl><FormMessage /></FormItem>
-                                )} />
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                <FormField control={form.control} name="mode" render={({ field }) => (
-                                    <FormItem><FormLabel className="text-xs font-semibold text-foreground">Mode *</FormLabel>
-                                        <Select onValueChange={field.onChange} value={field.value}>
-                                            <FormControl><SelectTrigger className="h-9 bg-muted/50 border-border text-sm"><SelectValue /></SelectTrigger></FormControl>
-                                            <SelectContent>{SALE_PAYMENT_MODES.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
-                                        </Select><FormMessage /></FormItem>
-                                )} />
-                                <FormField control={form.control} name="type" render={({ field }) => (
-                                    <FormItem><FormLabel className="text-xs font-semibold text-foreground">Type</FormLabel>
-                                        <Select onValueChange={field.onChange} value={field.value}>
-                                            <FormControl><SelectTrigger className="h-9 bg-muted/50 border-border text-sm"><SelectValue /></SelectTrigger></FormControl>
-                                            <SelectContent>
-                                                <SelectItem value="cash">Cash / Online</SelectItem>
-                                                <SelectItem value="exchange">Exchange Vehicle</SelectItem>
-                                            </SelectContent>
-                                        </Select></FormItem>
+                                    <FormItem><FormLabel className="text-xs font-semibold text-foreground">{isExchange ? "Exchange Value ₹ *" : "Amount ₹ *"}</FormLabel>
+                                        <FormControl>
+                                            <div className="relative">
+                                                <IndianRupee className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+                                                <Input type="number" min="0" className="h-9 bg-muted/50 border-border pl-7 text-sm" value={field.value || ""} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} />
+                                            </div>
+                                        </FormControl><FormMessage /></FormItem>
                                 )} />
                             </div>
 
-                            {/* ── Exchange Vehicle Section (Smart Picker) ── */}
-                            {paymentType === "exchange" && (
+                            {/* ── Payment Method Pills ── */}
+                            <div>
+                                <p className="text-xs font-semibold text-foreground mb-2">Payment Method *</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {SALE_PAYMENT_METHODS.map((m) => (
+                                        <button
+                                            key={m.value}
+                                            type="button"
+                                            onClick={() => handleMethodChange(m.value)}
+                                            className={cn(
+                                                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border",
+                                                paymentMethod === m.value
+                                                    ? m.value === "Exchange"
+                                                        ? "bg-orange-500/15 text-orange-400 border-orange-500/30 shadow-sm"
+                                                        : "bg-primary/15 text-primary border-primary/30 shadow-sm"
+                                                    : "bg-muted/30 text-muted-foreground border-border hover:bg-muted/60 hover:text-foreground"
+                                            )}
+                                        >
+                                            <span>{m.icon}</span>
+                                            {m.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* ── Exchange Vehicle Section ── */}
+                            {isExchange && (
                                 <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 p-4 space-y-4">
                                     <div className="flex items-center gap-2">
                                         <ArrowLeftRight className="h-3.5 w-3.5 text-orange-400" />
                                         <p className="text-[11px] font-bold text-orange-400 uppercase tracking-widest">Exchange Vehicle Details</p>
                                     </div>
 
-                                    {/* Smart picker — search existing inventory by reg number */}
                                     <ExchangeVehiclePicker
                                         regNo={form.watch("exchangeVehicleRegNo") ?? ""}
                                         make={form.watch("exchangeVehicleMake") ?? ""}
                                         model=""
                                         vehicleType={form.watch("exchangeVehicleType") ?? "two_wheeler"}
-                                        createExchangeAs={form.watch("createExchangeAs")}
                                         onChange={(v) => {
                                             form.setValue("exchangeVehicleRegNo", v.registrationNo);
                                             form.setValue("exchangeVehicleMake", `${v.make}${v.model ? " " + v.model : ""}`.trim());
@@ -375,21 +412,27 @@ const AddSalePaymentDialog = ({ vehicle }: { vehicle: IVehicle }) => {
                                             <FormControl><Input placeholder="Condition, deal notes..." className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl></FormItem>
                                     )} />
 
-                                    <FormField control={form.control} name="createExchangeAs" render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel className="text-xs font-semibold text-foreground">Add exchanged vehicle to inventory as</FormLabel>
-                                            <Select onValueChange={field.onChange} value={field.value ?? "skip"}>
-                                                <FormControl><SelectTrigger className="h-9 bg-muted/50 border-border text-sm"><SelectValue /></SelectTrigger></FormControl>
-                                                <SelectContent>
-                                                    <SelectItem value="skip">Record only — skip inventory</SelectItem>
-                                                    <SelectItem value="phase2_purchase">Phase 2 — Direct Purchase</SelectItem>
-                                                    <SelectItem value="phase3_park_sale">Phase 3 — Park Sale</SelectItem>
-                                                    <SelectItem value="phase3_finance_sale">Phase 3 — Finance Sale</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                            <p className="text-[11px] text-muted-foreground mt-1">Auto-creates a new record in the chosen module</p>
-                                        </FormItem>
-                                    )} />
+                                    {/* Auto-add to inventory toggle */}
+                                    <div className={cn(
+                                        "flex items-start gap-3 rounded-lg border p-3 transition-colors",
+                                        addToInventory ? "border-emerald-500/30 bg-emerald-500/5" : "border-dashed border-border"
+                                    )}>
+                                        <input
+                                            type="checkbox"
+                                            id="addToInventory"
+                                            checked={addToInventory ?? true}
+                                            onChange={e => form.setValue("addToInventory", e.target.checked)}
+                                            className="mt-0.5 h-4 w-4 rounded accent-emerald-500"
+                                        />
+                                        <div>
+                                            <label htmlFor="addToInventory" className="text-xs font-semibold text-foreground cursor-pointer">
+                                                Auto-add to Purchased Inventory
+                                            </label>
+                                            <p className="text-[11px] text-muted-foreground mt-0.5">
+                                                Creates a new vehicle in your purchased inventory with the exchange value as purchase price
+                                            </p>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
 
@@ -418,7 +461,6 @@ const AddSalePaymentDialog = ({ vehicle }: { vehicle: IVehicle }) => {
 // ── Main Vehicle Detail Component ─────────────────────────────────
 const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle | null }) => {
     const [activeTab, setActiveTab] = useState("overview");
-    const router = useRouter();
     const queryClient = useQueryClient();
 
     const { data: vehicle } = useQuery<IVehicle | null>({
@@ -654,7 +696,7 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                                         </Link>
                                     </div>
                                 );
-            })()}
+                            })()}
                         </div>
                     )}
                     {vehicle.remarks && (
@@ -843,7 +885,7 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                                                     <p className="text-xs font-bold text-orange-400 uppercase tracking-widest">Exchange Vehicle</p>
                                                     <p className="text-[10px] text-muted-foreground ml-auto">{formatDate(ep.date)}</p>
                                                 </div>
-                                                <div className="grid grid-cols-2 gap-3 text-sm">
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                                                     <div>
                                                         <p className="text-[11px] text-muted-foreground mb-0.5">Vehicle</p>
                                                         <p className="font-semibold text-foreground">{ep.exchangeVehicleMake || "—"}</p>

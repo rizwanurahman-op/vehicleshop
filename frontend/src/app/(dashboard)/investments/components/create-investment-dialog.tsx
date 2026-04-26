@@ -1,7 +1,6 @@
 "use client";
 
 import { z } from "zod";
-import { cn } from "@/lib/utils";
 import { useState } from "react";
 import axios from "@config/axios";
 import { AxiosError } from "axios";
@@ -12,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { formatApiErrors } from "@/lib/formatApiErrors";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { createInvestmentSchema } from "@schemas/investment";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { ArrowDownLeft, X, Plus, Calendar, Loader2, IndianRupee, Sparkles } from "lucide-react";

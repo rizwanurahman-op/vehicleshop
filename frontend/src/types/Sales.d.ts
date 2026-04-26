@@ -3,7 +3,7 @@ interface UnifiedSaleRecord {
     source: "vehicle" | "consignment";
     refId: string;
     saleType?: string;
-    vehicleType: string;
+    vehicleType: VehicleType;
     make: string;
     model: string;
     registrationNo: string;

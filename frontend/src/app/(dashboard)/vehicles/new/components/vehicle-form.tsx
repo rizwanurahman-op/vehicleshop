@@ -18,7 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Bike, Car, ChevronRight, ChevronLeft, Check, Loader2, Users, IndianRupee, Calendar, FileText } from "lucide-react";
-import { VEHICLE_MAKES_2W, VEHICLE_MAKES_4W, COST_CATEGORIES, PURCHASE_PAYMENT_MODES, FUNDING_SOURCES, NOC_STATUSES } from "@data/vehicle-constants";
+import { VEHICLE_MAKES_2W, VEHICLE_MAKES_4W, COST_CATEGORIES, FUNDING_SOURCES, NOC_STATUSES } from "@data/vehicle-constants";
 
 type FormData = z.infer<typeof createVehicleSchema>;
 
@@ -62,9 +62,11 @@ const VehicleForm = () => {
         },
     });
 
-    const vehicleType = form.watch("vehicleType");
-    const purchasePrice = form.watch("purchasePrice") || 0;
-    const costs = COST_CATEGORIES.map((c) => form.watch(c.key as keyof FormData) as number || 0);
+    // Use watch() for ALL values so the Review step is always reactive
+    const watched = form.watch();
+    const vehicleType = watched.vehicleType;
+    const purchasePrice = watched.purchasePrice || 0;
+    const costs = COST_CATEGORIES.map((c) => (watched[c.key as keyof FormData] as number) || 0);
     const totalCosts = costs.reduce((a, b) => a + b, 0);
     const totalInvestment = purchasePrice + totalCosts;
     const makes = vehicleType === "two_wheeler" ? VEHICLE_MAKES_2W : VEHICLE_MAKES_4W;
@@ -122,7 +124,9 @@ const VehicleForm = () => {
             <div className="mb-8 flex items-center gap-1">
                 {STEPS.map((s, i) => (
                     <div key={s.id} className="flex flex-1 items-center">
+                        {/* MUST be type="button" — default is type="submit" which would submit the form */}
                         <button
+                            type="button"
                             onClick={() => step > s.id && setStep(s.id)}
                             className={cn(
                                 "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-all",
@@ -133,7 +137,7 @@ const VehicleForm = () => {
                         >
                             {step > s.id ? <Check className="h-4 w-4" /> : s.id}
                         </button>
-                        {!form.watch("vehicleType") || i < STEPS.length - 1 && (
+                        {i < STEPS.length - 1 && (
                             <div className={cn("h-0.5 flex-1 transition-colors", step > s.id ? "bg-emerald-500" : "bg-muted/60")} />
                         )}
                     </div>
@@ -141,7 +145,7 @@ const VehicleForm = () => {
             </div>
 
             <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)}>
+                <form onSubmit={(e) => e.preventDefault()}>
                     <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
 
                         {/* ───── STEP 1: Vehicle Details ───── */}
@@ -156,7 +160,7 @@ const VehicleForm = () => {
                                 <FormField control={form.control} name="vehicleType" render={({ field }) => (
                                     <FormItem>
                                         <FormLabel className="font-semibold text-foreground">Vehicle Type <span className="text-destructive">*</span></FormLabel>
-                                        <div className="grid grid-cols-2 gap-3">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                             {[{ v: "two_wheeler", label: "Two Wheeler", Icon: Bike }, { v: "four_wheeler", label: "Four Wheeler", Icon: Car }].map(({ v, label, Icon }) => (
                                                 <button key={v} type="button" onClick={() => field.onChange(v)}
                                                     className={cn("flex items-center gap-3 rounded-xl border-2 p-4 transition-all text-left", field.value === v ? "border-primary bg-primary/10" : "border-border bg-muted/20 hover:border-primary/40")}>
@@ -379,16 +383,18 @@ const VehicleForm = () => {
                                     <h2 className="font-bold text-foreground text-lg">Review & Confirm</h2>
                                     <p className="text-xs text-muted-foreground mt-0.5">Double-check everything before saving</p>
                                 </div>
+                                {/* Use watched values (reactive) — NOT form.getValues() which is a one-time snapshot */}
                                 {[
-                                    { label: "Vehicle", value: `${form.getValues("vehicleType") === "two_wheeler" ? "🏍️" : "🚗"} ${form.getValues("make")} ${form.getValues("model")}${form.getValues("year") ? ` (${form.getValues("year")})` : ""}` },
-                                    { label: "Registration No", value: form.getValues("registrationNo") },
-                                    { label: "Purchased From", value: form.getValues("purchasedFrom") + (form.getValues("purchasedFromPhone") ? ` • ${form.getValues("purchasedFromPhone")}` : "") },
-                                    { label: "Date Purchased", value: form.getValues("datePurchased") },
+                                    { label: "Vehicle", value: `${watched.vehicleType === "two_wheeler" ? "🏍️" : "🚗"} ${watched.make} ${watched.model}${watched.year ? ` (${watched.year})` : ""}` },
+                                    { label: "Registration No", value: watched.registrationNo },
+                                    { label: "Purchased From", value: watched.purchasedFrom + (watched.purchasedFromPhone ? ` • ${watched.purchasedFromPhone}` : "") },
+                                    { label: "Date Purchased", value: watched.datePurchased },
                                     { label: "Purchase Price", value: `₹${formatINR(purchasePrice)}` },
                                     { label: "Total Investment", value: `₹${formatINR(totalInvestment)}` },
-                                    { label: "Funding Source", value: FUNDING_SOURCES.find((f) => f.value === form.getValues("fundingSource"))?.label || "-" },
-                                    ...(form.getValues("color") ? [{ label: "Color", value: form.getValues("color") as string }] : []),
-                                    ...(form.getValues("remarks") ? [{ label: "Remarks", value: form.getValues("remarks") as string }] : []),
+                                    { label: "Funding Source", value: FUNDING_SOURCES.find((f) => f.value === watched.fundingSource)?.label || "-" },
+                                    ...(watched.color ? [{ label: "Color", value: watched.color }] : []),
+                                    ...(watched.nocStatus && watched.nocStatus !== "not_applicable" ? [{ label: "NOC Status", value: watched.nocStatus }] : []),
+                                    ...(watched.remarks ? [{ label: "Remarks", value: watched.remarks }] : []),
                                 ].map((row) => (
                                     <div key={row.label} className="flex items-center justify-between rounded-lg bg-muted/20 px-4 py-2.5 text-sm">
                                         <span className="text-muted-foreground">{row.label}</span>
@@ -398,10 +404,10 @@ const VehicleForm = () => {
                                 {totalCosts > 0 && (
                                     <div className="rounded-xl border border-border bg-muted/10 p-4">
                                         <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-2">Reconditioning Costs</p>
-                                        {COST_CATEGORIES.filter((c) => (form.getValues(c.key as keyof FormData) as number) > 0).map((cat) => (
+                                        {COST_CATEGORIES.filter((c) => ((watched[c.key as keyof FormData] as number) || 0) > 0).map((cat) => (
                                             <div key={cat.key} className="flex justify-between text-sm py-0.5">
                                                 <span className="text-muted-foreground">{cat.icon} {cat.label}</span>
-                                                <span className="font-medium text-foreground">₹{formatINR(form.getValues(cat.key as keyof FormData) as number)}</span>
+                                                <span className="font-medium text-foreground">₹{formatINR((watched[cat.key as keyof FormData] as number) || 0)}</span>
                                             </div>
                                         ))}
                                     </div>
@@ -415,11 +421,11 @@ const VehicleForm = () => {
                                 <ChevronLeft className="mr-1.5 h-4 w-4" /> {step === 1 ? "Cancel" : "Back"}
                             </Button>
                             {step < 5 ? (
-                                <Button type="button" onClick={nextStep} className="bg-gradient-brand text-white hover:opacity-90">
+                                <Button key="next-btn" type="button" onClick={nextStep} className="bg-gradient-brand text-white hover:opacity-90">
                                     Next <ChevronRight className="ml-1.5 h-4 w-4" />
                                 </Button>
                             ) : (
-                                <Button type="submit" disabled={isPending} className="bg-gradient-brand text-white hover:opacity-90">
+                                <Button key="submit-btn" type="button" disabled={isPending} onClick={() => form.handleSubmit(onSubmit)()} className="bg-gradient-brand text-white hover:opacity-90">
                                     {isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</> : <><Check className="mr-2 h-4 w-4" /> Add Vehicle</>}
                                 </Button>
                             )}

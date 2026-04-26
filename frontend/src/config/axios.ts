@@ -1,5 +1,6 @@
 import axios from "axios";
 import { getClientSession, setClientSession, clearClientSession } from "@/lib/auth";
+import { useSessionStore } from "@/stores/session";
 
 const apiClient = axios.create({
     baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1",
@@ -34,6 +35,16 @@ const processQueue = (error: unknown, token: string | null = null) => {
     failedQueue = [];
 };
 
+// Force a full logout: clear cookie + clear Zustand session store
+const forceLogout = () => {
+    clearClientSession();
+    // Access the store outside React — this is safe with Zustand's getState()
+    useSessionStore.getState().clearSession();
+    if (typeof window !== "undefined") {
+        window.location.href = "/auth/login";
+    }
+};
+
 apiClient.interceptors.response.use(
     response => response,
     async error => {
@@ -64,12 +75,12 @@ apiClient.interceptors.response.use(
                     processQueue(null, newToken);
                     return apiClient(originalRequest);
                 }
+                // Refresh succeeded but returned no token — force logout
+                processQueue(new Error("No token in refresh response"), null);
+                forceLogout();
             } catch (refreshError) {
                 processQueue(refreshError, null);
-                clearClientSession();
-                if (typeof window !== "undefined") {
-                    window.location.href = "/auth/login";
-                }
+                forceLogout();
                 return Promise.reject(refreshError);
             } finally {
                 isRefreshing = false;

@@ -11,7 +11,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreateInvestmentDialog, UpdateInvestmentDialog, DeleteInvestmentDialog } from ".";
 import { EmptyState, TableSkeleton, CurrencyDisplay, DateDisplay } from "@components/shared";
-import { cn } from "@/lib/utils";
 import { useDebounce } from "@hooks/use-debounce";
 import { PAYMENT_MODES } from "@data";
 
@@ -78,45 +77,104 @@ const InvestmentList = ({ initialData }: InvestmentListProps) => {
                 ) : !data || data.length === 0 ? (
                     <EmptyState icon={ArrowDownLeft} title="No investments yet" description="Record the first investment from a lender." action={<CreateInvestmentDialog />} />
                 ) : (
-                    <div className="overflow-x-auto">
-                        <Table>
-                            <TableHeader>
-                                <TableRow className="border-border hover:bg-transparent">
-                                    <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">ID</TableHead>
-                                    <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Date</TableHead>
-                                    <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Lender</TableHead>
-                                    <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Amount</TableHead>
-                                    <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Mode</TableHead>
-                                    <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Notes</TableHead>
-                                    <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {data.map(inv => {
-                                    const lender = inv.lender as ILender;
-                                    return (
-                                        <TableRow key={inv._id} className="border-border hover:bg-muted/50 transition-colors">
-                                            <TableCell><span className="font-mono-id text-primary">{inv.investmentId}</span></TableCell>
-                                            <TableCell><DateDisplay date={inv.date} className="text-muted-foreground" /></TableCell>
-                                            <TableCell>
-                                                <div className="font-medium">{lender?.name || "—"}</div>
-                                                <div className="font-mono-id text-muted-foreground">{lender?.lenderId || ""}</div>
-                                            </TableCell>
-                                            <TableCell className="text-right"><CurrencyDisplay amount={inv.amountReceived} /></TableCell>
-                                            <TableCell><Badge variant="outline" className="text-[11px]">{inv.mode}</Badge></TableCell>
-                                            <TableCell><span className="text-xs text-muted-foreground">{inv.notes || "—"}</span></TableCell>
-                                            <TableCell className="text-right">
-                                                <div className="flex items-center justify-end gap-1">
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditItem(inv)}><Edit size={14} /></Button>
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-destructive" onClick={() => setDeleteItem(inv)}><Trash2 size={14} /></Button>
+                    <>
+                        {/* Mobile Cards View (< md) */}
+                        <div className="grid grid-cols-1 gap-4 p-4 md:hidden bg-muted/10">
+                            {data.map((inv) => {
+                                const lender = inv.lender as ILender;
+                                return (
+                                    <div key={inv._id} className="group flex flex-col rounded-2xl border border-border/60 bg-gradient-to-b from-card to-muted/10 p-5 shadow-sm hover:shadow-md hover:border-primary/30 transition-all overflow-hidden relative">
+                                        <div className="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-primary/50 to-primary" />
+                                        
+                                        {/* Header */}
+                                        <div className="flex items-center justify-between mb-4">
+                                            <div className="flex items-center gap-2">
+                                                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 shrink-0">
+                                                    <ArrowDownLeft className="h-4 w-4 text-primary" />
                                                 </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    );
-                                })}
-                            </TableBody>
-                        </Table>
-                    </div>
+                                                <div className="min-w-0">
+                                                    <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Investment</p>
+                                                    <p className="text-[10px] text-muted-foreground font-mono">{inv.investmentId}</p>
+                                                </div>
+                                            </div>
+                                            <DateDisplay date={inv.date} className="text-xs font-semibold text-foreground" />
+                                        </div>
+
+                                        {/* Lender Details */}
+                                        <div className="relative mb-5">
+                                            <p className="text-lg font-bold text-foreground tracking-tight leading-none mb-1.5">{lender?.name || "—"}</p>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <span className="text-[10px] text-muted-foreground font-mono bg-muted/50 px-1.5 py-0.5 rounded">{lender?.lenderId || ""}</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Financial details */}
+                                        <div className="relative mt-auto pt-4 border-t border-border/60 border-dashed">
+                                            <div className="flex items-end justify-between mb-3">
+                                                <div>
+                                                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Mode</p>
+                                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-muted/50">{inv.mode}</Badge>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-[10px] font-bold uppercase tracking-widest text-primary mb-1">Amount</p>
+                                                    <p className="text-xl font-bold text-primary tabular-nums leading-none"><CurrencyDisplay amount={inv.amountReceived} /></p>
+                                                </div>
+                                            </div>
+                                            {inv.notes && (
+                                                <p className="text-[11px] text-muted-foreground bg-muted/30 p-2 rounded-lg line-clamp-2 mt-2">{inv.notes}</p>
+                                            )}
+                                        </div>
+
+                                        <div className="absolute top-4 right-4 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <Button variant="ghost" size="icon" className="h-7 w-7 bg-card/80 shadow-sm" onClick={() => setEditItem(inv)}><Edit size={12} /></Button>
+                                            <Button variant="ghost" size="icon" className="h-7 w-7 bg-card/80 shadow-sm text-destructive" onClick={() => setDeleteItem(inv)}><Trash2 size={12} /></Button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* Desktop Table View (>= md) */}
+                        <div className="hidden md:block overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="border-border hover:bg-transparent">
+                                        <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">ID</TableHead>
+                                        <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Date</TableHead>
+                                        <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Lender</TableHead>
+                                        <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Amount</TableHead>
+                                        <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Mode</TableHead>
+                                        <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Notes</TableHead>
+                                        <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Actions</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {data.map(inv => {
+                                        const lender = inv.lender as ILender;
+                                        return (
+                                            <TableRow key={inv._id} className="border-border hover:bg-muted/50 transition-colors group">
+                                                <TableCell><span className="font-mono-id text-primary">{inv.investmentId}</span></TableCell>
+                                                <TableCell><DateDisplay date={inv.date} className="text-muted-foreground" /></TableCell>
+                                                <TableCell>
+                                                    <div className="font-medium">{lender?.name || "—"}</div>
+                                                    <div className="font-mono-id text-muted-foreground">{lender?.lenderId || ""}</div>
+                                                </TableCell>
+                                                <TableCell className="text-right"><CurrencyDisplay amount={inv.amountReceived} /></TableCell>
+                                                <TableCell><Badge variant="outline" className="text-[11px]">{inv.mode}</Badge></TableCell>
+                                                <TableCell><span className="text-xs text-muted-foreground">{inv.notes || "—"}</span></TableCell>
+                                                <TableCell className="text-right">
+                                                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditItem(inv)}><Edit size={14} /></Button>
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-destructive" onClick={() => setDeleteItem(inv)}><Trash2 size={14} /></Button>
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </>
                 )}
             </div>
 

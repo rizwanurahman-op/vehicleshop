@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import {
     ShoppingCart, Search, Filter, ChevronLeft, ChevronRight, Eye,
     CheckCircle2, Clock, AlertTriangle, IndianRupee, Wallet, Ban,
-    TrendingUp, Bike, Car
+    TrendingUp, Bike, Car, User
 } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import VehicleTypeIcon from "../../vehicles/components/vehicle-type-icon";
@@ -31,7 +31,7 @@ interface PurchaseStats {
 interface PurchaseVehicle {
     _id: string;
     vehicleId: string;
-    vehicleType: string;
+    vehicleType: VehicleType;
     make: string;
     model: string;
     registrationNo: string;
@@ -144,7 +144,7 @@ const PurchasesList = () => {
 
             {/* Stats */}
             {stats && (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                     <StatCard
                         label="Total Purchase Value"
                         value={formatCurrency(stats.totalPurchasePrice)}
@@ -225,10 +225,110 @@ const PurchasesList = () => {
                 </Select>
             </div>
 
-            {/* Table */}
+            {/* Data View */}
             <div className="rounded-xl border border-border bg-card overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                {/* Mobile Cards View (< md) */}
+                <div className="grid grid-cols-1 gap-4 p-4 md:hidden bg-muted/10">
+                    {isLoading ? (
+                        Array.from({ length: 4 }).map((_, i) => (
+                            <div key={i} className="h-40 animate-pulse rounded-xl bg-muted/40 border border-border/50" />
+                        ))
+                    ) : records.length === 0 ? (
+                        <div className="py-12 text-center text-sm text-muted-foreground">
+                            <ShoppingCart className="h-8 w-8 mx-auto mb-3 opacity-30" />
+                            No vehicles found
+                        </div>
+                    ) : (
+                        records.map((v) => {
+                            const paidAmount = v.purchasePrice - v.purchasePendingAmount;
+                            const paidPct = v.purchasePrice > 0 ? (paidAmount / v.purchasePrice) * 100 : 100;
+                            return (
+                                <Link key={v._id} href={`/vehicles/${v._id}`} className="group relative flex flex-col rounded-2xl border border-border/60 bg-gradient-to-b from-card to-muted/10 p-5 shadow-sm hover:shadow-md hover:border-primary/30 transition-all overflow-hidden">
+                                    {/* Decorative background glow */}
+                                    <div className="absolute top-0 right-0 -mt-4 -mr-4 h-24 w-24 rounded-full bg-primary/10 blur-2xl opacity-50 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                                    
+                                    {/* Top colored status bar */}
+                                    {v.purchasePendingAmount > 0 ? (
+                                        <div className="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-orange-400 to-red-500" />
+                                    ) : (
+                                        <div className="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-emerald-400 to-emerald-500" />
+                                    )}
+
+                                    {/* Header: Date & Status */}
+                                    <div className="relative flex items-center justify-between mb-4">
+                                        <div className="flex items-center gap-2 text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
+                                            <span className="flex items-center justify-center h-6 w-6 rounded bg-muted/80">
+                                                <VehicleTypeIcon type={v.vehicleType} className="h-3.5 w-3.5" />
+                                            </span>
+                                            {formatDate(v.datePurchased)}
+                                        </div>
+                                        <PaymentStatusBadge status={v.purchasePaymentStatus} />
+                                    </div>
+
+                                    {/* Vehicle & Seller */}
+                                    <div className="relative mb-5 flex flex-col items-start">
+                                        <p className="text-lg font-bold text-foreground tracking-tight leading-none mb-1.5 group-hover:text-primary transition-colors">{v.make} {v.model}</p>
+                                        <p className="text-[11px] font-medium text-muted-foreground mb-3">REG: <span className="text-foreground">{v.registrationNo}</span></p>
+                                        
+                                        <div className="inline-flex items-center gap-2 rounded-lg bg-muted/40 px-2.5 py-1.5 border border-border/50">
+                                            <div className="h-5 w-5 rounded-full bg-muted-foreground/20 flex items-center justify-center shrink-0">
+                                                <User className="h-3 w-3 text-muted-foreground" />
+                                            </div>
+                                            <span className="text-xs font-medium text-foreground truncate max-w-[110px] sm:max-w-[180px]">{v.purchasedFrom}</span>
+                                            {v.purchasedFromPhone && <span className="text-[10px] text-muted-foreground ml-1 shrink-0">· {v.purchasedFromPhone}</span>}
+                                        </div>
+                                    </div>
+
+                                    {/* Price & Balance Section - Bank App Style */}
+                                    <div className="relative mt-auto pt-4 border-t border-border/60 border-dashed">
+                                        <div className="flex items-end justify-between mb-4">
+                                            <div>
+                                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Total Price</p>
+                                                <p className="text-xl font-bold text-foreground tabular-nums leading-none tracking-tight">{formatCurrency(v.purchasePrice)}</p>
+                                            </div>
+                                            <div className="text-right">
+                                                {v.purchasePendingAmount > 0 ? (
+                                                    <>
+                                                        <p className="text-[10px] font-bold uppercase tracking-widest text-red-400 mb-1">Due Balance</p>
+                                                        <p className="text-base font-bold text-red-500 tabular-nums leading-none">{formatCurrency(v.purchasePendingAmount)}</p>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-500 mb-1.5">Fully Settled</p>
+                                                        <div className="flex items-center justify-end gap-1">
+                                                            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                                                            <p className="text-sm font-bold text-emerald-500 tabular-nums leading-none">{formatCurrency(paidAmount)}</p>
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Progress Bar & Details */}
+                                        <div>
+                                            <div className="relative h-1.5 w-full rounded-full bg-muted/80 overflow-hidden mb-2">
+                                                <div 
+                                                    className={cn("absolute top-0 left-0 h-full transition-all duration-700 ease-out", 
+                                                        paidPct >= 100 ? "bg-emerald-500" : paidPct > 0 ? "bg-gradient-to-r from-orange-400 to-emerald-400" : "bg-red-500"
+                                                    )}
+                                                    style={{ width: `${Math.min(paidPct, 100)}%` }}
+                                                />
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <p className="text-[10px] text-muted-foreground font-semibold">Paid: <span className="text-foreground">{formatCurrency(paidAmount)}</span></p>
+                                                <p className="text-[10px] text-muted-foreground font-semibold">{paidPct.toFixed(0)}% Completed</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </Link>
+                            );
+                        })
+                    )}
+                </div>
+
+                {/* Desktop Table View (>= md) */}
+                <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full min-w-[800px] text-sm">
                         <thead>
                             <tr className="border-b border-border bg-muted/30">
                                 {["Type", "Date", "Vehicle", "Seller", "Purchase Price", "Paid", "Pending", "Status", "View"].map((h) => (

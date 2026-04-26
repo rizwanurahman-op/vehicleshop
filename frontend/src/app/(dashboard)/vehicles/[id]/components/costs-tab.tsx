@@ -442,7 +442,7 @@ const CostsTab = ({ vehicle }: { vehicle: IVehicle }) => {
     return (
         <div className="space-y-4">
             {/* Summary bar */}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="rounded-xl border border-border bg-card p-4 text-center">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Purchase Price</p>
                     <p className="text-base font-bold text-foreground">{formatCurrency(vehicle.purchasePrice)}</p>

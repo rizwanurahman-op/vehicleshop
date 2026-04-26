@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { Metadata } from "next";
 import { APP_NAME } from "@data";
 import { LoginForm } from "./components";
@@ -8,5 +9,9 @@ export const metadata: Metadata = {
 };
 
 export default function LoginPage() {
-    return <LoginForm />;
+    return (
+        <Suspense>
+            <LoginForm />
+        </Suspense>
+    );
 }

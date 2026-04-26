@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
     ReceiptText, TrendingUp, TrendingDown, ChevronLeft, ChevronRight,
     Eye, AlertTriangle, Search, ArrowLeftRight, Car, Building2,
-    IndianRupee, CheckCircle2, Clock, Filter
+    IndianRupee, CheckCircle2, Clock, Filter, User
 } from "lucide-react";
 import VehicleTypeIcon from "../../vehicles/components/vehicle-type-icon";
 import { Badge } from "@/components/ui/badge";
@@ -118,7 +118,7 @@ const SalesList = ({ initialData }: SalesListProps) => {
 
             {/* Stats Grid */}
             {stats && (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                     <StatCard label="Total Revenue" value={formatCurrency(stats.totalRevenue)} sub={`${stats.totalSales} sales`} icon={IndianRupee} bg="bg-card border-border" />
                     <StatCard label="Total Received" value={formatCurrency(stats.totalReceived)} color="text-emerald-400" bg="bg-emerald-500/5 border-emerald-500/20" icon={CheckCircle2} />
                     <StatCard label="Outstanding" value={formatCurrency(stats.totalBalance)} sub={`${stats.pendingCount} pending`} color="text-red-400" bg="bg-red-500/5 border-red-500/20" icon={Clock} />
@@ -128,7 +128,7 @@ const SalesList = ({ initialData }: SalesListProps) => {
 
             {/* Secondary stats strip */}
             {stats && (
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div className="rounded-xl border border-border bg-card px-4 py-3 flex items-center justify-between">
                         <div className="flex items-center gap-2 text-sm"><Car className="h-4 w-4 text-blue-400" /><span className="text-muted-foreground">Purchase Sales</span></div>
                         <span className="font-bold text-foreground">{stats.vehicleSales}</span>
@@ -199,10 +199,114 @@ const SalesList = ({ initialData }: SalesListProps) => {
                 </Select>
             </div>
 
-            {/* Table */}
+            {/* Data View */}
             <div className="rounded-xl border border-border bg-card overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                {/* Mobile Cards View (< md) */}
+                <div className="grid grid-cols-1 gap-4 p-4 md:hidden bg-muted/10">
+                    {isLoading ? (
+                        Array.from({ length: 4 }).map((_, i) => (
+                            <div key={i} className="h-40 animate-pulse rounded-2xl bg-muted/40 border border-border/50" />
+                        ))
+                    ) : records.length === 0 ? (
+                        <div className="py-12 text-center text-sm text-muted-foreground">
+                            <ReceiptText className="h-8 w-8 mx-auto mb-3 opacity-30" />
+                            No sales found
+                        </div>
+                    ) : (
+                        records.map((r) => {
+                            const isProfit = r.profitLoss >= 0;
+                            const href = `/${r.source === "vehicle" ? "vehicles" : "consignments"}/${r._id}`;
+                            const paidPct = r.soldPrice > 0 ? (r.receivedAmount / r.soldPrice) * 100 : 100;
+
+                            return (
+                                <Link key={r._id} href={href} className="group relative flex flex-col rounded-2xl border border-border/60 bg-gradient-to-b from-card to-muted/10 p-5 shadow-sm hover:shadow-md hover:border-primary/30 transition-all overflow-hidden">
+                                    {/* Decorative glow */}
+                                    <div className="absolute top-0 right-0 -mt-4 -mr-4 h-24 w-24 rounded-full bg-primary/10 blur-2xl opacity-50 group-hover:opacity-100 transition-opacity pointer-events-none" />
+
+                                    {/* Status top bar */}
+                                    {r.balanceAmount > 0 ? (
+                                        <div className="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-orange-400 to-red-500" />
+                                    ) : (
+                                        <div className="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-emerald-400 to-emerald-500" />
+                                    )}
+
+                                    {/* Header */}
+                                    <div className="relative flex items-center justify-between mb-4">
+                                        <div className="flex items-center gap-2 text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
+                                            <span className="flex items-center justify-center h-6 w-6 rounded bg-muted/80">
+                                                <VehicleTypeIcon type={r.vehicleType} className="h-3.5 w-3.5" />
+                                            </span>
+                                            {r.dateSold ? formatDate(r.dateSold) : "—"}
+                                        </div>
+                                        <SaleStatusBadge status={r.saleStatus} />
+                                    </div>
+
+                                    {/* Vehicle & Buyer */}
+                                    <div className="relative mb-5 flex flex-col items-start">
+                                        <div className="flex items-center gap-2 mb-1.5">
+                                            <p className="text-lg font-bold text-foreground tracking-tight leading-none group-hover:text-primary transition-colors">{r.make} {r.model}</p>
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-2 mb-3">
+                                            <span className="text-[11px] font-medium text-muted-foreground">REG: <span className="text-foreground">{r.registrationNo}</span></span>
+                                            <span className="text-[10px] text-muted-foreground font-mono bg-muted/50 px-1 rounded">{r.refId}</span>
+                                            <SourceBadge source={r.source} saleType={r.saleType} />
+                                            {r.isExchange && (
+                                                <Badge className="bg-orange-500/10 text-orange-400 border-orange-500/20 text-[9px] gap-0.5 px-1.5 py-0">
+                                                    <ArrowLeftRight className="h-2 w-2" />Exchange
+                                                </Badge>
+                                            )}
+                                        </div>
+                                        
+                                        <div className="inline-flex items-center gap-2 rounded-lg bg-muted/40 px-2.5 py-1.5 border border-border/50">
+                                            <div className="h-5 w-5 rounded-full bg-muted-foreground/20 flex items-center justify-center shrink-0">
+                                                <User className="h-3 w-3 text-muted-foreground" />
+                                            </div>
+                                            <span className="text-xs font-medium text-foreground truncate max-w-[110px] sm:max-w-[180px]">{r.soldTo}</span>
+                                            {r.soldToPhone && <span className="text-[10px] text-muted-foreground ml-1 shrink-0">· {r.soldToPhone}</span>}
+                                        </div>
+                                    </div>
+
+                                    {/* Financial Section */}
+                                    <div className="relative mt-auto pt-4 border-t border-border/60 border-dashed">
+                                        <div className="flex items-end justify-between mb-4">
+                                            <div>
+                                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Sold Price</p>
+                                                <p className="text-xl font-bold text-foreground tabular-nums leading-none tracking-tight">{formatCurrency(r.soldPrice)}</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Profit/Loss</p>
+                                                <span className={cn("inline-flex items-center justify-end gap-1 font-bold text-base tabular-nums leading-none", isProfit ? "text-emerald-500" : "text-red-500")}>
+                                                    {isProfit ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+                                                    {isProfit ? "+" : ""}{formatCurrency(r.profitLoss)}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Progress Bar & Balances */}
+                                        <div>
+                                            <div className="flex justify-between text-[11px] font-bold mb-1.5">
+                                                <span className="text-emerald-500">Recv: {formatCurrency(r.receivedAmount)}</span>
+                                                <span className={r.balanceAmount > 0 ? "text-red-500" : "text-emerald-500"}>Bal: {formatCurrency(r.balanceAmount)}</span>
+                                            </div>
+                                            <div className="relative h-1.5 w-full rounded-full bg-muted/80 overflow-hidden">
+                                                <div 
+                                                    className={cn("absolute top-0 left-0 h-full transition-all duration-700 ease-out", 
+                                                        paidPct >= 100 ? "bg-emerald-500" : paidPct > 0 ? "bg-gradient-to-r from-orange-400 to-emerald-400" : "bg-red-500"
+                                                    )}
+                                                    style={{ width: `${Math.min(paidPct, 100)}%` }}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </Link>
+                            );
+                        })
+                    )}
+                </div>
+
+                {/* Desktop Table View (>= md) */}
+                <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full min-w-[900px] text-sm">
                         <thead>
                             <tr className="border-b border-border bg-muted/30">
                                 <th className="px-4 py-3 text-left text-xs font-bold text-muted-foreground uppercase tracking-wider">Type</th>
