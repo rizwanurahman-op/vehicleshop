@@ -4,10 +4,9 @@ import { usePathname } from "next/navigation";
 import { useSessionStore } from "@stores/session";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { LogOut, User, Settings, Bell } from "lucide-react";
+import { LogOut, User, Settings, Bell, Car } from "lucide-react";
 import { ThemeToggle } from ".";
 import { LogoutDialog } from ".";
-import MobileNav from "./mobile-nav";
 import { useState } from "react";
 
 const getPageTitle = (pathname: string): string => {
@@ -32,7 +31,10 @@ const Navbar = () => {
         <>
             <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-card px-4 sm:px-6">
                 <div className="flex items-center gap-3">
-                    <MobileNav />
+                    {/* Replaced MobileNav with Logo for mobile */}
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-brand shadow-md md:hidden">
+                        <Car className="h-4 w-4 text-white" />
+                    </div>
                     <h1 className="text-lg font-bold text-foreground">{title}</h1>
                 </div>
 

@@ -1,52 +1,68 @@
+// ─── DNS Override (must be first, before any network imports) ─────────────────
+import dns from "dns";
+dns.setServers(["1.1.1.1", "8.8.8.8", "8.8.4.4"]);
+
 import dotenv from "dotenv";
 dotenv.config();
 
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import { User } from "../models/user.model";
-import { initializeCounters } from "../services/counter.service";
 
+// ─── Admin credentials (change password after first login!) ───────────────────
+const ADMIN = {
+    username: "admin",
+    email: "admin@vehiclebook.in",
+    password: "Admin@123",
+    role: "admin" as const,
+};
+
+// ─── Seed ─────────────────────────────────────────────────────────────────────
 const seed = async () => {
     const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/vehiclebook";
-    
+
     console.log("🌱 Connecting to MongoDB...");
-    await mongoose.connect(MONGODB_URI);
-    console.log("✅ Connected!");
+    await mongoose.connect(MONGODB_URI, { dbName: "vehiclebook" });
+    console.log("✅ Connected!\n");
 
-    await initializeCounters();
-
-    // Check if admin already exists
-    const existing = await User.findOne({ username: "admin" });
+    // Idempotent — skip if admin already exists
+    const existing = await User.findOne({ username: ADMIN.username });
     if (existing) {
-        console.log("⚠️  Admin user already exists! Credentials:");
-        console.log("   Username : admin");
-        console.log("   Email    : admin@vehiclebook.in");
-        console.log("   Password : admin123");
+        console.log("⚠️  Admin user already exists. No changes made.");
+        console.log("");
+        console.log("   🔐 Use these credentials to login:");
+        console.log("   ┌──────────────────────────────────────┐");
+        console.log("   │  Username : admin                    │");
+        console.log("   │  Email    : admin@vehiclebook.in     │");
+        console.log("   │  Password : (as set during seed)     │");
+        console.log("   └──────────────────────────────────────┘");
         await mongoose.disconnect();
-        return;
+        process.exit(0);
     }
 
-    const passwordHash = await bcrypt.hash("admin123", 12);
+    const passwordHash = await bcrypt.hash(ADMIN.password, 12);
 
     await User.create({
-        username: "admin",
-        email: "admin@vehiclebook.in",
+        username: ADMIN.username,
+        email: ADMIN.email,
         passwordHash,
-        role: "admin",
+        role: ADMIN.role,
     });
 
     console.log("✅ Admin user created successfully!");
     console.log("");
     console.log("   🔐 Login Credentials:");
-    console.log("   ┌────────────────────────────────┐");
-    console.log("   │  Username : admin              │");
-    console.log("   │  Email    : admin@vehiclebook.in│");
-    console.log("   │  Password : admin123           │");
-    console.log("   └────────────────────────────────┘");
+    console.log("   ┌──────────────────────────────────────┐");
+    console.log("   │  Username : admin                    │");
+    console.log("   │  Email    : admin@vehiclebook.in     │");
+    console.log(`   │  Password : ${ADMIN.password.padEnd(24)}│`);
+    console.log("   └──────────────────────────────────────┘");
+    console.log("");
+    console.log("   ⚠️  Please change your password after first login!");
     console.log("");
 
     await mongoose.disconnect();
-    console.log("✅ Done!");
+    console.log("✅ Seed complete.");
     process.exit(0);
 };
 

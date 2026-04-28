@@ -19,7 +19,7 @@ export const getVehicleOwners = async (req: Request, res: Response): Promise<voi
 };
 
 export const getVehicleOwner = async (req: Request, res: Response): Promise<void> => {
-    const owner = await vos.getVehicleOwnerWithSummary(req.params.id);
+    const owner = await vos.getVehicleOwnerWithSummary(req.params.id as string);
     if (!owner) { res.status(404).json({ success: false, statusCode: 404, message: "Owner not found" }); return; }
     res.json({ success: true, statusCode: 200, message: "Owner fetched", data: owner });
 };
@@ -27,13 +27,13 @@ export const getVehicleOwner = async (req: Request, res: Response): Promise<void
 export const updateVehicleOwner = async (req: Request, res: Response): Promise<void> => {
     const parsed = updateVehicleOwnerSchema.safeParse(req.body);
     if (!parsed.success) { validationError(res, parsed.error.errors); return; }
-    const owner = await vos.updateVehicleOwner(req.params.id, parsed.data as never);
+    const owner = await vos.updateVehicleOwner(req.params.id as string, parsed.data as never);
     if (!owner) { res.status(404).json({ success: false, statusCode: 404, message: "Owner not found" }); return; }
     res.json({ success: true, statusCode: 200, message: "Owner updated", data: owner });
 };
 
 export const deleteVehicleOwner = async (req: Request, res: Response): Promise<void> => {
-    const ok = await vos.deleteVehicleOwner(req.params.id);
+    const ok = await vos.deleteVehicleOwner(req.params.id as string);
     if (!ok) { res.status(404).json({ success: false, statusCode: 404, message: "Owner not found" }); return; }
     res.json({ success: true, statusCode: 200, message: "Owner deleted" });
 };

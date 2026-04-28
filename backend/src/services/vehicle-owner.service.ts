@@ -27,7 +27,7 @@ export const getVehicleOwnerById = async (id: string) => {
     return VehicleOwner.findOne({ _id: id, isActive: true });
 };
 
-export const getVehicleOwnerWithSummary = async (id: string) => {
+export const getVehicleOwnerWithSummary = async (id: string): Promise<unknown> => {
     if (!mongoose.Types.ObjectId.isValid(id)) return null;
     const owner = await VehicleOwner.findOne({ _id: id, isActive: true }).lean();
     if (!owner) return null;

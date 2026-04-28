@@ -50,7 +50,13 @@ apiClient.interceptors.response.use(
     async error => {
         const originalRequest = error.config;
 
-        if (error.response?.status === 401 && !originalRequest._retry) {
+        // Never try to refresh on auth-endpoint failures (login, refresh, register).
+        // Those routes don't carry an access token, so a 401 there means bad credentials
+        // or an expired refresh token — retrying would cause an infinite loop.
+        const requestUrl: string = originalRequest.url ?? "";
+        const isAuthEndpoint = /\/auth\/(login|refresh|register)/.test(requestUrl);
+
+        if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
             if (isRefreshing) {
                 return new Promise((resolve, reject) => {
                     failedQueue.push({ resolve, reject });

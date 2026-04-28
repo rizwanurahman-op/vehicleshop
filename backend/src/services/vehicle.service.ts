@@ -37,7 +37,7 @@ export const createVehicle = async (data: Partial<IVehicle>): Promise<IVehicle> 
     return vehicle;
 };
 
-export const getVehicles = async (query: VehicleQuery) => {
+export const getVehicles = async (query: VehicleQuery): Promise<unknown> => {
     const { vehicleType, status, saleStatus, fundingSource, isFromExchange, search, dateFrom, dateTo, page = 1, limit = 20 } = query;
     const filter: Record<string, unknown> = { isActive: true };
 
@@ -82,7 +82,7 @@ export const deleteVehicle = async (id: string): Promise<boolean> => {
     return !!result;
 };
 
-export const getVehicleStats = async () => {
+export const getVehicleStats = async (): Promise<unknown> => {
     const stats = await Vehicle.aggregate([
         { $match: { isActive: true } },
         {
@@ -549,7 +549,7 @@ export const deleteCostBreakdownItem = async (id: string, itemId: string) => {
 };
 
 // ── Reports ──────────────────────────────────────────────────────
-export const getProfitLossReport = async (vehicleType?: string, dateFrom?: string, dateTo?: string) => {
+export const getProfitLossReport = async (vehicleType?: string, dateFrom?: string, dateTo?: string): Promise<unknown> => {
     const match: Record<string, unknown> = { isActive: true, dateSold: { $ne: null } };
     if (vehicleType) match.vehicleType = vehicleType;
     if (dateFrom || dateTo) {
@@ -583,7 +583,7 @@ export const getMonthlyReport = async () => {
     ]);
 };
 
-export const getPendingReport = async () => {
+export const getPendingReport = async (): Promise<unknown> => {
     return Vehicle.find({ isActive: true, $or: [{ saleStatus: { $in: ["balance_pending", "noc_pending", "noc_cash_pending"] } }, { purchasePaymentStatus: { $in: ["pending", "partial"] } }] })
         .select("vehicleId vehicleType make model registrationNo purchasedFrom soldTo datePurchased dateSold purchasePrice soldPrice totalInvestment receivedAmount balanceAmount purchasePendingAmount status saleStatus nocStatus purchasePaymentStatus")
         .sort({ dateSold: -1 })
@@ -615,7 +615,7 @@ interface PurchaseRegisterQuery {
     limit?: number;
 }
 
-export const getPurchaseRegister = async (query: PurchaseRegisterQuery) => {
+export const getPurchaseRegister = async (query: PurchaseRegisterQuery): Promise<unknown> => {
     const { vehicleType, paymentStatus, search, dateFrom, dateTo, page = 1, limit = 20 } = query;
 
     const match: Record<string, unknown> = { isActive: true };

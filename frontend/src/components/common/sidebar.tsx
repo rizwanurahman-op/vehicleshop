@@ -2,8 +2,11 @@
 
 import { cn } from "@/lib/utils";
 import { useState, Suspense } from "react";
-import { Car, ChevronLeft, ChevronRight } from "lucide-react";
+import { Car, LogOut, ChevronLeft, ChevronRight } from "lucide-react";
 import { SidebarNav } from "./sidebar-nav";
+import { useUiStore } from "@stores/ui";
+import { LogoutDialog } from ".";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const SidebarFallback = ({ collapsed: _collapsed }: { collapsed: boolean }) => (
     <div className="flex-1 overflow-y-auto p-3 space-y-2">
@@ -14,12 +17,13 @@ const SidebarFallback = ({ collapsed: _collapsed }: { collapsed: boolean }) => (
 );
 
 const Sidebar = () => {
-    const [collapsed, setCollapsed] = useState(false);
+    const collapsed = useUiStore(s => s.sidebarCollapsed);
+    const [logoutOpen, setLogoutOpen] = useState(false);
 
     return (
         <aside
             className={cn(
-                "hidden md:flex flex-col border-r border-border bg-card transition-all duration-300 ease-in-out",
+                "hidden md:flex flex-col border-r border-border bg-card transition-all duration-300 ease-in-out relative",
                 collapsed ? "w-16" : "w-64"
             )}
         >
@@ -41,19 +45,35 @@ const Sidebar = () => {
                 <SidebarNav collapsed={collapsed} />
             </Suspense>
 
-            {/* Collapse Toggle */}
+            {/* Logout Button */}
             <div className="border-t border-border p-3">
-                <button
-                    onClick={() => setCollapsed(c => !c)}
-                    className={cn(
-                        "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors",
-                        collapsed && "justify-center"
-                    )}
-                >
-                    {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-                    {!collapsed && <span>Collapse</span>}
-                </button>
+                <TooltipProvider>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <button
+                                onClick={() => setLogoutOpen(true)}
+                                className={cn(
+                                    "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors",
+                                    collapsed && "justify-center px-2"
+                                )}
+                            >
+                                <LogOut className="h-4 w-4 shrink-0" />
+                                {!collapsed && <span>Sign out</span>}
+                            </button>
+                        </TooltipTrigger>
+                        {collapsed && <TooltipContent side="right">Sign out</TooltipContent>}
+                    </Tooltip>
+                </TooltipProvider>
             </div>
+            <LogoutDialog open={logoutOpen} onOpenChange={setLogoutOpen} />
+
+            {/* Collapse Toggle */}
+            <button
+                onClick={() => useUiStore.getState().toggleSidebar()}
+                className="absolute -right-3 top-8 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm hover:text-foreground transition-colors z-50"
+            >
+                {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
+            </button>
         </aside>
     );
 };

@@ -74,7 +74,7 @@ app.use(errorHandler);
 const startServer = async () => {
     await connectDB();
     await initializeCounters();
-    
+
     const PORT = parseInt(env.PORT, 10);
     app.listen(PORT, () => {
         console.log(`🚀 VehicleBook API running on http://localhost:${PORT}`);

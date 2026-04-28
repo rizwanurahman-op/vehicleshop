@@ -1,6 +1,6 @@
 import mongoose, { Schema, Document, model } from "mongoose";
 
-export interface IConsignmentVehicle extends Document {
+export interface IConsignmentVehicle extends Omit<Document, 'model'> {
     consignmentId: string;
     saleType: "park_sale" | "finance_sale";
     vehicleType: "two_wheeler" | "four_wheeler";

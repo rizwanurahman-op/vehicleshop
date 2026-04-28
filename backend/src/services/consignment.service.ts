@@ -79,7 +79,7 @@ export const createConsignment = async (data: Partial<IConsignmentVehicle>): Pro
     return vehicle;
 };
 
-export const getConsignments = async (query: ConsignmentQuery) => {
+export const getConsignments = async (query: ConsignmentQuery): Promise<unknown> => {
     const { saleType, vehicleType, status, settlementStatus, buyerPaymentStatus, payeePaymentStatus, search, dateFrom, dateTo, page = 1, limit = 20 } = query;
     const filter: Record<string, unknown> = { isActive: true };
 
@@ -497,11 +497,11 @@ export const closePayeeSettlement = async (id: string): Promise<IConsignmentVehi
 
 // ── Reports ───────────────────────────────────────────────────────
 
-export const getConsignmentReports = async (saleType?: string, dateFrom?: string, dateTo?: string) => {
+export const getConsignmentReports = async (saleType?: string, dateFrom?: string, dateTo?: string): Promise<unknown> => {
     const match: Record<string, unknown> = { isActive: true };
     if (saleType) match.saleType = saleType;
 
-    const soldMatch = { ...match, dateSold: { $ne: null } };
+    const soldMatch: Record<string, unknown> = { ...match, dateSold: { $ne: null } };
     if (dateFrom || dateTo) {
         const df: Record<string, Date> = {};
         if (dateFrom) df.$gte = new Date(dateFrom);

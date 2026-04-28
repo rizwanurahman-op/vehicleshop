@@ -153,7 +153,7 @@ export const getSales = async (query: SalesQuery) => {
             // Map consignment settlement to unified saleStatus label
             let saleStatus = "pending";
             if (c.settlementStatus === "fully_closed") saleStatus = "fully_received";
-            else if (c.settlementStatus === "partial" || c.settlementStatus === "open") saleStatus = "balance_pending";
+            else if (c.settlementStatus === "open") saleStatus = "balance_pending";
 
             records.push({
                 _id: (c._id as { toString(): string }).toString(),

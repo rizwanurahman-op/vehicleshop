@@ -24,7 +24,7 @@ export function SidebarNav({ collapsed = false, onItemClick }: SidebarNavProps) 
     }, {});
 
     return (
-        <nav className="flex-1 overflow-y-auto p-3 space-y-1">
+        <nav className="flex-1 overflow-y-auto scrollbar-hide p-3 space-y-1">
             <TooltipProvider>
                 {Object.entries(groups).map(([group, items]) => (
                     <div key={group} className="mb-2">
@@ -44,13 +44,24 @@ export function SidebarNav({ collapsed = false, onItemClick }: SidebarNavProps) 
                             } else {
                                 const isPathMatch = pathname === hrefPath || pathname.startsWith(`${hrefPath}/`);
                                 if (isPathMatch) {
-                                    if (item.href.includes("?")) {
-                                        const hasAllParams = Array.from(itemQuery.entries()).every(
-                                            ([key, value]) => searchParams.get(key) === value
+                                    const isBetterMatchExists = SIDEBAR_MENU.some(otherItem => {
+                                        const otherHrefPath = otherItem.href.split("?")[0];
+                                        return (
+                                            otherItem.href !== item.href &&
+                                            (pathname === otherHrefPath || pathname.startsWith(`${otherHrefPath}/`)) &&
+                                            otherHrefPath.length > hrefPath.length
                                         );
-                                        isActive = hasAllParams;
-                                    } else {
-                                        isActive = true;
+                                    });
+
+                                    if (!isBetterMatchExists) {
+                                        if (item.href.includes("?")) {
+                                            const hasAllParams = Array.from(itemQuery.entries()).every(
+                                                ([key, value]) => searchParams.get(key) === value
+                                            );
+                                            isActive = hasAllParams;
+                                        } else {
+                                            isActive = true;
+                                        }
                                     }
                                 }
                             }

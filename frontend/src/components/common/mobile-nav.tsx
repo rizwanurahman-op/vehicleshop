@@ -14,7 +14,11 @@ const SidebarFallback = () => (
     </div>
 );
 
-const MobileNav = () => {
+interface MobileNavProps {
+    customTrigger?: React.ReactNode;
+}
+
+const MobileNav = ({ customTrigger }: MobileNavProps = {}) => {
     const [open, setOpen] = useState(false);
     const pathname = usePathname();
 
@@ -26,10 +30,14 @@ const MobileNav = () => {
     return (
         <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
-                <button onClick={() => setOpen(true)} className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground md:hidden transition-colors cursor-pointer">
-                    <Menu className="h-5 w-5 pointer-events-none" />
-                    <span className="sr-only">Toggle Navigation</span>
-                </button>
+                {customTrigger ? (
+                    <div onClick={() => setOpen(true)}>{customTrigger}</div>
+                ) : (
+                    <button onClick={() => setOpen(true)} className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground md:hidden transition-colors cursor-pointer">
+                        <Menu className="h-5 w-5 pointer-events-none" />
+                        <span className="sr-only">Toggle Navigation</span>
+                    </button>
+                )}
             </SheetTrigger>
             <SheetContent side="left" className="w-72 p-0 flex flex-col">
                 <SheetTitle className="sr-only">Navigation Menu</SheetTitle>

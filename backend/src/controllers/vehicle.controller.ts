@@ -27,7 +27,7 @@ export const getVehicles = async (req: Request, res: Response): Promise<void> =>
 };
 
 export const getVehicle = async (req: Request, res: Response): Promise<void> => {
-    const vehicle = await vs.getVehicleById(req.params.id);
+    const vehicle = await vs.getVehicleById(req.params.id as string);
     if (!vehicle) { res.status(404).json({ success: false, statusCode: 404, message: "Vehicle not found" }); return; }
     res.json({ success: true, statusCode: 200, message: "Vehicle fetched", data: vehicle });
 };
@@ -38,13 +38,13 @@ export const updateVehicle = async (req: Request, res: Response): Promise<void> 
         res.status(400).json({ success: false, statusCode: 400, message: "Validation failed", errors: parsed.error.errors.map((e) => ({ field: e.path.join("."), message: e.message })) });
         return;
     }
-    const vehicle = await vs.updateVehicle(req.params.id, parsed.data as never);
+    const vehicle = await vs.updateVehicle(req.params.id as string, parsed.data as never);
     if (!vehicle) { res.status(404).json({ success: false, statusCode: 404, message: "Vehicle not found" }); return; }
     res.json({ success: true, statusCode: 200, message: "Vehicle updated", data: vehicle });
 };
 
 export const deleteVehicle = async (req: Request, res: Response): Promise<void> => {
-    const ok = await vs.deleteVehicle(req.params.id);
+    const ok = await vs.deleteVehicle(req.params.id as string);
     if (!ok) { res.status(404).json({ success: false, statusCode: 404, message: "Vehicle not found" }); return; }
     res.json({ success: true, statusCode: 200, message: "Vehicle deleted" });
 };
@@ -61,7 +61,7 @@ export const recordSale = async (req: Request, res: Response): Promise<void> => 
         res.status(400).json({ success: false, statusCode: 400, message: "Validation failed", errors: parsed.error.errors.map((e) => ({ field: e.path.join("."), message: e.message })) });
         return;
     }
-    const vehicle = await vs.recordSale(req.params.id, parsed.data);
+    const vehicle = await vs.recordSale(req.params.id as string, parsed.data);
     if (!vehicle) { res.status(404).json({ success: false, statusCode: 404, message: "Vehicle not found" }); return; }
     res.json({ success: true, statusCode: 200, message: "Sale recorded", data: vehicle });
 };
@@ -72,13 +72,13 @@ export const updateSale = async (req: Request, res: Response): Promise<void> => 
         res.status(400).json({ success: false, statusCode: 400, message: "Validation failed", errors: parsed.error.errors.map((e) => ({ field: e.path.join("."), message: e.message })) });
         return;
     }
-    const vehicle = await vs.recordSale(req.params.id, parsed.data as never);
+    const vehicle = await vs.recordSale(req.params.id as string, parsed.data as never);
     if (!vehicle) { res.status(404).json({ success: false, statusCode: 404, message: "Vehicle not found" }); return; }
     res.json({ success: true, statusCode: 200, message: "Sale updated", data: vehicle });
 };
 
 export const undoSale = async (req: Request, res: Response): Promise<void> => {
-    const vehicle = await vs.undoSale(req.params.id);
+    const vehicle = await vs.undoSale(req.params.id as string);
     if (!vehicle) { res.status(404).json({ success: false, statusCode: 404, message: "Vehicle not found" }); return; }
     res.json({ success: true, statusCode: 200, message: "Sale undone", data: vehicle });
 };
@@ -90,13 +90,13 @@ export const addPurchasePayment = async (req: Request, res: Response): Promise<v
         res.status(400).json({ success: false, statusCode: 400, message: "Validation failed", errors: parsed.error.errors.map((e) => ({ field: e.path.join("."), message: e.message })) });
         return;
     }
-    const vehicle = await vs.addPurchasePayment(req.params.id, parsed.data);
+    const vehicle = await vs.addPurchasePayment(req.params.id as string, parsed.data);
     if (!vehicle) { res.status(404).json({ success: false, statusCode: 404, message: "Vehicle not found" }); return; }
     res.status(201).json({ success: true, statusCode: 201, message: "Purchase payment recorded", data: vehicle });
 };
 
 export const deletePurchasePayment = async (req: Request, res: Response): Promise<void> => {
-    const vehicle = await vs.deletePurchasePayment(req.params.id, req.params.paymentId);
+    const vehicle = await vs.deletePurchasePayment(req.params.id as string, req.params.paymentId as string);
     if (!vehicle) { res.status(404).json({ success: false, statusCode: 404, message: "Not found" }); return; }
     res.json({ success: true, statusCode: 200, message: "Payment deleted", data: vehicle });
 };
@@ -108,13 +108,13 @@ export const addSalePayment = async (req: Request, res: Response): Promise<void>
         res.status(400).json({ success: false, statusCode: 400, message: "Validation failed", errors: parsed.error.errors.map((e) => ({ field: e.path.join("."), message: e.message })) });
         return;
     }
-    const result = await vs.addSalePayment(req.params.id, parsed.data);
+    const result = await vs.addSalePayment(req.params.id as string, parsed.data);
     if (!result) { res.status(404).json({ success: false, statusCode: 404, message: "Vehicle not found" }); return; }
     res.status(201).json({ success: true, statusCode: 201, message: "Sale payment recorded", data: result.vehicle, exchangeVehicle: result.exchangeVehicle });
 };
 
 export const deleteSalePayment = async (req: Request, res: Response): Promise<void> => {
-    const vehicle = await vs.deleteSalePayment(req.params.id, req.params.paymentId);
+    const vehicle = await vs.deleteSalePayment(req.params.id as string, req.params.paymentId as string);
     if (!vehicle) { res.status(404).json({ success: false, statusCode: 404, message: "Not found" }); return; }
     res.json({ success: true, statusCode: 200, message: "Payment deleted", data: vehicle });
 };
@@ -126,13 +126,13 @@ export const updateCosts = async (req: Request, res: Response): Promise<void> =>
         res.status(400).json({ success: false, statusCode: 400, message: "Validation failed", errors: parsed.error.errors.map((e) => ({ field: e.path.join("."), message: e.message })) });
         return;
     }
-    const vehicle = await vs.updateCosts(req.params.id, parsed.data as never);
+    const vehicle = await vs.updateCosts(req.params.id as string, parsed.data as never);
     if (!vehicle) { res.status(404).json({ success: false, statusCode: 404, message: "Vehicle not found" }); return; }
     res.json({ success: true, statusCode: 200, message: "Costs updated", data: vehicle });
 };
 
 export const recalcCosts = async (req: Request, res: Response): Promise<void> => {
-    const vehicle = await vs.recalcCosts(req.params.id);
+    const vehicle = await vs.recalcCosts(req.params.id as string);
     if (!vehicle) { res.status(404).json({ success: false, statusCode: 404, message: "Vehicle not found" }); return; }
     res.json({ success: true, statusCode: 200, message: "Costs recalculated", data: vehicle });
 };
@@ -144,13 +144,13 @@ export const addCostBreakdownItem = async (req: Request, res: Response): Promise
         return;
     }
     const { category, ...item } = parsed.data;
-    const vehicle = await vs.addCostBreakdownItem(req.params.id, category, item);
+    const vehicle = await vs.addCostBreakdownItem(req.params.id as string, category, item);
     if (!vehicle) { res.status(404).json({ success: false, statusCode: 404, message: "Vehicle not found" }); return; }
     res.status(201).json({ success: true, statusCode: 201, message: "Cost item added", data: vehicle });
 };
 
 export const deleteCostBreakdownItem = async (req: Request, res: Response): Promise<void> => {
-    const vehicle = await vs.deleteCostBreakdownItem(req.params.id, req.params.itemId);
+    const vehicle = await vs.deleteCostBreakdownItem(req.params.id as string, req.params.itemId as string);
     if (!vehicle) { res.status(404).json({ success: false, statusCode: 404, message: "Not found" }); return; }
     res.json({ success: true, statusCode: 200, message: "Cost item deleted", data: vehicle });
 };
