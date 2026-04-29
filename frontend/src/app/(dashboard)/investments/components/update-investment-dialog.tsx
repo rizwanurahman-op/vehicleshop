@@ -68,7 +68,7 @@ const UpdateInvestmentDialog = ({ investment, open, onOpenChange }: Props) => {
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="overflow-hidden p-0 sm:max-w-md max-h-[90vh] flex flex-col bg-card border-border">
+            <DialogContent className="w-[96vw] max-w-md p-0 overflow-hidden flex flex-col rounded-2xl bg-card border-border max-h-[92vh] sm:w-full">
                 <div className="glass-header relative p-4 sm:p-6">
                     <div className="absolute -top-20 -right-20 h-40 w-40 rounded-full bg-primary/10 blur-3xl" />
                     <div className="absolute -bottom-10 -left-10 h-24 w-24 rounded-full bg-primary/10 blur-2xl" />
@@ -141,11 +141,15 @@ const UpdateInvestmentDialog = ({ investment, open, onOpenChange }: Props) => {
                                 )} />
                             </div>
                         </div>
-                        <div className="border-t border-border bg-muted/30 p-4 pt-3 flex justify-end gap-3">
-                            <Button disabled={isPending} type="button" variant="outline" onClick={() => onOpenChange(false)} className="cursor-pointer border-border"><X size={16} className="mr-2" /> Cancel</Button>
-                            <Button disabled={isPending} type="submit" className="cursor-pointer bg-gradient-brand text-white hover:opacity-90">
-                                {isPending ? <><Loader2 size={16} className="mr-2 animate-spin" /> Saving…</> : <><Save size={16} className="mr-2" /> Save</>}
-                            </Button>
+                        <div className="border-t border-border bg-muted/30 p-4 pt-3 sm:p-6 sm:pt-4">
+                            <div className="flex flex-col-reverse items-stretch justify-end gap-2 sm:flex-row sm:items-center sm:gap-3">
+                                <Button disabled={isPending} type="button" variant="outline" onClick={() => onOpenChange(false)} className="cursor-pointer border-border hover:bg-muted">
+                                    <X size={16} className="mr-2" /> Cancel
+                                </Button>
+                                <Button disabled={isPending} type="submit" className="cursor-pointer bg-gradient-brand text-white hover:opacity-90">
+                                    {isPending ? <><Loader2 size={16} className="mr-2 animate-spin" /> Saving…</> : <><Save size={16} className="mr-2" /> Save</>}
+                                </Button>
+                            </div>
                         </div>
                     </form>
                 </Form>

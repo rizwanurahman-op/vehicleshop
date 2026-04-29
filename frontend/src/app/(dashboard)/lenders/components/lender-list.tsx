@@ -63,7 +63,7 @@ const LenderList = ({ initialData }: LenderListProps) => {
                 <div className="relative flex-1 max-w-sm">
                     <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
-                        placeholder="Search by name, ID, or phone…"
+                        placeholder="Search by name or phone…"
                         value={search}
                         onChange={e => setSearch(e.target.value)}
                         className="pl-9 bg-muted/50 border-border h-10"
@@ -96,11 +96,68 @@ const LenderList = ({ initialData }: LenderListProps) => {
                         action={<CreateLenderDialog />}
                     />
                 ) : (
-                    <div className="overflow-x-auto">
+                    <>
+                        {/* Mobile Cards View (< md) */}
+                        <div className="grid grid-cols-1 gap-4 p-4 md:hidden bg-muted/10">
+                            {data.map(lender => (
+                                <div key={lender._id} className="group relative flex flex-col rounded-2xl border border-border/60 bg-gradient-to-b from-card to-muted/10 p-5 shadow-sm hover:shadow-md hover:border-primary/30 transition-all overflow-hidden cursor-pointer" onClick={() => router.push(`/lenders/${lender._id}`)}>
+                                    <div className="absolute top-0 right-0 -mt-4 -mr-4 h-24 w-24 rounded-full bg-primary/10 blur-2xl opacity-50 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                                    <div className="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-primary/50 to-primary" />
+                                    
+                                    <div className="relative flex items-center justify-between mb-4">
+                                        <div className="flex items-center gap-2">
+                                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 shrink-0">
+                                                <Users className="h-4 w-4 text-primary" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Lender</p>
+                                            </div>
+                                        </div>
+                                        <StatusBadge status={lender.isActive ? "active" : "inactive"} />
+                                    </div>
+
+                                    <div className="relative mb-5 flex flex-col items-start">
+                                        <p className="text-lg font-bold text-foreground tracking-tight leading-none mb-1.5 group-hover:text-primary transition-colors">{lender.name}</p>
+                                        {lender.phone && (
+                                            <span className="text-[11px] font-medium text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">{lender.phone}</span>
+                                        )}
+                                    </div>
+
+                                    <div className="relative mt-auto pt-4 border-t border-border/60 border-dashed">
+                                        <div className="grid grid-cols-2 gap-4 mb-3">
+                                            <div>
+                                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Borrowed</p>
+                                                <p className="font-bold text-foreground tabular-nums leading-none"><CurrencyDisplay amount={lender.totalBorrowed} /></p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Repaid</p>
+                                                <p className="font-bold text-success tabular-nums leading-none"><CurrencyDisplay amount={lender.totalRepaid} /></p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center justify-between bg-muted/30 p-2.5 rounded-lg border border-border/50">
+                                            <span className="text-xs font-semibold text-muted-foreground">Balance</span>
+                                            <span className="font-bold tabular-nums"><CurrencyDisplay amount={lender.balancePayable} variant={lender.balancePayable > 0 ? "warning" : "success"} /></span>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-4 pt-3 flex items-center justify-end gap-2 border-t border-border/60 border-dashed" onClick={e => e.stopPropagation()}>
+                                        <Button variant="outline" size="sm" className="h-8 px-3 text-xs bg-muted/30" onClick={() => setEditLender(lender)}>
+                                            <Edit size={14} className="mr-1.5" /> Edit
+                                        </Button>
+                                        <Button variant="outline" size="sm" className="h-8 px-3 text-xs text-destructive hover:text-destructive hover:bg-destructive/10 bg-muted/30" onClick={() => setDeleteLender(lender)}>
+                                            <ToggleLeft size={14} className="mr-1.5" /> Deactivate
+                                        </Button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Desktop Table View (>= md) */}
+                        <div className="hidden md:block overflow-x-auto">
                         <Table>
                             <TableHeader>
                                 <TableRow className="border-border hover:bg-transparent">
-                                    <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">ID</TableHead>
+                                    <TableHead className="text-xs uppercase tracking-wider text-muted-foreground w-12 text-center">#</TableHead>
                                     <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Name</TableHead>
                                     <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Total Borrowed</TableHead>
                                     <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Total Repaid</TableHead>
@@ -110,15 +167,13 @@ const LenderList = ({ initialData }: LenderListProps) => {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {data.map(lender => (
+                                {data.map((lender, index) => (
                                     <TableRow
                                         key={lender._id}
                                         className="border-border hover:bg-muted/50 cursor-pointer transition-colors"
                                         onClick={() => router.push(`/lenders/${lender._id}`)}
                                     >
-                                        <TableCell>
-                                            <span className="font-mono-id text-primary">{lender.lenderId}</span>
-                                        </TableCell>
+                                        <TableCell className="text-center text-muted-foreground font-mono text-xs">{index + 1}</TableCell>
                                         <TableCell>
                                             <div className="font-medium text-foreground">{lender.name}</div>
                                             {lender.phone && <div className="text-xs text-muted-foreground">{lender.phone}</div>}
@@ -168,7 +223,8 @@ const LenderList = ({ initialData }: LenderListProps) => {
                                 ))}
                             </TableBody>
                         </Table>
-                    </div>
+                        </div>
+                    </>
                 )}
             </div>
 

@@ -79,7 +79,7 @@ const AddBreakdownDialog = ({
 
     return (
         <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-            <DialogContent className="overflow-hidden p-0 sm:max-w-sm max-h-[90vh] flex flex-col bg-card border-border">
+            <DialogContent className="w-[96vw] max-w-sm p-0 overflow-hidden flex flex-col rounded-2xl bg-card border-border max-h-[92vh] sm:w-full">
                 {/* Header */}
                 <div className="glass-header relative p-5">
                     <div className="absolute -top-12 -right-12 h-24 w-24 rounded-full bg-primary/10 blur-3xl" />
@@ -178,13 +178,15 @@ const AddBreakdownDialog = ({
                             </div>
                         </div>
 
-                        <div className="border-t border-border bg-muted/20 p-4 flex justify-end gap-3">
-                            <Button type="button" variant="outline" onClick={onClose} className="border-border text-sm">
-                                Cancel
-                            </Button>
-                            <Button type="submit" disabled={isPending} className="bg-gradient-brand text-white hover:opacity-90 text-sm">
-                                {isPending ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Adding...</> : <><Plus className="mr-1.5 h-3.5 w-3.5" />Add Item</>}
-                            </Button>
+                        <div className="border-t border-border bg-muted/20 p-4 sm:p-6 sm:pt-4">
+                            <div className="flex flex-col-reverse items-stretch justify-end gap-2 sm:flex-row sm:items-center sm:gap-3">
+                                <Button type="button" variant="outline" onClick={onClose} className="border-border text-sm hover:bg-muted">
+                                    Cancel
+                                </Button>
+                                <Button type="submit" disabled={isPending} className="bg-gradient-brand text-white hover:opacity-90 text-sm">
+                                    {isPending ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Adding...</> : <><Plus className="mr-1.5 h-3.5 w-3.5" />Add Item</>}
+                                </Button>
+                            </div>
                         </div>
                     </form>
                 </Form>
@@ -227,10 +229,10 @@ const InlineAmountEditor = ({
                 </span>
                 <button
                     onClick={() => { setEditing(true); setValue(currentAmount.toString()); }}
-                    className="opacity-0 group-hover:opacity-100 flex h-5 w-5 items-center justify-center rounded hover:bg-muted transition-all"
+                    className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 flex h-6 w-6 items-center justify-center rounded bg-muted sm:bg-transparent hover:bg-muted transition-all"
                     title="Edit amount"
                 >
-                    <Pencil className="h-3 w-3 text-muted-foreground" />
+                    <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                 </button>
             </div>
         );
@@ -341,10 +343,10 @@ const CategoryRow = ({
                     {/* Add item button */}
                     <button
                         onClick={() => { setAddDialogOpen(true); setExpanded(true); }}
-                        className="opacity-0 group-hover:opacity-100 flex h-6 w-6 items-center justify-center rounded bg-muted hover:bg-primary/10 hover:text-primary text-muted-foreground transition-all"
+                        className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 flex h-7 w-7 items-center justify-center rounded bg-muted hover:bg-primary/10 hover:text-primary text-muted-foreground transition-all"
                         title={`Add ${cat.label} item`}
                     >
-                        <Plus className="h-3 w-3" />
+                        <Plus className="h-4 w-4" />
                     </button>
                 </div>
 
@@ -382,10 +384,10 @@ const CategoryRow = ({
                                     <button
                                         onClick={() => deleteItem(item._id)}
                                         disabled={isDeleting}
-                                        className="opacity-0 group-hover/item:opacity-100 flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
+                                        className="opacity-100 sm:opacity-0 sm:group-hover/item:opacity-100 flex h-6 w-6 items-center justify-center rounded bg-destructive/10 sm:bg-transparent text-destructive sm:text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
                                         title="Remove item"
                                     >
-                                        {isDeleting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                                        {isDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                                     </button>
                                 </div>
                             </div>
@@ -460,13 +462,13 @@ const CostsTab = ({ vehicle }: { vehicle: IVehicle }) => {
             {/* Cost categories */}
             <div className="rounded-xl border border-border bg-card overflow-hidden">
                 {/* Header */}
-                <div className="flex items-center justify-between px-5 py-3 border-b border-border bg-muted/20">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between px-5 py-4 sm:py-3 border-b border-border bg-muted/20 gap-3 sm:gap-0">
                     <div>
                         <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
                             Reconditioning Costs
                         </p>
                         <p className="text-[10px] text-muted-foreground italic mt-0.5">
-                            Hover a row to edit amount or add items
+                            Tap the pencil or plus icons to edit amounts or add breakdown items
                         </p>
                     </div>
                     {isMismatched && (
@@ -475,9 +477,9 @@ const CostsTab = ({ vehicle }: { vehicle: IVehicle }) => {
                             size="sm" 
                             onClick={() => syncCosts()} 
                             disabled={isSyncing}
-                            className="h-7 text-xs border-orange-400 text-orange-400 hover:bg-orange-400/10"
+                            className="h-8 text-xs border-orange-400 text-orange-400 hover:bg-orange-400/10 w-full sm:w-auto"
                         >
-                            {isSyncing ? <Loader2 className="h-3 w-3 animate-spin mr-1.5" /> : null}
+                            {isSyncing ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
                             Fix Sync Issue
                         </Button>
                     )}

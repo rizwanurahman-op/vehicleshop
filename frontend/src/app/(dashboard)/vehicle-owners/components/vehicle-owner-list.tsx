@@ -62,7 +62,7 @@ const OwnerDialog = ({ owner, onSuccess }: { owner?: IVehicleOwner; onSuccess: (
                     : <Button className="bg-gradient-brand text-white hover:opacity-90 shadow-md cursor-pointer"><Plus className="mr-2 h-4 w-4" />Add Owner</Button>
                 }
             </DialogTrigger>
-            <DialogContent className="overflow-hidden p-0 sm:max-w-sm max-h-[90vh] flex flex-col bg-card border-border">
+            <DialogContent className="w-[96vw] max-w-sm p-0 overflow-hidden flex flex-col rounded-2xl bg-card border-border max-h-[92vh] sm:w-full">
                 <div className="glass-header relative p-5">
                     <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-brand shadow-lg"><UserCheck className="h-4 w-4 text-white" /></div>
@@ -101,11 +101,13 @@ const OwnerDialog = ({ owner, onSuccess }: { owner?: IVehicleOwner; onSuccess: (
                                 </FormItem>
                             )} />
                         </div>
-                        <div className="border-t border-border bg-muted/20 p-4 flex justify-end gap-3">
-                            <Button type="button" variant="outline" onClick={() => setOpen(false)} className="border-border">Cancel</Button>
-                            <Button type="submit" disabled={isPending} className="bg-gradient-brand text-white hover:opacity-90">
-                                {isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : (isEdit ? "Update" : "Add Owner")}
-                            </Button>
+                        <div className="border-t border-border bg-muted/20 p-4 sm:p-6 sm:pt-4">
+                            <div className="flex flex-col-reverse items-stretch justify-end gap-2 sm:flex-row sm:items-center sm:gap-3">
+                                <Button type="button" variant="outline" onClick={() => setOpen(false)} className="border-border hover:bg-muted">Cancel</Button>
+                                <Button type="submit" disabled={isPending} className="bg-gradient-brand text-white hover:opacity-90">
+                                    {isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : (isEdit ? "Update" : "Add Owner")}
+                                </Button>
+                            </div>
                         </div>
                     </form>
                 </Form>
