@@ -70,7 +70,7 @@ const CreateInvestmentDialog = () => {
                     <Plus size={18} className="mr-2" /> Record Investment
                 </Button>
             </DialogTrigger>
-            <DialogContent onOpenAutoFocus={e => e.preventDefault()} className="overflow-hidden p-0 sm:max-w-lg max-h-[90vh] flex flex-col bg-card border-border">
+            <DialogContent onOpenAutoFocus={e => e.preventDefault()} className="w-[96vw] max-w-lg p-0 overflow-hidden flex flex-col rounded-2xl bg-card border-border max-h-[92vh] sm:w-full">
                 <div className="glass-header relative p-4 sm:p-6">
                     <div className="absolute -top-20 -right-20 h-40 w-40 rounded-full bg-primary/10 blur-3xl" />
                     <div className="absolute -bottom-10 -left-10 h-24 w-24 rounded-full bg-primary/10 blur-2xl" />
@@ -193,9 +193,9 @@ const CreateInvestmentDialog = () => {
                             </div>
                         </div>
 
-                        <div className="border-t border-border bg-muted/30 p-4 pt-3">
-                            <div className="flex gap-3 justify-end">
-                                <Button disabled={isPending} type="button" variant="outline" onClick={() => setOpen(false)} className="cursor-pointer border-border">
+                        <div className="border-t border-border bg-muted/30 p-4 pt-3 sm:p-6 sm:pt-4">
+                            <div className="flex flex-col-reverse items-stretch justify-end gap-2 sm:flex-row sm:items-center sm:gap-3">
+                                <Button disabled={isPending} type="button" variant="outline" onClick={() => setOpen(false)} className="cursor-pointer border-border hover:bg-muted">
                                     <X size={16} className="mr-2" /> Cancel
                                 </Button>
                                 <Button disabled={isPending} type="submit" className="cursor-pointer bg-gradient-brand text-white hover:opacity-90">

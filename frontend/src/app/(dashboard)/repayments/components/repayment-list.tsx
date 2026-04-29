@@ -92,7 +92,8 @@ const RepaymentList = ({ initialData }: RepaymentListProps) => {
                             {filtered.map((rep) => {
                                 const lender = rep.lender as ILender;
                                 return (
-                                    <div key={rep._id} className="group flex flex-col rounded-2xl border border-border/60 bg-gradient-to-b from-card to-muted/10 p-5 shadow-sm hover:shadow-md hover:border-emerald-500/30 transition-all overflow-hidden relative">
+                                    <div key={rep._id} className="group relative flex flex-col rounded-2xl border border-border/60 bg-gradient-to-b from-card to-muted/10 p-5 shadow-sm hover:shadow-md hover:border-emerald-500/30 transition-all overflow-hidden">
+                                        <div className="absolute top-0 right-0 -mt-4 -mr-4 h-24 w-24 rounded-full bg-emerald-500/10 blur-2xl opacity-50 group-hover:opacity-100 transition-opacity pointer-events-none" />
                                         <div className="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-emerald-400 to-emerald-600" />
                                         
                                         {/* Header */}
@@ -103,7 +104,6 @@ const RepaymentList = ({ initialData }: RepaymentListProps) => {
                                                 </div>
                                                 <div className="min-w-0">
                                                     <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Repayment</p>
-                                                    <p className="text-[10px] text-muted-foreground font-mono">{rep.repaymentId}</p>
                                                 </div>
                                             </div>
                                             <DateDisplay date={rep.date} className="text-xs font-semibold text-foreground" />
@@ -112,9 +112,6 @@ const RepaymentList = ({ initialData }: RepaymentListProps) => {
                                         {/* Lender Details */}
                                         <div className="relative mb-5">
                                             <p className="text-lg font-bold text-foreground tracking-tight leading-none mb-1.5">{lender?.name || "—"}</p>
-                                            <div className="flex flex-wrap items-center gap-2">
-                                                <span className="text-[10px] text-muted-foreground font-mono bg-muted/50 px-1.5 py-0.5 rounded">{lender?.lenderId || ""}</span>
-                                            </div>
                                         </div>
 
                                         {/* Financial details */}
@@ -134,9 +131,13 @@ const RepaymentList = ({ initialData }: RepaymentListProps) => {
                                             )}
                                         </div>
 
-                                        <div className="absolute top-4 right-4 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <Button variant="ghost" size="icon" className="h-7 w-7 bg-card/80 shadow-sm" onClick={() => setEditItem(rep)}><Edit size={12} /></Button>
-                                            <Button variant="ghost" size="icon" className="h-7 w-7 bg-card/80 shadow-sm text-destructive" onClick={() => setDeleteItem(rep)}><Trash2 size={12} /></Button>
+                                        <div className="mt-4 pt-3 flex items-center justify-end gap-2 border-t border-border/60 border-dashed">
+                                            <Button variant="outline" size="sm" className="h-8 px-3 text-xs bg-muted/30" onClick={() => setEditItem(rep)}>
+                                                <Edit size={14} className="mr-1.5" /> Edit
+                                            </Button>
+                                            <Button variant="outline" size="sm" className="h-8 px-3 text-xs text-destructive hover:text-destructive hover:bg-destructive/10 bg-muted/30" onClick={() => setDeleteItem(rep)}>
+                                                <Trash2 size={14} className="mr-1.5" /> Delete
+                                            </Button>
                                         </div>
                                     </div>
                                 );
@@ -148,7 +149,7 @@ const RepaymentList = ({ initialData }: RepaymentListProps) => {
                             <Table>
                                 <TableHeader>
                                     <TableRow className="border-border hover:bg-transparent">
-                                        <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">ID</TableHead>
+                                        <TableHead className="text-xs uppercase tracking-wider text-muted-foreground w-12 text-center">#</TableHead>
                                         <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Date</TableHead>
                                         <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Lender</TableHead>
                                         <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Amount Paid</TableHead>
@@ -158,15 +159,14 @@ const RepaymentList = ({ initialData }: RepaymentListProps) => {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {filtered.map(rep => {
+                                    {filtered.map((rep, index) => {
                                         const lender = rep.lender as ILender;
                                         return (
                                             <TableRow key={rep._id} className="border-border hover:bg-muted/50 transition-colors group">
-                                                <TableCell><span className="font-mono-id text-success">{rep.repaymentId}</span></TableCell>
+                                                <TableCell className="text-center text-muted-foreground font-mono text-xs">{index + 1}</TableCell>
                                                 <TableCell><DateDisplay date={rep.date} className="text-muted-foreground" /></TableCell>
                                                 <TableCell>
                                                     <div className="font-medium">{lender?.name || "—"}</div>
-                                                    <div className="font-mono-id text-muted-foreground">{lender?.lenderId || ""}</div>
                                                 </TableCell>
                                                 <TableCell className="text-right"><CurrencyDisplay amount={rep.amountPaid} variant="success" /></TableCell>
                                                 <TableCell><Badge variant="outline" className="text-[11px]">{rep.mode}</Badge></TableCell>

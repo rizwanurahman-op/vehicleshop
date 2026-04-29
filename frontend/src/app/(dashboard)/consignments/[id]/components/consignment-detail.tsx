@@ -65,7 +65,7 @@ const RecordSaleDialog = ({ vehicle }: { vehicle: IConsignmentVehicle }) => {
             <DialogTrigger asChild>
                 <Button className="bg-gradient-success text-white hover:opacity-90 cursor-pointer shadow-md"><DollarSign className="mr-2 h-4 w-4" />Record Sale</Button>
             </DialogTrigger>
-            <DialogContent className="overflow-hidden p-0 sm:max-w-md max-h-[90vh] flex flex-col bg-card border-border">
+            <DialogContent className="w-[96vw] max-w-md p-0 overflow-hidden flex flex-col rounded-2xl bg-card border-border max-h-[92vh] sm:w-full">
                 <div className="glass-header relative p-5">
                     <div className="absolute -top-16 -right-16 h-32 w-32 rounded-full bg-success/10 blur-3xl" />
                     <div className="flex items-center gap-3">
@@ -99,11 +99,13 @@ const RecordSaleDialog = ({ vehicle }: { vehicle: IConsignmentVehicle }) => {
                                 <FormItem><FormLabel className="text-xs font-semibold text-foreground">Remarks</FormLabel><FormControl><Textarea placeholder="Any notes..." rows={2} className="resize-none bg-muted/50 border-border text-sm" {...field} /></FormControl></FormItem>
                             )} />
                         </div>
-                        <div className="border-t border-border bg-muted/20 p-4 flex justify-end gap-3">
-                            <Button type="button" variant="outline" onClick={() => setOpen(false)} className="border-border">Cancel</Button>
-                            <Button type="submit" disabled={isPending} className="bg-gradient-success text-white hover:opacity-90">
-                                {isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : "Record Sale"}
-                            </Button>
+                        <div className="border-t border-border bg-muted/20 p-4 sm:p-6 sm:pt-4">
+                            <div className="flex flex-col-reverse items-stretch justify-end gap-2 sm:flex-row sm:items-center sm:gap-3">
+                                <Button type="button" variant="outline" onClick={() => setOpen(false)} className="border-border hover:bg-muted">Cancel</Button>
+                                <Button type="submit" disabled={isPending} className="bg-gradient-success text-white hover:opacity-90">
+                                    {isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : "Record Sale"}
+                                </Button>
+                            </div>
                         </div>
                     </form>
                 </Form>
@@ -158,7 +160,7 @@ const AddBuyerPaymentDialog = ({ vehicle }: { vehicle: IConsignmentVehicle }) =>
             <DialogTrigger asChild>
                 <Button size="sm" className="bg-gradient-success text-white hover:opacity-90 cursor-pointer"><Plus className="mr-1.5 h-3.5 w-3.5" />Add Buyer Payment</Button>
             </DialogTrigger>
-            <DialogContent className="overflow-hidden p-0 sm:max-w-md max-h-[90vh] flex flex-col bg-card border-border">
+            <DialogContent className="w-[96vw] max-w-md p-0 overflow-hidden flex flex-col rounded-2xl bg-card border-border max-h-[92vh] sm:w-full">
                 <div className="glass-header relative p-5">
                     <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-success shadow-lg"><ArrowDownLeft className="h-4 w-4 text-white" /></div>
@@ -253,11 +255,13 @@ const AddBuyerPaymentDialog = ({ vehicle }: { vehicle: IConsignmentVehicle }) =>
                                 <FormItem><FormLabel className="text-xs font-semibold text-foreground">Notes</FormLabel><FormControl><Input placeholder="advance, balance, etc." className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl></FormItem>
                             )} />
                         </div>
-                        <div className="border-t border-border bg-muted/20 p-4 flex justify-end gap-3">
-                            <Button type="button" variant="outline" onClick={() => setOpen(false)} className="border-border">Cancel</Button>
-                            <Button type="submit" disabled={isPending} className="bg-gradient-success text-white hover:opacity-90">
-                                {isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : "Record"}
-                            </Button>
+                        <div className="border-t border-border bg-muted/20 p-4 sm:p-6 sm:pt-4">
+                            <div className="flex flex-col-reverse items-stretch justify-end gap-2 sm:flex-row sm:items-center sm:gap-3">
+                                <Button type="button" variant="outline" onClick={() => setOpen(false)} className="border-border hover:bg-muted">Cancel</Button>
+                                <Button type="submit" disabled={isPending} className="bg-gradient-success text-white hover:opacity-90">
+                                    {isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : "Record"}
+                                </Button>
+                            </div>
                         </div>
                     </form>
                 </Form>
@@ -285,7 +289,7 @@ const AddPayeePaymentDialog = ({ vehicle }: { vehicle: IConsignmentVehicle }) =>
             <DialogTrigger asChild>
                 <Button size="sm" variant="outline" className="border-border"><Plus className="mr-1.5 h-3.5 w-3.5" />Pay {label}</Button>
             </DialogTrigger>
-            <DialogContent className="overflow-hidden p-0 sm:max-w-sm max-h-[90vh] flex flex-col bg-card border-border">
+            <DialogContent className="w-[96vw] max-w-sm p-0 overflow-hidden flex flex-col rounded-2xl bg-card border-border max-h-[92vh] sm:w-full">
                 <div className="glass-header relative p-5">
                     <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-brand shadow-lg"><ArrowUpRight className="h-4 w-4 text-white" /></div>
@@ -333,11 +337,13 @@ const AddPayeePaymentDialog = ({ vehicle }: { vehicle: IConsignmentVehicle }) =>
                                 </FormItem>
                             )} />
                         </div>
-                        <div className="border-t border-border bg-muted/20 p-4 flex justify-end gap-3">
-                            <Button type="button" variant="outline" onClick={() => setOpen(false)} className="border-border">Cancel</Button>
-                            <Button type="submit" disabled={isPending} className="bg-gradient-brand text-white hover:opacity-90">
-                                {isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : `Record Payment`}
-                            </Button>
+                        <div className="border-t border-border bg-muted/20 p-4 sm:p-6 sm:pt-4">
+                            <div className="flex flex-col-reverse items-stretch justify-end gap-2 sm:flex-row sm:items-center sm:gap-3">
+                                <Button type="button" variant="outline" onClick={() => setOpen(false)} className="border-border hover:bg-muted">Cancel</Button>
+                                <Button type="submit" disabled={isPending} className="bg-gradient-brand text-white hover:opacity-90">
+                                    {isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : `Record Payment`}
+                                </Button>
+                            </div>
                         </div>
                     </form>
                 </Form>
@@ -364,7 +370,7 @@ const AddCostBreakdownDialog = ({ vehicle }: { vehicle: IConsignmentVehicle }) =
             <DialogTrigger asChild>
                 <Button size="sm" variant="outline" className="border-border"><Plus className="mr-1.5 h-3.5 w-3.5" />Add Cost Item</Button>
             </DialogTrigger>
-            <DialogContent className="overflow-hidden p-0 sm:max-w-sm max-h-[90vh] flex flex-col bg-card border-border">
+            <DialogContent className="w-[96vw] max-w-sm p-0 overflow-hidden flex flex-col rounded-2xl bg-card border-border max-h-[92vh] sm:w-full">
                 <div className="glass-header relative p-5">
                     <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-brand shadow-lg"><IndianRupee className="h-4 w-4 text-white" /></div>
@@ -395,11 +401,13 @@ const AddCostBreakdownDialog = ({ vehicle }: { vehicle: IConsignmentVehicle }) =
                                 <FormItem><FormLabel className="text-xs font-semibold text-foreground">Notes</FormLabel><FormControl><Input placeholder="any detail..." className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl></FormItem>
                             )} />
                         </div>
-                        <div className="border-t border-border bg-muted/20 p-4 flex justify-end gap-3">
-                            <Button type="button" variant="outline" onClick={() => setOpen(false)} className="border-border">Cancel</Button>
-                            <Button type="submit" disabled={isPending} className="bg-gradient-brand text-white hover:opacity-90">
-                                {isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Adding...</> : "Add Item"}
-                            </Button>
+                        <div className="border-t border-border bg-muted/20 p-4 sm:p-6 sm:pt-4">
+                            <div className="flex flex-col-reverse items-stretch justify-end gap-2 sm:flex-row sm:items-center sm:gap-3">
+                                <Button type="button" variant="outline" onClick={() => setOpen(false)} className="border-border hover:bg-muted">Cancel</Button>
+                                <Button type="submit" disabled={isPending} className="bg-gradient-brand text-white hover:opacity-90">
+                                    {isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Adding...</> : "Add Item"}
+                                </Button>
+                            </div>
                         </div>
                     </form>
                 </Form>
@@ -482,29 +490,33 @@ const ConsignmentDetail = ({ id, initialData }: { id: string; initialData: ICons
             <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
                 <div className="glass-header relative p-5 sm:p-6">
                     <div className={cn("absolute -top-16 -right-16 h-32 w-32 rounded-full blur-3xl", vehicle.saleType === "park_sale" ? "bg-violet-500/10" : "bg-blue-500/10")} />
-                    <div className="relative flex items-start justify-between gap-4">
-                        <div className="flex items-center gap-4">
-                            <div className={cn("flex h-14 w-14 items-center justify-center rounded-2xl shadow-lg shrink-0", vehicle.saleType === "park_sale" ? "bg-violet-500/20" : "bg-blue-500/20")}>
-                                <VehicleIcon className={cn("h-7 w-7", vehicle.saleType === "park_sale" ? "text-violet-400" : "text-blue-400")} />
+                    <div className="relative flex flex-col sm:flex-row items-start sm:justify-between gap-4">
+                        <div className="flex items-start sm:items-center gap-3 sm:gap-4 w-full sm:w-auto">
+                            <div className={cn("flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-2xl shadow-lg shrink-0 mt-1 sm:mt-0", vehicle.saleType === "park_sale" ? "bg-violet-500/20" : "bg-blue-500/20")}>
+                                <VehicleIcon className={cn("h-6 w-6 sm:h-7 sm:w-7", vehicle.saleType === "park_sale" ? "text-violet-400" : "text-blue-400")} />
                             </div>
-                            <div>
-                                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                    <span className="text-xs font-mono font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md">{vehicle.consignmentId}</span>
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap">
+                                    <span className="text-[10px] sm:text-xs font-mono font-bold text-primary bg-primary/10 px-1.5 sm:px-2 py-0.5 rounded-md">{vehicle.consignmentId}</span>
                                     <SaleTypePill type={vehicle.saleType} />
                                     {vehicle.settlementStatus === "fully_closed" && (
-                                        <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px]"><CheckCircle2 className="mr-1 h-2.5 w-2.5" />Fully Closed</Badge>
+                                        <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[9px] sm:text-[10px]"><CheckCircle2 className="mr-1 h-2.5 w-2.5" />Fully Closed</Badge>
                                     )}
                                 </div>
-                                <h1 className="text-2xl font-bold text-foreground">{vehicle.make} {vehicle.model}</h1>
-                                <p className="text-sm text-muted-foreground mt-0.5">
-                                    <span className="font-mono bg-muted/50 px-1.5 py-0.5 rounded text-xs mr-2">{vehicle.registrationNo}</span>
+                                <h1 className="text-xl sm:text-2xl font-bold text-foreground leading-tight">{vehicle.make} {vehicle.model}</h1>
+                                <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                                    <span className="font-mono bg-muted/50 px-1.5 py-0.5 rounded text-[10px] sm:text-xs mr-2">{vehicle.registrationNo}</span>
                                     <User className="inline h-3 w-3 mr-1" />{vehicle.previousOwner}
                                     {vehicle.financeCompany && <span className="ml-2 text-blue-400">· {vehicle.financeCompany}</span>}
                                     {vehicle.daysInShop != null && <span className="ml-2">· {vehicle.daysInShop}d in shop</span>}
                                 </p>
                             </div>
                         </div>
-                        {!isSold && <RecordSaleDialog vehicle={vehicle} />}
+                        {!isSold && (
+                            <div className="w-full sm:w-auto mt-2 sm:mt-0">
+                                <RecordSaleDialog vehicle={vehicle} />
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -555,20 +567,20 @@ const ConsignmentDetail = ({ id, initialData }: { id: string; initialData: ICons
                 )}
 
                 {/* Stats */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-y sm:divide-y-0 divide-border">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-border border-y border-border">
                     {[
                         { label: "Total Investment", value: formatCurrency(vehicle.totalInvestment), sub: `Recon: ${formatCurrency(vehicle.totalReconCost)}` },
                         { label: isSold ? "Sold Price" : "Status", value: isSold ? formatCurrency(vehicle.soldPrice!) : vehicle.status.replace(/_/g, " "), sub: isSold ? `To: ${vehicle.soldTo}` : formatDate(vehicle.dateReceived) },
                         { label: `Paid to ${label}`, value: formatCurrency(vehicle.paidToPayee), sub: `Balance: ${formatCurrency(vehicle.payeeBalance)}`, color: vehicle.payeeBalance > 0 ? "text-orange-400" : "text-foreground" },
                         { label: isSold ? "Net Profit" : "P&L (Unrealized)", value: formatCurrency(Math.abs(vehicle.netProfit)), sub: `${isProfit ? "+" : ""}${vehicle.profitLossPercentage.toFixed(1)}%`, color: isSold ? (isProfit ? "text-emerald-400" : "text-red-400") : "text-muted-foreground" },
                     ].map(s => (
-                        <div key={s.label} className="p-4 flex flex-col gap-1">
-                            <p className="text-[11px] text-muted-foreground uppercase tracking-widest font-semibold">{s.label}</p>
-                            <p className={cn("text-lg font-bold", s.color ?? "text-foreground")}>
-                                {s.label.includes("Profit") && isSold && (isProfit ? <TrendingUp className="inline h-4 w-4 mr-1" /> : <TrendingDown className="inline h-4 w-4 mr-1" />)}
+                        <div key={s.label} className="p-4 flex flex-col gap-1 bg-card">
+                            <p className="text-[10px] sm:text-[11px] text-muted-foreground uppercase tracking-widest font-semibold">{s.label}</p>
+                            <p className={cn("text-base sm:text-lg font-bold", s.color ?? "text-foreground")}>
+                                {s.label.includes("Profit") && isSold && (isProfit ? <TrendingUp className="inline h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1" /> : <TrendingDown className="inline h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1" />)}
                                 {s.value}
                             </p>
-                            <p className="text-[11px] text-muted-foreground">{s.sub}</p>
+                            <p className="text-[10px] sm:text-[11px] text-muted-foreground">{s.sub}</p>
                         </div>
                     ))}
                 </div>

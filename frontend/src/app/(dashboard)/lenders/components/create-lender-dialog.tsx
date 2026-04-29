@@ -59,7 +59,7 @@ const CreateLenderDialog = () => {
                     <Plus size={18} className="mr-2" /> Add Lender
                 </Button>
             </DialogTrigger>
-            <DialogContent onOpenAutoFocus={e => e.preventDefault()} aria-label="Create Lender Dialog" className={cn("overflow-hidden p-0 sm:max-w-lg max-h-[90vh] flex flex-col", "bg-card border-border")}>
+            <DialogContent onOpenAutoFocus={e => e.preventDefault()} aria-label="Create Lender Dialog" className="w-[96vw] max-w-lg p-0 overflow-hidden flex flex-col rounded-2xl bg-card border-border max-h-[92vh] sm:w-full">
                 <div className="glass-header relative p-4 sm:p-6">
                     <div className="absolute -top-20 -right-20 h-40 w-40 rounded-full bg-primary/10 blur-3xl" />
                     <div className="absolute -bottom-10 -left-10 h-24 w-24 rounded-full bg-primary/10 blur-2xl" />
