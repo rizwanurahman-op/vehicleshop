@@ -241,10 +241,18 @@ export const deleteCostBreakdownItem = async (id: string, itemId: string): Promi
     const vehicle = await ConsignmentVehicle.findOne({ _id: id, isActive: true });
     if (!vehicle) return null;
 
+    let deletedItemName: string | undefined;
+    let deletedItemAmount: number | undefined;
+    let deletedCategory: string | undefined;
+
     for (const breakdown of vehicle.costBreakdowns) {
         const before = breakdown.items.length;
+        const found = breakdown.items.find(item => item._id.toString() === itemId);
         breakdown.items = breakdown.items.filter(item => item._id.toString() !== itemId);
         if (before !== breakdown.items.length) {
+            deletedItemName = found?.name;
+            deletedItemAmount = found?.amount;
+            deletedCategory = breakdown.category;
             const field = CATEGORY_TO_FIELD[breakdown.category];
             if (field) {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -252,7 +260,14 @@ export const deleteCostBreakdownItem = async (id: string, itemId: string): Promi
             }
         }
     }
-    vehicle.activityLog.push({ action: "cost_item_deleted", description: "Cost breakdown item removed", date: new Date() });
+    vehicle.activityLog.push({
+        action: "cost_item_deleted",
+        description: deletedCategory && deletedItemName
+            ? `${deletedCategory.charAt(0).toUpperCase() + deletedCategory.slice(1)} cost item removed: ${deletedItemName}${deletedItemAmount ? ` ₹${deletedItemAmount.toLocaleString("en-IN")}` : ""}`
+            : "Cost breakdown item removed",
+        amount: deletedItemAmount,
+        date: new Date(),
+    });
     await vehicle.save();
     return vehicle;
 };
@@ -433,7 +448,7 @@ export const addBuyerPayment = async (id: string, payment: {
 
 
     vehicle.buyerPayments.push(paymentEntry);
-    vehicle.activityLog.push({ action: "buyer_payment", description: `Buyer payment received: ₹${payment.amount.toLocaleString("en-IN")} via ${payment.mode}${payment.type === "exchange" ? " (exchange)" : ""}`, amount: payment.amount, date: new Date() });
+    vehicle.activityLog.push({ action: "buyer_payment", description: `Buyer payment received: ₹${payment.amount.toLocaleString("en-IN")} via ${payment.type === "exchange" ? "Exchange" : payment.mode}${payment.type === "exchange" && payment.exchangeVehicleMake ? ` (${payment.exchangeVehicleMake}${payment.exchangeVehicleRegNo ? " — " + payment.exchangeVehicleRegNo : ""})` : ""}`, amount: payment.amount, date: new Date() });
     await vehicle.save();
     return { vehicle, exchangeVehicle: exchangeVehicle ?? undefined };
 };
@@ -442,8 +457,16 @@ export const deleteBuyerPayment = async (id: string, paymentId: string): Promise
     if (!mongoose.Types.ObjectId.isValid(id) || !mongoose.Types.ObjectId.isValid(paymentId)) return null;
     const vehicle = await ConsignmentVehicle.findOne({ _id: id, isActive: true });
     if (!vehicle) return null;
+    const deleted = vehicle.buyerPayments.find(p => p._id.toString() === paymentId);
     vehicle.buyerPayments = vehicle.buyerPayments.filter(p => p._id.toString() !== paymentId);
-    vehicle.activityLog.push({ action: "buyer_payment_deleted", description: "Buyer payment removed", date: new Date() });
+    vehicle.activityLog.push({
+        action: "buyer_payment_deleted",
+        description: deleted
+            ? `Buyer payment of ₹${deleted.amount.toLocaleString("en-IN")} via ${deleted.type === "exchange" ? "Exchange" : deleted.mode} removed`
+            : "Buyer payment removed",
+        amount: deleted?.amount,
+        date: new Date(),
+    });
     await vehicle.save();
     return vehicle;
 };
@@ -477,10 +500,19 @@ export const deletePayeePayment = async (id: string, paymentId: string): Promise
     if (!mongoose.Types.ObjectId.isValid(id) || !mongoose.Types.ObjectId.isValid(paymentId)) return null;
     const vehicle = await ConsignmentVehicle.findOne({ _id: id, isActive: true });
     if (!vehicle) return null;
+    const deleted = vehicle.payeePayments.find(p => p._id.toString() === paymentId);
     vehicle.payeePayments = vehicle.payeePayments.filter(p => p._id.toString() !== paymentId);
     // Reset closed status if payments deleted
     if (vehicle.payeePaymentStatus === "closed") vehicle.payeePaymentStatus = "partial";
-    vehicle.activityLog.push({ action: "payee_payment_deleted", description: "Payee payment removed", date: new Date() });
+    const payeeLabel = vehicle.saleType === "park_sale" ? "Owner" : "Finance";
+    vehicle.activityLog.push({
+        action: "payee_payment_deleted",
+        description: deleted
+            ? `${payeeLabel} payment of ₹${deleted.amount.toLocaleString("en-IN")} via ${deleted.mode} removed`
+            : `${payeeLabel} payment removed`,
+        amount: deleted?.amount,
+        date: new Date(),
+    });
     await vehicle.save();
     return vehicle;
 };

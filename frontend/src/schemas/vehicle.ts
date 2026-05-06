@@ -29,6 +29,30 @@ export const createVehicleSchema = z.object({
     notes: z.string().optional(),
 });
 
+export const editBasicInfoSchema = z.object({
+    vehicleType: z.enum(["two_wheeler", "four_wheeler"]),
+    make: z.string().min(1, "Make is required"),
+    model: z.string().min(1, "Model is required"),
+    year: z.preprocess(
+        (v) => (v === "" || v === null || v === undefined ? null : Number(v)),
+        z.number().int().min(1950).max(new Date().getFullYear() + 1).nullable().optional()
+    ),
+    registrationNo: z.string().min(1, "Registration number is required"),
+    color: z.string().optional(),
+    engineNo: z.string().optional(),
+    chassisNo: z.string().optional(),
+    purchasedFrom: z.string().min(1, "Seller name is required"),
+    purchasedFromPhone: z.string().optional(),
+    datePurchased: z.string().min(1, "Purchase date is required"),
+    purchasePrice: z.number().min(0, "Purchase price must be ≥ 0"),
+    fundingSource: z.enum(["own", "investor", "mixed"]),
+    status: z.enum(["in_stock", "reconditioning", "ready_for_sale"]).optional(),
+    remarks: z.string().optional(),
+    notes: z.string().optional(),
+});
+
+
+
 export const recordSaleSchema = z.object({
     dateSold: z.string().min(1, "Sale date is required"),
     soldPrice: z.number().min(0, "Sold price is required"),
@@ -48,10 +72,15 @@ export const addPurchasePaymentSchema = z.object({
 
 export const addSalePaymentSchema = z.object({
     date: z.string().min(1, "Date is required"),
-    amount: z.number().min(1, "Amount must be > 0"),
+    amount: z.number().min(0, "Amount is required"),
     mode: z.enum(["Cash", "Online", "Cheque", "UPI", "GPay", "Finance", "Bank Transfer"]),
     type: z.enum(["cash", "exchange"]).default("cash"),
     source: z.string().optional(),
+    // Finance-specific fields
+    financeCompany: z.string().optional(),
+    loanRef: z.string().optional(),
+    financeAmount: z.number().min(0).optional(),
+    // Exchange-specific fields
     exchangeDetails: z.string().optional(),
     exchangeVehicleMake: z.string().optional(),
     exchangeVehicleRegNo: z.string().optional(),

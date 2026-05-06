@@ -2,7 +2,9 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "@config/axios";
-import { useState } from "react";
+import { getClientSession } from "@/lib/auth";
+import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { AxiosError } from "axios";
 import { formatApiErrors } from "@lib/formatApiErrors";
@@ -20,16 +22,18 @@ import { Badge } from "@/components/ui/badge";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
     ArrowLeft, Bike, Car, TrendingUp, TrendingDown, IndianRupee, ArrowLeftRight,
     DollarSign, Plus, Trash2, Loader2, FileText, Activity, Sparkles, ShoppingCart,
-    Package, ExternalLink
+    Package, ExternalLink, Pencil, RotateCcw, Download, FileSpreadsheet, ChevronDown
 } from "lucide-react";
 import Link from "next/link";
 import VehicleStatusBadge from "../../components/vehicle-status-badge";
 import CostsTab from "./costs-tab";
 import { PURCHASE_PAYMENT_MODES, SALE_PAYMENT_METHODS, NOC_STATUSES } from "@data/vehicle-constants";
-import { recordSaleSchema, addPurchasePaymentSchema, addSalePaymentSchema } from "@schemas/vehicle";
+import { recordSaleSchema, addPurchasePaymentSchema, addSalePaymentSchema, editBasicInfoSchema } from "@schemas/vehicle";
 import { ExchangeVehiclePicker } from "@/components/exchange-vehicle-picker";
 
 const fetchVehicle = async (id: string): Promise<IVehicle | null> => {
@@ -260,11 +264,15 @@ const AddSalePaymentDialog = ({ vehicle }: { vehicle: IVehicle }) => {
 
     const form = useForm({
         resolver: zodResolver(addSalePaymentSchema),
+        mode: "onBlur",
         defaultValues: {
             date: new Date().toISOString().split("T")[0],
-            amount: 0,
+            amount: undefined as unknown as number,
             mode: "Cash" as const,
             type: "cash" as const,
+            financeCompany: "",
+            loanRef: "",
+            financeAmount: undefined as unknown as number,
             exchangeVehicleMake: "",
             exchangeVehicleRegNo: "",
             exchangeVehicleType: "two_wheeler" as const,
@@ -276,9 +284,9 @@ const AddSalePaymentDialog = ({ vehicle }: { vehicle: IVehicle }) => {
         },
     });
 
-    // Unified payment method state (replaces mode + type)
     const [paymentMethod, setPaymentMethod] = useState<string>("Cash");
     const isExchange = paymentMethod === "Exchange";
+    const isFinance = paymentMethod === "Finance";
 
     const handleMethodChange = (method: string) => {
         setPaymentMethod(method);
@@ -287,20 +295,30 @@ const AddSalePaymentDialog = ({ vehicle }: { vehicle: IVehicle }) => {
             form.setValue("mode", found.backendMode as z.infer<typeof addSalePaymentSchema>["mode"]);
             form.setValue("type", found.backendType);
         }
-        // Reset exchange fields when switching away from exchange
         if (method !== "Exchange") {
             form.setValue("exchangeVehicleMake", "");
             form.setValue("exchangeVehicleRegNo", "");
             form.setValue("exchangeDetails", "");
         }
+        if (method !== "Finance") {
+            form.setValue("financeCompany", "");
+            form.setValue("loanRef", "");
+            form.setValue("financeAmount", 0);
+        }
     };
 
     const addToInventory = form.watch("addToInventory");
 
+    // Pre-fill finance company if already set on vehicle
+    const existingFinanceCompany = (vehicle as unknown as Record<string, unknown>).financeCompany as string | undefined;
+    const existingFinanceAmount = (vehicle as unknown as Record<string, unknown>).financeAmount as number | undefined;
+    const financePayments = vehicle.salePayments.filter(p => p.mode === "Finance");
+    const totalFinanceDisbursed = financePayments.reduce((s, p) => s + p.amount, 0);
+    const financeBalance = existingFinanceAmount ? Math.max(0, existingFinanceAmount - totalFinanceDisbursed) : 0;
+
     const { mutate, isPending } = useMutation({
         mutationFn: async (values: z.infer<typeof addSalePaymentSchema>) => {
             setTid(toast.loading("Recording payment..."));
-            // Map addToInventory checkbox → createExchangeAs
             const payload = { ...values };
             if (values.type === "exchange") {
                 payload.createExchangeAs = values.addToInventory ? "phase2_purchase" : "skip";
@@ -312,7 +330,7 @@ const AddSalePaymentDialog = ({ vehicle }: { vehicle: IVehicle }) => {
         onSuccess: (res) => {
             const ev = res.data?.data?.exchangeVehicle;
             if (ev) {
-                toast.success(`Payment recorded! Exchange vehicle created: ${ev.make} (${ev.registrationNo}) → Purchased Inventory`, { id: tid, duration: 6000 });
+                toast.success(`Payment recorded! Exchange vehicle: ${ev.make} (${ev.registrationNo})`, { id: tid, duration: 6000 });
             } else {
                 toast.success("Payment recorded!", { id: tid });
             }
@@ -330,7 +348,7 @@ const AddSalePaymentDialog = ({ vehicle }: { vehicle: IVehicle }) => {
     });
 
     return (
-        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setPaymentMethod("Cash"); } }}>
+        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setPaymentMethod("Cash"); form.reset(); } }}>
             <DialogTrigger asChild>
                 <Button size="sm" className="bg-gradient-success text-white hover:opacity-90 cursor-pointer">
                     <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Payment
@@ -341,8 +359,8 @@ const AddSalePaymentDialog = ({ vehicle }: { vehicle: IVehicle }) => {
                     <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-success shadow-lg"><DollarSign className="h-4 w-4 text-white" /></div>
                         <div>
-                            <DialogTitle className="text-base font-bold text-foreground">Sale Payment</DialogTitle>
-                            <DialogDescription className="text-xs text-muted-foreground">Record money received from buyer</DialogDescription>
+                            <DialogTitle className="text-base font-bold text-foreground">Record Payment</DialogTitle>
+                            <DialogDescription className="text-xs text-muted-foreground">Record money received from buyer or finance</DialogDescription>
                         </div>
                     </div>
                 </div>
@@ -356,11 +374,13 @@ const AddSalePaymentDialog = ({ vehicle }: { vehicle: IVehicle }) => {
                                         <FormControl><Input type="date" className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl><FormMessage /></FormItem>
                                 )} />
                                 <FormField control={form.control} name="amount" render={({ field }) => (
-                                    <FormItem><FormLabel className="text-xs font-semibold text-foreground">{isExchange ? "Exchange Value ₹ *" : "Amount ₹ *"}</FormLabel>
+                                    <FormItem><FormLabel className="text-xs font-semibold text-foreground">
+                                        {isFinance ? "Disbursement Amount ₹ *" : isExchange ? "Exchange Value ₹ *" : "Amount ₹ *"}
+                                    </FormLabel>
                                         <FormControl>
                                             <div className="relative">
                                                 <IndianRupee className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
-                                                <Input type="number" min="0" className="h-9 bg-muted/50 border-border pl-7 text-sm" value={field.value || ""} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} />
+                                                <Input type="number" min="0" className="h-9 bg-muted/50 border-border pl-7 text-sm" value={field.value ?? ""} onChange={(e) => { const v = parseFloat(e.target.value); field.onChange(isNaN(v) ? undefined : v); }} />
                                             </div>
                                         </FormControl><FormMessage /></FormItem>
                                 )} />
@@ -380,7 +400,9 @@ const AddSalePaymentDialog = ({ vehicle }: { vehicle: IVehicle }) => {
                                                 paymentMethod === m.value
                                                     ? m.value === "Exchange"
                                                         ? "bg-orange-500/15 text-orange-400 border-orange-500/30 shadow-sm"
-                                                        : "bg-primary/15 text-primary border-primary/30 shadow-sm"
+                                                        : m.value === "Finance"
+                                                            ? "bg-blue-500/15 text-blue-400 border-blue-500/30 shadow-sm"
+                                                            : "bg-primary/15 text-primary border-primary/30 shadow-sm"
                                                     : "bg-muted/30 text-muted-foreground border-border hover:bg-muted/60 hover:text-foreground"
                                             )}
                                         >
@@ -391,6 +413,52 @@ const AddSalePaymentDialog = ({ vehicle }: { vehicle: IVehicle }) => {
                                 </div>
                             </div>
 
+                            {/* ── Finance Section ── */}
+                            {isFinance && (
+                                <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 space-y-3">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-base">💳</span>
+                                        <p className="text-[11px] font-bold text-blue-400 uppercase tracking-widest">Finance / Loan Details</p>
+                                    </div>
+
+                                    {/* Info banner: show existing finance tracking if any */}
+                                    {existingFinanceAmount && existingFinanceAmount > 0 && (
+                                        <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 px-3 py-2 text-[11px] text-blue-300 space-y-0.5">
+                                            <div className="flex justify-between"><span>Sanctioned Loan</span><span className="font-semibold">{formatCurrency(existingFinanceAmount)}</span></div>
+                                            <div className="flex justify-between"><span>Already Disbursed</span><span className="font-semibold text-emerald-400">{formatCurrency(totalFinanceDisbursed)}</span></div>
+                                            <div className="flex justify-between"><span>Remaining to Disburse</span><span className={cn("font-semibold", financeBalance > 0 ? "text-amber-400" : "text-emerald-400")}>{formatCurrency(financeBalance)}</span></div>
+                                        </div>
+                                    )}
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <FormField control={form.control} name="financeCompany" render={({ field }) => (
+                                            <FormItem><FormLabel className="text-xs font-semibold text-foreground">Finance Company *</FormLabel>
+                                                <FormControl><Input placeholder={existingFinanceCompany || "HDFC, Bajaj Finance..."} className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl></FormItem>
+                                        )} />
+                                        <FormField control={form.control} name="loanRef" render={({ field }) => (
+                                            <FormItem><FormLabel className="text-xs font-semibold text-foreground">Loan Ref / File No</FormLabel>
+                                                <FormControl><Input placeholder="LN2024XXXXX" className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl></FormItem>
+                                        )} />
+                                    </div>
+
+                                    <FormField control={form.control} name="financeAmount" render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel className="text-xs font-semibold text-foreground">
+                                                Total Sanctioned Loan Amount ₹
+                                                <span className="ml-1 text-[10px] font-normal text-muted-foreground">(update if changed)</span>
+                                            </FormLabel>
+                                            <FormControl>
+                                                <div className="relative">
+                                                    <IndianRupee className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+                                                    <Input type="number" min="0" placeholder={existingFinanceAmount?.toString() || "0"} className="h-9 bg-muted/50 border-border pl-7 text-sm" value={field.value ?? ""} onChange={(e) => { const v = parseFloat(e.target.value); field.onChange(isNaN(v) ? undefined : v); }} />
+                                                </div>
+                                            </FormControl>
+                                            <p className="text-[10px] text-muted-foreground">This is the total loan sanctioned. Record the actual disbursement amount in the &quot;Disbursement Amount&quot; field above.</p>
+                                        </FormItem>
+                                    )} />
+                                </div>
+                            )}
+
                             {/* ── Exchange Vehicle Section ── */}
                             {isExchange && (
                                 <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 p-4 space-y-4">
@@ -398,7 +466,6 @@ const AddSalePaymentDialog = ({ vehicle }: { vehicle: IVehicle }) => {
                                         <ArrowLeftRight className="h-3.5 w-3.5 text-orange-400" />
                                         <p className="text-[11px] font-bold text-orange-400 uppercase tracking-widest">Exchange Vehicle Details</p>
                                     </div>
-
                                     <ExchangeVehiclePicker
                                         regNo={form.watch("exchangeVehicleRegNo") ?? ""}
                                         make={form.watch("exchangeVehicleMake") ?? ""}
@@ -410,31 +477,15 @@ const AddSalePaymentDialog = ({ vehicle }: { vehicle: IVehicle }) => {
                                             form.setValue("exchangeVehicleType", v.vehicleType);
                                         }}
                                     />
-
                                     <FormField control={form.control} name="exchangeDetails" render={({ field }) => (
                                         <FormItem><FormLabel className="text-xs font-semibold text-foreground">Exchange Notes</FormLabel>
                                             <FormControl><Input placeholder="Condition, deal notes..." className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl></FormItem>
                                     )} />
-
-                                    {/* Auto-add to inventory toggle */}
-                                    <div className={cn(
-                                        "flex items-start gap-3 rounded-lg border p-3 transition-colors",
-                                        addToInventory ? "border-emerald-500/30 bg-emerald-500/5" : "border-dashed border-border"
-                                    )}>
-                                        <input
-                                            type="checkbox"
-                                            id="addToInventory"
-                                            checked={addToInventory ?? true}
-                                            onChange={e => form.setValue("addToInventory", e.target.checked)}
-                                            className="mt-0.5 h-4 w-4 rounded accent-emerald-500"
-                                        />
+                                    <div className={cn("flex items-start gap-3 rounded-lg border p-3 transition-colors", addToInventory ? "border-emerald-500/30 bg-emerald-500/5" : "border-dashed border-border")}>
+                                        <input type="checkbox" id="addToInventory" checked={addToInventory ?? true} onChange={e => form.setValue("addToInventory", e.target.checked)} className="mt-0.5 h-4 w-4 rounded accent-emerald-500" />
                                         <div>
-                                            <label htmlFor="addToInventory" className="text-xs font-semibold text-foreground cursor-pointer">
-                                                Auto-add to Purchased Inventory
-                                            </label>
-                                            <p className="text-[11px] text-muted-foreground mt-0.5">
-                                                Creates a new vehicle in your purchased inventory with the exchange value as purchase price
-                                            </p>
+                                            <label htmlFor="addToInventory" className="text-xs font-semibold text-foreground cursor-pointer">Auto-add to Purchased Inventory</label>
+                                            <p className="text-[11px] text-muted-foreground mt-0.5">Creates a new vehicle entry with the exchange value as purchase price</p>
                                         </div>
                                     </div>
                                 </div>
@@ -442,11 +493,11 @@ const AddSalePaymentDialog = ({ vehicle }: { vehicle: IVehicle }) => {
 
                             <FormField control={form.control} name="referenceNo" render={({ field }) => (
                                 <FormItem><FormLabel className="text-xs font-semibold text-foreground">Reference No</FormLabel>
-                                    <FormControl><Input placeholder="UPI/Cheque ref..." className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl></FormItem>
+                                    <FormControl><Input placeholder="UPI/Cheque/Loan ref..." className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl></FormItem>
                             )} />
                             <FormField control={form.control} name="notes" render={({ field }) => (
                                 <FormItem><FormLabel className="text-xs font-semibold text-foreground">Notes</FormLabel>
-                                    <FormControl><Input placeholder="advance, balance, etc." className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl></FormItem>
+                                    <FormControl><Input placeholder="advance, partial disbursement, etc." className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl></FormItem>
                             )} />
                         </div>
                         <div className="border-t border-border bg-muted/20 p-4 sm:p-6 sm:pt-4">
@@ -461,6 +512,532 @@ const AddSalePaymentDialog = ({ vehicle }: { vehicle: IVehicle }) => {
                 </Form>
             </DialogContent>
         </Dialog>
+    );
+};
+
+// ── Edit Basic Info Dialog ───────────────────────────────────────
+const EditBasicInfoDialog = ({ vehicle }: { vehicle: IVehicle }) => {
+    const [open, setOpen] = useState(false);
+    const [tid, setTid] = useState<string | number | undefined>();
+    const queryClient = useQueryClient();
+
+    const toDateStr = (d: Date | string) => new Date(d).toISOString().split("T")[0];
+    const safeStatus = (s: string) =>
+        (["in_stock", "reconditioning", "ready_for_sale"] as const).includes(s as never) ? s as "in_stock" | "reconditioning" | "ready_for_sale" : undefined;
+
+    const defaultVals = () => ({
+        vehicleType: vehicle.vehicleType,
+        make: vehicle.make,
+        model: vehicle.model,
+        year: vehicle.year ?? undefined,
+        registrationNo: vehicle.registrationNo,
+        color: vehicle.color ?? "",
+        engineNo: vehicle.engineNo ?? "",
+        chassisNo: vehicle.chassisNo ?? "",
+        purchasedFrom: vehicle.purchasedFrom,
+        purchasedFromPhone: vehicle.purchasedFromPhone ?? "",
+        datePurchased: toDateStr(vehicle.datePurchased),
+        purchasePrice: vehicle.purchasePrice,
+        fundingSource: vehicle.fundingSource,
+        status: safeStatus(vehicle.status),
+        remarks: vehicle.remarks ?? "",
+        notes: vehicle.notes ?? "",
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const form = useForm({ resolver: zodResolver(editBasicInfoSchema) as any, defaultValues: defaultVals() });
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => { if (open) form.reset(defaultVals()); }, [open]);
+
+    const { mutate, isPending } = useMutation({
+        mutationFn: async (values: z.infer<typeof editBasicInfoSchema>) => {
+            setTid(toast.loading("Saving changes..."));
+            return axios.put(`/vehicles/${vehicle._id}`, values);
+        },
+        onSuccess: () => {
+            toast.success("Vehicle updated!", { id: tid });
+            queryClient.invalidateQueries({ queryKey: ["vehicle", vehicle._id] });
+            queryClient.invalidateQueries({ queryKey: ["vehicles"] });
+            setOpen(false);
+        },
+        onError: (err: unknown) => {
+            const e = (err as AxiosError)?.response?.data as ErrorData;
+            toast.error("Update failed", { id: tid, description: formatApiErrors(e?.errors) || e?.message });
+        },
+    });
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button size="sm" variant="outline" className="h-7 gap-1.5 text-xs border-border text-muted-foreground hover:text-foreground">
+                    <Pencil className="h-3 w-3" /> Edit
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="w-[96vw] max-w-2xl p-0 overflow-hidden flex flex-col rounded-2xl bg-card border-border max-h-[92vh] sm:w-full">
+                <div className="glass-header relative p-5">
+                    <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-brand shadow-lg">
+                            <Pencil className="h-4 w-4 text-white" />
+                        </div>
+                        <div>
+                            <DialogTitle className="text-base font-bold text-foreground">Edit Basic Information</DialogTitle>
+                            <DialogDescription className="text-xs text-muted-foreground">{vehicle.make} {vehicle.model} &mdash; {vehicle.registrationNo}</DialogDescription>
+                        </div>
+                    </div>
+                </div>
+                <Form {...form}>
+                    <form onSubmit={form.handleSubmit((v) => mutate(v))} className="flex flex-col flex-1 overflow-hidden min-h-0">
+                        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+                            {/* ── Vehicle Identity ── */}
+                            <div className="space-y-3">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Vehicle Identity</p>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    <FormField control={form.control} name="vehicleType" render={({ field }) => (
+                                        <FormItem><FormLabel className="text-xs font-semibold">Type *</FormLabel>
+                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                <FormControl><SelectTrigger className="h-9 bg-muted/50 border-border text-sm"><SelectValue /></SelectTrigger></FormControl>
+                                                <SelectContent>
+                                                    <SelectItem value="two_wheeler">Two Wheeler</SelectItem>
+                                                    <SelectItem value="four_wheeler">Four Wheeler</SelectItem>
+                                                </SelectContent>
+                                            </Select><FormMessage /></FormItem>
+                                    )} />
+                                    <FormField control={form.control} name="make" render={({ field }) => (
+                                        <FormItem><FormLabel className="text-xs font-semibold">Make *</FormLabel>
+                                            <FormControl><Input className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl><FormMessage /></FormItem>
+                                    )} />
+                                    <FormField control={form.control} name="model" render={({ field }) => (
+                                        <FormItem><FormLabel className="text-xs font-semibold">Model *</FormLabel>
+                                            <FormControl><Input className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl><FormMessage /></FormItem>
+                                    )} />
+                                </div>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                    <FormField control={form.control} name="year" render={({ field }) => (
+                                        <FormItem><FormLabel className="text-xs font-semibold">Year</FormLabel>
+                                            <FormControl><Input type="number" placeholder="2022" className="h-9 bg-muted/50 border-border text-sm"
+                                                value={field.value ?? ""}
+                                                onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value))} /></FormControl></FormItem>
+                                    )} />
+                                    <FormField control={form.control} name="registrationNo" render={({ field }) => (
+                                        <FormItem><FormLabel className="text-xs font-semibold">Reg. No. *</FormLabel>
+                                            <FormControl><Input className="h-9 bg-muted/50 border-border text-sm uppercase" {...field}
+                                                onChange={(e) => field.onChange(e.target.value.toUpperCase())} /></FormControl><FormMessage /></FormItem>
+                                    )} />
+                                    <FormField control={form.control} name="color" render={({ field }) => (
+                                        <FormItem><FormLabel className="text-xs font-semibold">Color</FormLabel>
+                                            <FormControl><Input placeholder="Red" className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl></FormItem>
+                                    )} />
+                                    <FormField control={form.control} name="status" render={({ field }) => (
+                                        <FormItem><FormLabel className="text-xs font-semibold">Status</FormLabel>
+                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                <FormControl><SelectTrigger className="h-9 bg-muted/50 border-border text-sm"><SelectValue placeholder="Keep current" /></SelectTrigger></FormControl>
+                                                <SelectContent>
+                                                    <SelectItem value="in_stock">In Stock</SelectItem>
+                                                    <SelectItem value="reconditioning">Reconditioning</SelectItem>
+                                                    <SelectItem value="ready_for_sale">Ready for Sale</SelectItem>
+                                                </SelectContent>
+                                            </Select></FormItem>
+                                    )} />
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <FormField control={form.control} name="engineNo" render={({ field }) => (
+                                        <FormItem><FormLabel className="text-xs font-semibold">Engine No.</FormLabel>
+                                            <FormControl><Input className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl></FormItem>
+                                    )} />
+                                    <FormField control={form.control} name="chassisNo" render={({ field }) => (
+                                        <FormItem><FormLabel className="text-xs font-semibold">Chassis No.</FormLabel>
+                                            <FormControl><Input className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl></FormItem>
+                                    )} />
+                                </div>
+                            </div>
+
+                            {/* ── Purchase Info ── */}
+                            <div className="space-y-3">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Purchase Information</p>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <FormField control={form.control} name="purchasedFrom" render={({ field }) => (
+                                        <FormItem><FormLabel className="text-xs font-semibold">Seller Name *</FormLabel>
+                                            <FormControl><Input className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl><FormMessage /></FormItem>
+                                    )} />
+                                    <FormField control={form.control} name="purchasedFromPhone" render={({ field }) => (
+                                        <FormItem><FormLabel className="text-xs font-semibold">Seller Phone</FormLabel>
+                                            <FormControl><Input placeholder="+91 9876543210" className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl></FormItem>
+                                    )} />
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <FormField control={form.control} name="datePurchased" render={({ field }) => (
+                                        <FormItem><FormLabel className="text-xs font-semibold">Date Purchased *</FormLabel>
+                                            <FormControl><Input type="date" className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl><FormMessage /></FormItem>
+                                    )} />
+                                    <FormField control={form.control} name="purchasePrice" render={({ field }) => (
+                                        <FormItem><FormLabel className="text-xs font-semibold">Purchase Price ₹ *</FormLabel>
+                                            <FormControl>
+                                                <div className="relative">
+                                                    <IndianRupee className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+                                                    <Input type="number" min="0" className="h-9 bg-muted/50 border-border pl-7 text-sm"
+                                                        value={field.value || ""} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} />
+                                                </div>
+                                            </FormControl><FormMessage /></FormItem>
+                                    )} />
+                                </div>
+                            </div>
+
+                            {/* ── Notes ── */}
+                            <div className="space-y-3">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Notes & Remarks</p>
+                                <FormField control={form.control} name="remarks" render={({ field }) => (
+                                    <FormItem><FormLabel className="text-xs font-semibold">Remarks</FormLabel>
+                                        <FormControl><Textarea placeholder="Any remarks..." rows={2} className="resize-none bg-muted/50 border-border text-sm" {...field} /></FormControl></FormItem>
+                                )} />
+                                <FormField control={form.control} name="notes" render={({ field }) => (
+                                    <FormItem><FormLabel className="text-xs font-semibold">Internal Notes</FormLabel>
+                                        <FormControl><Textarea placeholder="Internal notes..." rows={2} className="resize-none bg-muted/50 border-border text-sm" {...field} /></FormControl></FormItem>
+                                )} />
+                            </div>
+                        </div>
+
+                        <div className="border-t border-border bg-muted/20 p-4">
+                            <div className="flex flex-col-reverse items-stretch justify-end gap-2 sm:flex-row sm:items-center sm:gap-3">
+                                <Button type="button" variant="outline" onClick={() => setOpen(false)} className="border-border hover:bg-muted">Cancel</Button>
+                                <Button type="submit" disabled={isPending} className="bg-gradient-brand text-white hover:opacity-90">
+                                    {isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : "Save Changes"}
+                                </Button>
+                            </div>
+                        </div>
+                    </form>
+                </Form>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
+// ── Delete Payment Dialog ─────────────────────────────────
+const DeletePaymentDialog = ({ type, payment, onDelete }: { type: "purchase" | "sale"; payment: { amount: number; mode: string }; onDelete: () => void }) => {
+    return (
+        <AlertDialog>
+            <AlertDialogTrigger asChild>
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10" title="Delete payment">
+                    <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent className="w-[96vw] max-w-sm rounded-3xl bg-card border-border p-0 overflow-hidden gap-0 sm:w-full shadow-2xl">
+                {/* Glassmorphic Danger Header */}
+                <div className="relative overflow-hidden bg-red-500/5 border-b border-red-500/10 px-6 pt-6 pb-5">
+                    <div className="absolute -top-12 -right-12 h-32 w-32 rounded-full bg-red-500/20 blur-[40px] pointer-events-none" />
+                    <div className="relative flex flex-col items-center text-center gap-3">
+                        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-red-500/10 border border-red-500/20 shadow-inner">
+                            <Trash2 className="h-6 w-6 text-red-500 drop-shadow-sm" />
+                        </div>
+                        <div>
+                            <AlertDialogTitle className="text-foreground text-lg font-bold leading-tight">
+                                Delete Payment
+                            </AlertDialogTitle>
+                            <p className="text-xs text-muted-foreground mt-1">This action cannot be undone</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="px-6 py-6 space-y-4">
+                    <div className="rounded-xl border border-border bg-muted/30 p-4 text-center">
+                        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">{type} PAYMENT</p>
+                        <p className="text-2xl font-bold text-foreground">{formatCurrency(payment.amount)}</p>
+                        <p className="text-xs text-muted-foreground mt-1">via {payment.mode}</p>
+                    </div>
+                    <AlertDialogDescription className="text-sm text-center text-muted-foreground leading-relaxed">
+                        Are you sure you want to permanently remove this payment record from the timeline?
+                    </AlertDialogDescription>
+                </div>
+
+                <AlertDialogFooter className="px-6 pb-6 pt-0 flex-col sm:flex-row gap-3">
+                    <AlertDialogCancel className="w-full sm:w-1/2 border-border hover:bg-muted m-0">Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                        onClick={onDelete}
+                        className="w-full sm:w-1/2 bg-red-500 hover:bg-red-600 text-white shadow-md shadow-red-500/20 m-0"
+                    >
+                        Delete Payment
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+    );
+};
+
+// ── Delete Vehicle Dialog ─────────────────────────────────
+const DeleteVehicleDialog = ({ vehicle }: { vehicle: IVehicle }) => {
+    const router = useRouter();
+    const [open, setOpen] = useState(false);
+    const [confirmText, setConfirmText] = useState("");
+    const inputRef = useRef<HTMLInputElement>(null);
+    const confirmKey = vehicle.registrationNo;
+    const isConfirmed = confirmText.trim().toUpperCase() === confirmKey.toUpperCase();
+
+    const { mutate, isPending } = useMutation({
+        mutationFn: () => axios.delete(`/vehicles/${vehicle._id}`),
+        onSuccess: () => {
+            toast.success(`${vehicle.make} ${vehicle.model} deleted successfully`);
+            router.push("/vehicles");
+        },
+        onError: (err: unknown) => {
+            const e = (err as AxiosError)?.response?.data as ErrorData;
+            toast.error(e?.message ?? "Failed to delete vehicle");
+        },
+    });
+
+    // Reset confirm text when dialog opens
+    useEffect(() => {
+        if (open) {
+            setConfirmText("");
+            setTimeout(() => inputRef.current?.focus(), 100);
+        }
+    }, [open]);
+
+    return (
+        <AlertDialog open={open} onOpenChange={setOpen}>
+            <AlertDialogTrigger asChild>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 w-8 p-0 border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300 hover:border-red-500/50 transition-all"
+                    title="Delete vehicle"
+                >
+                    <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+            </AlertDialogTrigger>
+
+            <AlertDialogContent className="w-[96vw] max-w-md rounded-3xl bg-card border-border p-0 overflow-hidden gap-0 sm:w-full shadow-2xl">
+                {/* Red danger header */}
+                <div className="relative overflow-hidden bg-red-500/5 border-b border-red-500/10 px-6 pt-6 pb-5">
+                    <div className="absolute -top-12 -right-12 h-32 w-32 rounded-full bg-red-500/20 blur-[40px] pointer-events-none" />
+                    <div className="relative flex items-center gap-4">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-red-500/10 border border-red-500/20 shadow-inner">
+                            <Trash2 className="h-5 w-5 text-red-500 drop-shadow-sm" />
+                        </div>
+                        <div>
+                            <AlertDialogTitle className="text-foreground text-lg font-bold leading-tight">
+                                Delete Vehicle
+                            </AlertDialogTitle>
+                            <p className="text-xs text-muted-foreground mt-1">Permanent & irreversible action</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="px-6 py-6 space-y-5">
+                    {/* Vehicle info pill */}
+                    <div className="flex items-center gap-3 rounded-xl bg-muted/40 border border-border px-4 py-3 shadow-sm">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-brand shadow-inner text-white">
+                            {vehicle.vehicleType === "two_wheeler" ? <Bike className="h-4 w-4" /> : <Car className="h-4 w-4" />}
+                        </div>
+                        <div className="min-w-0">
+                            <p className="text-sm font-bold text-foreground truncate">{vehicle.make} {vehicle.model}{vehicle.year ? ` (${vehicle.year})` : ""}</p>
+                            <p className="text-xs text-muted-foreground font-mono mt-0.5">{vehicle.registrationNo}</p>
+                        </div>
+                    </div>
+
+                    <AlertDialogDescription className="text-sm text-muted-foreground leading-relaxed">
+                        Deleting this vehicle will permanently remove all associated data including purchase payments, sale records, costs, and activity history.
+                    </AlertDialogDescription>
+
+                    {/* Confirm input */}
+                    <div className="space-y-2.5">
+                        <p className="text-xs font-medium text-foreground">
+                            Type <span className="font-mono font-bold text-red-500 bg-red-500/10 border border-red-500/20 px-1.5 py-0.5 rounded">{confirmKey}</span> to confirm
+                        </p>
+                        <input
+                            ref={inputRef}
+                            value={confirmText}
+                            onChange={(e) => setConfirmText(e.target.value)}
+                            onKeyDown={(e) => e.key === "Enter" && isConfirmed && !isPending && mutate()}
+                            placeholder={`Type ${confirmKey} here...`}
+                            className={cn(
+                                "w-full rounded-xl border bg-background px-4 py-2.5 text-sm font-mono outline-none transition-all shadow-sm",
+                                "placeholder:text-muted-foreground/50",
+                                isConfirmed
+                                    ? "border-red-500/60 ring-4 ring-red-500/10 text-red-500 font-bold"
+                                    : "border-border focus:border-red-500/50 focus:ring-4 focus:ring-red-500/10"
+                            )}
+                        />
+                    </div>
+
+                    {/* Warning banner */}
+                    <div className="flex items-start gap-3 rounded-xl bg-red-500/5 border border-red-500/20 p-3.5">
+                        <span className="text-red-500 mt-0.5 shrink-0 text-base leading-none">⚠️</span>
+                        <p className="text-xs text-red-500/90 font-medium leading-relaxed">
+                            This cannot be undone. All records including payments, costs, sale history and activity logs will be permanently deleted.
+                        </p>
+                    </div>
+                </div>
+
+                <AlertDialogFooter className="px-6 pb-6 pt-0 flex-col sm:flex-row gap-3">
+                    <AlertDialogCancel
+                        onClick={() => setOpen(false)}
+                        className="w-full sm:w-1/2 border-border hover:bg-muted m-0"
+                        disabled={isPending}
+                    >
+                        Cancel
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                        onClick={() => mutate()}
+                        disabled={!isConfirmed || isPending}
+                        className="w-full sm:w-1/2 bg-red-500 hover:bg-red-600 text-white shadow-md shadow-red-500/20 disabled:opacity-40 m-0"
+                    >
+                        {isPending ? (
+                            <><Loader2 className="h-4 w-4 animate-spin mr-2" />Deleting...</>
+                        ) : (
+                            <><Trash2 className="h-4 w-4 mr-2" />Delete Vehicle</>
+                        )}
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+    );
+};
+
+// ── Export Detail Button ──────────────────────────────────────────
+const ExportDetailButton = ({ vehicleId, vehicleName }: { vehicleId: string; vehicleName: string }) => {
+    const [isExporting, setIsExporting] = useState<"pdf" | "csv" | null>(null);
+
+    const handleExport = async (format: "pdf" | "csv") => {
+        setIsExporting(format);
+        try {
+            const baseURL = (axios.defaults.baseURL ?? "").replace(/\/$/, "");
+            const url = `${baseURL}/vehicles/${vehicleId}/export?format=${format}`;
+            const token = getClientSession();
+            const res = await fetch(url, {
+                credentials: "include",
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
+            });
+            if (!res.ok) throw new Error("Export failed");
+            const blob = await res.blob();
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = `${vehicleName}_${new Date().toISOString().slice(0, 10)}.${format}`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(link.href);
+            toast.success(`${format.toUpperCase()} downloaded successfully`);
+        } catch {
+            toast.error("Export failed. Please try again.");
+        } finally {
+            setIsExporting(null);
+        }
+    };
+
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5 border-border text-muted-foreground hover:text-foreground" disabled={!!isExporting}>
+                    {isExporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                    Export
+                    <ChevronDown className="h-3 w-3 opacity-60" />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48 bg-card border-border">
+                <DropdownMenuLabel className="text-xs text-muted-foreground">Download as</DropdownMenuLabel>
+                <DropdownMenuSeparator className="bg-border" />
+                <DropdownMenuItem onClick={() => handleExport("pdf")} disabled={isExporting === "pdf"} className="gap-2 cursor-pointer">
+                    <FileText className="h-4 w-4 text-red-400" />
+                    <div>
+                        <p className="text-sm font-medium">Export PDF</p>
+                        <p className="text-[10px] text-muted-foreground">Full detail report</p>
+                    </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport("csv")} disabled={isExporting === "csv"} className="gap-2 cursor-pointer">
+                    <FileSpreadsheet className="h-4 w-4 text-green-400" />
+                    <div>
+                        <p className="text-sm font-medium">Export CSV</p>
+                        <p className="text-[10px] text-muted-foreground">Open in Excel / Sheets</p>
+                    </div>
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
+};
+
+// ── Revert Sale Button ───────────────────────────────────────────
+const RevertSaleButton = ({ vehicle, size = "default" }: { vehicle: IVehicle; size?: "default" | "sm" }) => {
+    const [tid, setTid] = useState<string | number | undefined>();
+    const queryClient = useQueryClient();
+
+    const { mutate, isPending } = useMutation({
+        mutationFn: async () => {
+            setTid(toast.loading("Reverting sale..."));
+            return axios.delete(`/vehicles/${vehicle._id}/sale`);
+        },
+        onSuccess: () => {
+            toast.success("Sale reverted. Vehicle is back in stock.", { id: tid });
+            queryClient.invalidateQueries({ queryKey: ["vehicle", vehicle._id] });
+            queryClient.invalidateQueries({ queryKey: ["vehicles"] });
+            // Invalidate consignments — a migrated consignment may have been restored
+            queryClient.invalidateQueries({ queryKey: ["consignments"] });
+        },
+        onError: (err: unknown) => {
+            const e = (err as AxiosError)?.response?.data as ErrorData;
+            toast.error("Failed to revert sale", { id: tid, description: e?.message });
+        },
+    });
+
+    return (
+        <AlertDialog>
+            <AlertDialogTrigger asChild>
+                {size === "sm" ? (
+                    <Button size="sm" variant="outline" className="h-7 gap-1.5 text-xs border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300">
+                        <RotateCcw className="h-3 w-3" /> Revert Sale
+                    </Button>
+                ) : (
+                    <Button variant="outline" className="gap-2 border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300">
+                        {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                        Revert Sale
+                    </Button>
+                )}
+            </AlertDialogTrigger>
+            <AlertDialogContent className="w-[96vw] max-w-md rounded-3xl bg-card border-border p-0 overflow-hidden gap-0 sm:w-full shadow-2xl">
+                {/* Red danger header */}
+                <div className="relative overflow-hidden bg-orange-500/5 border-b border-orange-500/10 px-6 pt-6 pb-5">
+                    <div className="absolute -top-12 -right-12 h-32 w-32 rounded-full bg-orange-500/20 blur-[40px] pointer-events-none" />
+                    <div className="relative flex items-center gap-4">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-orange-500/10 border border-orange-500/20 shadow-inner">
+                            <RotateCcw className="h-5 w-5 text-orange-500 drop-shadow-sm" />
+                        </div>
+                        <div>
+                            <AlertDialogTitle className="text-foreground text-lg font-bold leading-tight">
+                                Revert Sale
+                            </AlertDialogTitle>
+                            <p className="text-xs text-muted-foreground mt-1">Undo vehicle sale transaction</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="px-6 py-6 space-y-4">
+                    <AlertDialogDescription className="text-sm text-muted-foreground leading-relaxed">
+                        This will permanently undo the sale of <strong className="text-foreground">{vehicle.make} {vehicle.model}</strong> and restore it to <strong className="text-foreground">In Stock</strong>.
+                    </AlertDialogDescription>
+
+                    {/* Warning banner */}
+                    <div className="flex items-start gap-3 rounded-xl bg-orange-500/5 border border-orange-500/20 p-3.5">
+                        <span className="text-orange-500 mt-0.5 shrink-0 text-base leading-none">⚠️</span>
+                        <p className="text-xs text-orange-500/90 font-medium leading-relaxed">
+                            All recorded sale payments and related exchange entries for this vehicle will be completely cleared. This action cannot be undone.
+                        </p>
+                    </div>
+                </div>
+
+                <AlertDialogFooter className="px-6 pb-6 pt-0 flex-col sm:flex-row gap-3">
+                    <AlertDialogCancel className="w-full sm:w-1/2 border-border hover:bg-muted m-0">Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                        onClick={() => mutate()}
+                        className="w-full sm:w-1/2 bg-orange-500 hover:bg-orange-600 text-white shadow-md shadow-orange-500/20 m-0"
+                    >
+                        {isPending ? (
+                            <><Loader2 className="h-4 w-4 animate-spin mr-2" />Reverting...</>
+                        ) : (
+                            <><RotateCcw className="h-4 w-4 mr-2" />Revert Sale</>
+                        )}
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
     );
 };
 
@@ -483,6 +1060,10 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
         onSuccess: () => {
             toast.success("Payment deleted");
             queryClient.invalidateQueries({ queryKey: ["vehicle", id] });
+            // Invalidate lists — a sale payment delete may deactivate an exchange vehicle
+            // or restore a consignment, so both lists need refreshing
+            queryClient.invalidateQueries({ queryKey: ["vehicles"] });
+            queryClient.invalidateQueries({ queryKey: ["consignments"] });
         },
     });
 
@@ -550,11 +1131,18 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                                 </p>
                             </div>
                         </div>
-                        {!isSold && (
-                            <div className="w-full sm:w-auto mt-2 sm:mt-0">
+                        {/* Action buttons */}
+                        <div className="flex items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0 flex-wrap">
+                            {/* Export dropdown */}
+                            <ExportDetailButton vehicleId={vehicle._id} vehicleName={`${vehicle.make}_${vehicle.model}`} />
+                            {!isSold ? (
                                 <RecordSaleDialog vehicle={vehicle} />
-                            </div>
-                        )}
+                            ) : (
+                                <RevertSaleButton vehicle={vehicle} />
+                            )}
+                            {/* Delete */}
+                            <DeleteVehicleDialog vehicle={vehicle} />
+                        </div>
                     </div>
                 </div>
 
@@ -646,7 +1234,10 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
             {activeTab === "overview" && (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="rounded-xl border border-border bg-card p-5 space-y-3">
-                        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Vehicle Details</p>
+                        <div className="flex items-center justify-between">
+                            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Vehicle Details</p>
+                            <EditBasicInfoDialog vehicle={vehicle} />
+                        </div>
                         {[
                             { label: "Make & Model", value: `${vehicle.make} ${vehicle.model}` },
                             { label: "Year", value: vehicle.year?.toString() || "—" },
@@ -654,7 +1245,6 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                             { label: "Color", value: vehicle.color || "—" },
                             { label: "Engine No", value: vehicle.engineNo || "—" },
                             { label: "Chassis No", value: vehicle.chassisNo || "—" },
-                            { label: "Funding Source", value: vehicle.fundingSource.replace("_", " ").toUpperCase() },
                         ].map((r) => (
                             <div key={r.label} className="flex justify-between text-sm border-b border-border/50 pb-2 last:border-0 last:pb-0">
                                 <span className="text-muted-foreground">{r.label}</span>
@@ -749,9 +1339,7 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                                             <p className="text-xs text-muted-foreground">{formatDate(p.date)}{p.bankAccount && ` — ${p.bankAccount}`}{p.notes && ` — ${p.notes}`}</p>
                                         </div>
                                     </div>
-                                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10" onClick={() => deletePayment({ type: "purchase", paymentId: p._id })}>
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                    </Button>
+                                    <DeletePaymentDialog type="purchase" payment={p} onDelete={() => deletePayment({ type: "purchase", paymentId: p._id })} />
                                 </div>
                             ))}
                         </div>
@@ -770,6 +1358,14 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                         </div>
                     ) : (
                         <>
+                            {/* Revert Sale action bar */}
+                            <div className="flex items-center justify-between rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3">
+                                <div>
+                                    <p className="text-xs font-bold text-red-400">Sale Recorded</p>
+                                    <p className="text-[11px] text-muted-foreground mt-0.5">Made a mistake? You can revert this sale and restore the vehicle to stock.</p>
+                                </div>
+                                <RevertSaleButton vehicle={vehicle} size="sm" />
+                            </div>
                             {/* Sale Summary */}
                             <div className="rounded-xl border border-border bg-card p-5">
                                 <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Sale Summary</p>
@@ -788,6 +1384,61 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                                 </div>
                             </div>
 
+                            {/* ── Finance Disbursement Card ── */}
+                            {(() => {
+                                const vAny = vehicle as unknown as Record<string, unknown>;
+                                const finCo = vAny.financeCompany as string | undefined;
+                                const finAmt = vAny.financeAmount as number | undefined;
+                                const finStatus = vAny.financeStatus as string | undefined;
+                                const finPayments = vehicle.salePayments.filter(p => p.mode === "Finance");
+                                // Only count actual disbursements (amount > 0) — ₹0 entries are just initializers
+                                const actualDisbursements = finPayments.filter(p => p.amount > 0);
+                                const disbursed = actualDisbursements.reduce((s, p) => s + p.amount, 0);
+                                const finBalance = finAmt ? Math.max(0, finAmt - disbursed) : 0;
+                                const pct = finAmt && finAmt > 0 ? Math.min(100, (disbursed / finAmt) * 100) : 0;
+                                if (!finCo && finPayments.length === 0) return null;
+                                return (
+                                    <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-base">💳</span>
+                                                <p className="text-xs font-bold text-blue-400 uppercase tracking-widest">Finance Disbursement</p>
+                                            </div>
+                                            <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full border",
+                                                finStatus === "disbursed" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
+                                                finStatus === "partial" ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
+                                                "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                                            )}>
+                                                {finStatus === "disbursed" ? "Fully Disbursed" : finStatus === "partial" ? "Partially Disbursed" : "Awaiting Disbursement"}
+                                            </span>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3 text-sm">
+                                            {finCo && <div><p className="text-[10px] text-muted-foreground">Finance Company</p><p className="font-semibold text-foreground">{finCo}</p></div>}
+                                            {finAmt && finAmt > 0 && <div><p className="text-[10px] text-muted-foreground">Sanctioned Loan</p><p className="font-semibold text-foreground">{formatCurrency(finAmt)}</p></div>}
+                                            <div>
+                                                <p className="text-[10px] text-muted-foreground">
+                                                    {actualDisbursements.length > 0
+                                                        ? `Disbursed (${actualDisbursements.length} tranche${actualDisbursements.length !== 1 ? "s" : ""})`
+                                                        : "Disbursed"}
+                                                </p>
+                                                <p className="font-semibold text-emerald-400">{actualDisbursements.length > 0 ? formatCurrency(disbursed) : "None yet"}</p>
+                                            </div>
+                                            {finAmt && finAmt > 0 && <div><p className="text-[10px] text-muted-foreground">Pending Disbursement</p><p className={cn("font-semibold", finBalance > 0 ? "text-amber-400" : "text-emerald-400")}>{formatCurrency(finBalance)}</p></div>}
+                                        </div>
+                                        {finAmt && finAmt > 0 && (
+                                            <div>
+                                                <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
+                                                    <span>Disbursement Progress</span><span>{pct.toFixed(0)}%</span>
+                                                </div>
+                                                <div className="h-1.5 bg-muted/40 rounded-full overflow-hidden">
+                                                    <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })()}
+
                             {/* Payment Timeline */}
                             <div className="flex items-center justify-between">
                                 <p className="font-bold text-foreground">Payment Timeline</p>
@@ -797,29 +1448,53 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                                 <div className="rounded-xl border border-dashed border-border p-6 text-center text-muted-foreground text-sm">No payments recorded yet</div>
                             ) : (
                                 <div className="rounded-xl border border-border bg-card overflow-hidden">
-                                    {vehicle.salePayments.map((p, i) => (
+                                    {vehicle.salePayments.map((p, i) => {
+                                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                        const pAny = p as any;
+                                        const isFinanceInit = p.mode === "Finance" && p.amount === 0;
+                                        return (
                                         <div key={p._id} className={cn("flex items-center justify-between px-5 py-3", i > 0 ? "border-t border-border" : "")}>
                                             <div className="flex items-center gap-4">
-                                                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-success/10 text-emerald-400 text-xs font-bold">{i + 1}</div>
-                                                <div>
-                                                    <div className="flex items-center gap-2 flex-wrap">
-                                                        <p className="text-sm font-semibold text-emerald-400">+{formatCurrency(p.amount)} <span className="text-xs font-normal text-muted-foreground">via {p.mode}</span></p>
-                                                        {p.type === "exchange" && (
-                                                            <Badge className="bg-orange-500/10 text-orange-400 border-orange-500/20 text-[10px]">
-                                                                <ArrowLeftRight className="mr-1 h-2.5 w-2.5" />Exchange
-                                                            </Badge>
-                                                        )}
-                                                        {p.exchangeCreatedRef && p.exchangeCreatedIn && (
-                                                            <Link href={`/${p.exchangeCreatedIn === "vehicles" ? "vehicles" : "consignments"}/${p.exchangeCreatedRef}`}
-                                                                className="inline-flex items-center gap-1 text-[10px] text-orange-400 hover:underline"
-                                                                onClick={e => e.stopPropagation()}>
-                                                                <ExternalLink className="h-2.5 w-2.5" />
-                                                                {p.exchangeCreatedIn === "vehicles" ? "View Vehicle" : "View Consignment"}
-                                                            </Link>
-                                                        )}
+                                                {isFinanceInit ? (
+                                                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-500/10 text-blue-400 text-xs">
+                                                        <span>⏳</span>
                                                     </div>
+                                                ) : (
+                                                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-success/10 text-emerald-400 text-xs font-bold">
+                                                        {vehicle.salePayments.filter(x => x.amount > 0).indexOf(p) + 1 || "—"}
+                                                    </div>
+                                                )}
+                                                <div>
+                                                    {isFinanceInit ? (
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            <p className="text-sm font-semibold text-blue-400">Finance Initialized</p>
+                                                            <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[10px]">💳 Awaiting Disbursement</Badge>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            <p className="text-sm font-semibold text-emerald-400">+{formatCurrency(p.amount)} <span className="text-xs font-normal text-muted-foreground">via {p.type === "exchange" ? "Exchange" : p.mode}</span></p>
+                                                            {p.type === "exchange" && (
+                                                                <Badge className="bg-orange-500/10 text-orange-400 border-orange-500/20 text-[10px]">
+                                                                    <ArrowLeftRight className="mr-1 h-2.5 w-2.5" />Exchange
+                                                                </Badge>
+                                                            )}
+                                                            {p.mode === "Finance" && (
+                                                                <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[10px]">💳 Finance</Badge>
+                                                            )}
+                                                            {p.exchangeCreatedRef && p.exchangeCreatedIn && (
+                                                                <Link href={`/${p.exchangeCreatedIn === "vehicles" ? "vehicles" : "consignments"}/${p.exchangeCreatedRef}`}
+                                                                    className="inline-flex items-center gap-1 text-[10px] text-orange-400 hover:underline"
+                                                                    onClick={e => e.stopPropagation()}>
+                                                                    <ExternalLink className="h-2.5 w-2.5" />
+                                                                    {p.exchangeCreatedIn === "vehicles" ? "View Vehicle" : "View Consignment"}
+                                                                </Link>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                     <p className="text-xs text-muted-foreground">
                                                         {formatDate(p.date)}
+                                                        {pAny.financeCompany && ` — ${pAny.financeCompany}`}
+                                                        {pAny.loanRef && ` (Loan: ${pAny.loanRef})`}
                                                         {p.referenceNo && ` — Ref: ${p.referenceNo}`}
                                                         {p.notes && ` — ${p.notes}`}
                                                     </p>
@@ -831,11 +1506,10 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                                                     )}
                                                 </div>
                                             </div>
-                                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10" onClick={() => deletePayment({ type: "sale", paymentId: p._id })}>
-                                                <Trash2 className="h-3.5 w-3.5" />
-                                            </Button>
+                                            <DeletePaymentDialog type="sale" payment={p} onDelete={() => deletePayment({ type: "sale", paymentId: p._id })} />
                                         </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             )}
                         </>
@@ -975,18 +1649,48 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                         <div className="p-8 text-center text-muted-foreground text-sm">No activity recorded</div>
                     ) : (
                         <div className="divide-y divide-border">
-                            {[...vehicle.activityLog].reverse().map((log, i) => (
+                            {[...vehicle.activityLog].reverse().map((log, i) => {
+                                // Determine icon bg + text color based on action type
+                                const isExchangePayment = log.action === "sale_payment" && log.description.toLowerCase().includes("exchange");
+                                const isDeletion = log.action === "sale_payment_deleted" || log.action === "purchase_payment_deleted";
+                                const isRevert = log.action === "sale_undone" || log.action === "reverted";
+                                const isSale = log.action === "sold";
+                                const isPayment = log.action === "sale_payment" || log.action === "purchase_payment";
+
+                                const iconBg =
+                                    isExchangePayment ? "bg-orange-500/10 text-orange-400" :
+                                    isDeletion        ? "bg-red-500/10 text-red-400" :
+                                    isRevert          ? "bg-yellow-500/10 text-yellow-400" :
+                                    isSale            ? "bg-emerald-500/10 text-emerald-400" :
+                                    isPayment         ? "bg-primary/10 text-primary" :
+                                                        "bg-muted/40 text-muted-foreground";
+
+                                const amountColor =
+                                    isDeletion ? "text-red-400 line-through" :
+                                    isExchangePayment ? "text-orange-400" :
+                                    "text-primary";
+
+                                // Prefix deletions with a clear ✕ marker
+                                const prefix = isDeletion ? "✕ " : "";
+
+                                return (
                                 <div key={i} className="flex items-start gap-4 px-5 py-3">
-                                    <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs">
+                                    <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs ${iconBg}`}>
                                         <Activity className="h-3.5 w-3.5" />
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-sm text-foreground">{log.description}</p>
+                                        <p className="text-sm text-foreground">{prefix}{log.description}</p>
                                         <p className="text-xs text-muted-foreground mt-0.5">{formatDate(log.date)}</p>
                                     </div>
-                                    {log.amount && <span className="text-xs font-semibold text-primary shrink-0">{formatCurrency(log.amount)}</span>}
+                                    {log.amount && (
+                                        <span className={`text-xs font-semibold shrink-0 ${amountColor}`}>
+                                            {isDeletion ? "-" : "+"}{formatCurrency(log.amount)}
+                                        </span>
+                                    )}
                                 </div>
-                            ))}
+                                );
+                            })}
+
                         </div>
                     )}
                 </div>

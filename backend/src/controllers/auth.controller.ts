@@ -8,7 +8,9 @@ import { env } from "../config/env";
 const REFRESH_COOKIE_OPTIONS = {
     httpOnly: true,
     secure: env.NODE_ENV === "production",
-    sameSite: "strict" as const,
+    // "lax" allows the refresh cookie to be sent for cross-origin requests in dev
+    // (frontend :3000 → backend :5000). In production (same origin) this is equally safe.
+    sameSite: "lax" as const,
     path: "/",
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
 };
@@ -16,7 +18,7 @@ const REFRESH_COOKIE_OPTIONS = {
 const CLEAR_COOKIE_OPTIONS = {
     httpOnly: true,
     secure: env.NODE_ENV === "production",
-    sameSite: "strict" as const,
+    sameSite: "lax" as const,
     path: "/",
 };
 

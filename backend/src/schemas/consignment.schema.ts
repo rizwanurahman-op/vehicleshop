@@ -29,9 +29,11 @@ export const createConsignmentSchema = z.object({
 
     purchasePrice: z.number().min(0).default(0),
 
-    // Reconditioning costs
+    // Reconditioning costs (10 categories, same as vehicle)
+    travelCost: z.number().min(0).default(0),
     workshopRepairCost: z.number().min(0).default(0),
     sparePartsAccessories: z.number().min(0).default(0),
+    alignmentWork: z.number().min(0).default(0),
     paintingPolishingCost: z.number().min(0).default(0),
     washingDetailingCost: z.number().min(0).default(0),
     fuelCost: z.number().min(0).default(0),
@@ -51,8 +53,10 @@ export const updateConsignmentStatusSchema = z.object({
 });
 
 export const updateConsignmentCostsSchema = z.object({
+    travelCost: z.number().min(0).optional(),
     workshopRepairCost: z.number().min(0).optional(),
     sparePartsAccessories: z.number().min(0).optional(),
+    alignmentWork: z.number().min(0).optional(),
     paintingPolishingCost: z.number().min(0).optional(),
     washingDetailingCost: z.number().min(0).optional(),
     fuelCost: z.number().min(0).optional(),
@@ -62,7 +66,7 @@ export const updateConsignmentCostsSchema = z.object({
 });
 
 export const addCostBreakdownItemSchema = z.object({
-    category: z.enum(["workshop", "spareParts", "painting", "washing", "fuel", "paperwork", "commission", "other"]),
+    category: z.enum(["travel", "workshop", "spareParts", "alignment", "painting", "washing", "fuel", "paperwork", "commission", "other"]),
     name: z.string().min(1, { message: "Item name is required" }),
     amount: z.number().min(0),
     date: z.string().optional(),

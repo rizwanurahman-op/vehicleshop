@@ -2,7 +2,8 @@
 
 import { useQuery } from "@tanstack/react-query";
 import axios from "@config/axios";
-import { useState } from "react";
+import { getClientSession } from "@/lib/auth";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { formatCurrency } from "@lib/currency";
@@ -11,12 +12,33 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Download, Bike, Car, Package, Eye, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Boxes, ArrowLeftRight } from "lucide-react";
+import { Plus, Search, Download, Package, Eye, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, ArrowLeftRight, Calendar, X, FileText, FileSpreadsheet, Loader2, ChevronDown } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import VehicleStatusBadge from "./vehicle-status-badge";
 import VehicleTypeIcon from "./vehicle-type-icon";
+import VehicleStatsCards from "./vehicle-stats-cards";
+import type { VehicleStatsFilters } from "./vehicle-stats-cards";
 import { VEHICLE_STATUSES } from "@data/vehicle-constants";
 
 type VehicleListProps = { initialData: VehiclePaginatedData | null };
+
+type DatePreset = "all" | "today" | "yesterday" | "this_week" | "this_month" | "this_year" | "last_year" | "custom";
+
+const getPresetRange = (preset: DatePreset): { dateFrom?: string; dateTo?: string } => {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    if (preset === "today") { const t = fmt(now); return { dateFrom: t, dateTo: t }; }
+    if (preset === "yesterday") { const y = new Date(now); y.setDate(y.getDate() - 1); const t = fmt(y); return { dateFrom: t, dateTo: t }; }
+    if (preset === "this_week") {
+        const start = new Date(now); start.setDate(now.getDate() - now.getDay());
+        return { dateFrom: fmt(start), dateTo: fmt(now) };
+    }
+    if (preset === "this_month") return { dateFrom: fmt(new Date(now.getFullYear(), now.getMonth(), 1)), dateTo: fmt(now) };
+    if (preset === "this_year") return { dateFrom: fmt(new Date(now.getFullYear(), 0, 1)), dateTo: fmt(now) };
+    if (preset === "last_year") return { dateFrom: `${now.getFullYear() - 1}-01-01`, dateTo: `${now.getFullYear() - 1}-12-31` };
+    return {};
+};
 
 const fetchVehicles = async (params: Record<string, string | number>): Promise<VehiclePaginatedData | null> => {
     const response = await axios.get<ApiResponse<VehiclePaginatedData>>("/vehicles", { params });
@@ -29,35 +51,116 @@ const VehicleList = ({ initialData }: VehicleListProps) => {
 
     const [page, setPage] = useState(1);
     const [search, setSearch] = useState("");
-    const [activeTab, setActiveTab] = useState<string>(defaultType || "all");
+    const [debouncedSearch, setDebouncedSearch] = useState("");
+    const [vehicleType, setVehicleType] = useState<string>(defaultType || "all");
     const [statusFilter, setStatusFilter] = useState("all");
     const [sourceFilter, setSourceFilter] = useState("all");
+    const [datePreset, setDatePreset] = useState<DatePreset>("all");
+    const [customFrom, setCustomFrom] = useState("");
+    const [customTo, setCustomTo] = useState("");
 
-    const vehicleType = activeTab !== "all" ? activeTab : undefined;
+    // Debounce search input 300ms — avoids hammering API on every keystroke
+    useEffect(() => {
+        const timer = setTimeout(() => { setDebouncedSearch(search); setPage(1); }, 300);
+        return () => clearTimeout(timer);
+    }, [search]);
+
+    const isAnyFilterActive =
+        debouncedSearch !== "" ||
+        vehicleType !== "all" ||
+        statusFilter !== "all" ||
+        sourceFilter !== "all" ||
+        datePreset !== "all";
+
+    const clearFilters = () => {
+        setSearch("");
+        setDebouncedSearch("");
+        setVehicleType("all");
+        setStatusFilter("all");
+        setSourceFilter("all");
+        setDatePreset("all");
+        setCustomFrom("");
+        setCustomTo("");
+        setPage(1);
+    };
+
+    const resolvedVehicleType = vehicleType !== "all" ? vehicleType : undefined;
+
+    const dateRange = useMemo(() => {
+        if (datePreset === "custom") return { dateFrom: customFrom || undefined, dateTo: customTo || undefined };
+        return getPresetRange(datePreset);
+    }, [datePreset, customFrom, customTo]);
 
     const { data, isLoading } = useQuery<VehiclePaginatedData | null>({
-        queryKey: ["vehicles", { page, search, vehicleType, statusFilter, sourceFilter }],
+        queryKey: ["vehicles", { page, debouncedSearch, vehicleType, statusFilter, sourceFilter, dateRange }],
         queryFn: () => fetchVehicles({
             page,
             limit: 15,
-            ...(search && { search }),
-            ...(vehicleType && { vehicleType }),
+            ...(debouncedSearch && { search: debouncedSearch }),
+            ...(resolvedVehicleType && { vehicleType: resolvedVehicleType }),
             ...(statusFilter !== "all" && { status: statusFilter }),
             ...(sourceFilter === "exchange" && { isFromExchange: "true" }),
             ...(sourceFilter === "purchased" && { isFromExchange: "false" }),
+            ...(dateRange.dateFrom && { dateFrom: dateRange.dateFrom }),
+            ...(dateRange.dateTo && { dateTo: dateRange.dateTo }),
         }),
-        initialData: activeTab === defaultType ? initialData : undefined,
+        initialData: vehicleType === defaultType ? initialData : undefined,
         retry: 0,
     });
 
-    const tabs = [
-        { key: "two_wheeler", label: "Two Wheelers", icon: Bike },
-        { key: "four_wheeler", label: "Four Wheelers", icon: Car },
-        { key: "all", label: "All Vehicles", icon: Package },
-    ];
-
     const vehicles = data?.data ?? [];
     const meta = data ? { total: data.total, page: data.page, totalPages: data.totalPages } : null;
+
+    // Derive stats filter from current UI state — stats cards refetch whenever this changes
+    const statsFilters = useMemo((): VehicleStatsFilters => ({
+        ...(debouncedSearch && { search: debouncedSearch }),
+        ...(resolvedVehicleType && { vehicleType: resolvedVehicleType }),
+        ...(dateRange.dateFrom && { dateFrom: dateRange.dateFrom }),
+        ...(dateRange.dateTo && { dateTo: dateRange.dateTo }),
+        ...(statusFilter !== "all" && { status: statusFilter }),
+        ...(sourceFilter === "exchange" && { isFromExchange: "true" }),
+        ...(sourceFilter === "purchased" && { isFromExchange: "false" }),
+    }), [debouncedSearch, resolvedVehicleType, dateRange, statusFilter, sourceFilter]);
+
+    const [isExporting, setIsExporting] = useState<"csv" | "pdf" | null>(null);
+
+    const handleExport = async (format: "csv" | "pdf") => {
+        setIsExporting(format);
+        try {
+            const params = new URLSearchParams({ format });
+            if (debouncedSearch) params.set("search", debouncedSearch);
+            if (resolvedVehicleType) params.set("vehicleType", resolvedVehicleType);
+            if (statusFilter !== "all") params.set("status", statusFilter);
+            if (sourceFilter === "exchange") params.set("isFromExchange", "true");
+            if (sourceFilter === "purchased") params.set("isFromExchange", "false");
+            if (dateRange.dateFrom) params.set("dateFrom", dateRange.dateFrom);
+            if (dateRange.dateTo) params.set("dateTo", dateRange.dateTo);
+
+            // Use the configured axios base URL but trigger a real browser download
+            const baseURL = (axios.defaults.baseURL ?? "").replace(/\/$/, "");
+            const url = `${baseURL}/vehicles/export?${params.toString()}`;
+
+            // Carry auth token — same as the axios interceptor
+            const token = getClientSession();
+            const res = await fetch(url, {
+                credentials: "include",
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
+            });
+            if (!res.ok) throw new Error("Export failed");
+            const blob = await res.blob();
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = `vehicles_${new Date().toISOString().slice(0, 10)}.${format}`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(link.href);
+        } catch {
+            // silently fail — could add toast here
+        } finally {
+            setIsExporting(null);
+        }
+    };
 
     return (
         <div className="flex w-full flex-col gap-5 pb-6">
@@ -73,9 +176,51 @@ const VehicleList = ({ initialData }: VehicleListProps) => {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" className="border-border text-muted-foreground hover:text-foreground">
-                        <Download className="mr-1.5 h-4 w-4" /> Export
-                    </Button>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="border-border text-muted-foreground hover:text-foreground" disabled={!!isExporting}>
+                                {isExporting ? (
+                                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                                ) : (
+                                    <Download className="mr-1.5 h-4 w-4" />
+                                )}
+                                Export
+                                <ChevronDown className="ml-1 h-3 w-3 opacity-60" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44">
+                            <DropdownMenuLabel className="text-xs text-muted-foreground">Download as</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                                onClick={() => handleExport("csv")}
+                                disabled={isExporting === "csv"}
+                                className="gap-2 cursor-pointer"
+                            >
+                                <FileSpreadsheet className="h-4 w-4 text-emerald-500" />
+                                <div>
+                                    <p className="text-sm font-medium">Export CSV</p>
+                                    <p className="text-[10px] text-muted-foreground">Excel compatible</p>
+                                </div>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                onClick={() => handleExport("pdf")}
+                                disabled={isExporting === "pdf"}
+                                className="gap-2 cursor-pointer"
+                            >
+                                <FileText className="h-4 w-4 text-red-500" />
+                                <div>
+                                    <p className="text-sm font-medium">Export PDF</p>
+                                    <p className="text-[10px] text-muted-foreground">Formatted report</p>
+                                </div>
+                            </DropdownMenuItem>
+                            {isAnyFilterActive && (
+                                <>
+                                    <DropdownMenuSeparator />
+                                    <p className="px-2 py-1 text-[10px] text-primary">✦ Exports respect active filters</p>
+                                </>
+                            )}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                     <Link href="/vehicles/new">
                         <Button className="bg-gradient-brand cursor-pointer text-white shadow-lg hover:opacity-90">
                             <Plus className="mr-2 h-4 w-4" /> Add Vehicle
@@ -84,60 +229,114 @@ const VehicleList = ({ initialData }: VehicleListProps) => {
                 </div>
             </div>
 
-            {/* Tabs */}
-            <div className="flex border-b border-border">
-                {tabs.map((tab) => {
-                    const Icon = tab.icon;
-                    return (
-                        <button
-                            key={tab.key}
-                            onClick={() => { setActiveTab(tab.key); setPage(1); }}
-                            className={cn(
-                                "flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 -mb-px",
-                                activeTab === tab.key
-                                    ? "border-primary text-primary"
-                                    : "border-transparent text-muted-foreground hover:text-foreground"
-                            )}
-                        >
-                            <Icon className="h-4 w-4" />
-                            {tab.label}
-                        </button>
-                    );
-                })}
-            </div>
+            {/* Stats Cards — reactive to all active filters */}
+            <VehicleStatsCards filters={statsFilters} />
 
             {/* Filters */}
-            <div className="flex flex-col gap-3 sm:flex-row">
-                <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                        placeholder="Search by make, model, reg.no, seller..."
-                        className="h-10 bg-muted/50 pl-9 border-border"
-                        value={search}
-                        onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-                    />
+            <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row">
+                    <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                            placeholder="Search by vehicle name, reg. no., seller…"
+                            className="h-10 bg-muted/50 pl-9 border-border"
+                            value={search}
+                            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                        />
+                    </div>
+                    {/* Vehicle Type Dropdown */}
+                    <Select value={vehicleType} onValueChange={(v) => { setVehicleType(v); setPage(1); }}>
+                        <SelectTrigger className="h-10 w-full sm:w-44 bg-muted/50 border-border">
+                            <SelectValue placeholder="All Vehicles" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Vehicles</SelectItem>
+                            <SelectItem value="two_wheeler">🏍️ Two Wheelers</SelectItem>
+                            <SelectItem value="four_wheeler">🚗 Four Wheelers</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <Select value={sourceFilter} onValueChange={(v) => { setSourceFilter(v); setPage(1); }}>
+                        <SelectTrigger className="h-10 w-full sm:w-40 bg-muted/50 border-border">
+                            <SelectValue placeholder="All Sources" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Sources</SelectItem>
+                            <SelectItem value="purchased">🛒 Purchased</SelectItem>
+                            <SelectItem value="exchange">🔄 From Exchange</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
+                        <SelectTrigger className="h-10 w-full sm:w-44 bg-muted/50 border-border">
+                            <SelectValue placeholder="All Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Status</SelectItem>
+                            {VEHICLE_STATUSES.map((s) => (
+                                <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                 </div>
-                <Select value={sourceFilter} onValueChange={(v) => { setSourceFilter(v); setPage(1); }}>
-                    <SelectTrigger className="h-10 w-full sm:w-40 bg-muted/50 border-border">
-                        <SelectValue placeholder="All Sources" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">All Sources</SelectItem>
-                        <SelectItem value="purchased">🛒 Purchased</SelectItem>
-                        <SelectItem value="exchange">🔄 From Exchange</SelectItem>
-                    </SelectContent>
-                </Select>
-                <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
-                    <SelectTrigger className="h-10 w-full sm:w-44 bg-muted/50 border-border">
-                        <SelectValue placeholder="All Status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">All Status</SelectItem>
-                        {VEHICLE_STATUSES.map((s) => (
-                            <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
+
+                {/* Date Range Row */}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
+                        <Calendar className="h-3.5 w-3.5" />
+                        <span className="font-medium">Purchase Date:</span>
+                    </div>
+                    <Select value={datePreset} onValueChange={(v) => { setDatePreset(v as DatePreset); setPage(1); }}>
+                        <SelectTrigger className="h-10 w-full sm:w-48 bg-muted/50 border-border">
+                            <SelectValue placeholder="All Time" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Time</SelectItem>
+                            <SelectItem value="today">Today</SelectItem>
+                            <SelectItem value="yesterday">Yesterday</SelectItem>
+                            <SelectItem value="this_week">This Week</SelectItem>
+                            <SelectItem value="this_month">This Month</SelectItem>
+                            <SelectItem value="this_year">This Year</SelectItem>
+                            <SelectItem value="last_year">Last Year</SelectItem>
+                            <SelectItem value="custom">Custom Range…</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    {datePreset === "custom" && (
+                        <div className="flex items-center gap-2">
+                            <Input
+                                type="date"
+                                value={customFrom}
+                                onChange={(e) => { setCustomFrom(e.target.value); setPage(1); }}
+                                className="h-10 w-40 bg-muted/50 border-border text-sm"
+                            />
+                            <span className="text-xs text-muted-foreground">to</span>
+                            <Input
+                                type="date"
+                                value={customTo}
+                                onChange={(e) => { setCustomTo(e.target.value); setPage(1); }}
+                                className="h-10 w-40 bg-muted/50 border-border text-sm"
+                            />
+                        </div>
+                    )}
+                </div>
+
+                {/* Active Filters Indicator + Clear Button */}
+                {isAnyFilterActive && (
+                    <div className="flex items-center justify-between rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
+                        <div className="flex items-center gap-2 text-xs text-primary">
+                            <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse inline-block" />
+                            <span className="font-medium">Filters active</span>
+                            <span className="text-muted-foreground">— showing filtered results</span>
+                        </div>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={clearFilters}
+                            className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                        >
+                            <X className="h-3 w-3" />
+                            Clear Filters
+                        </Button>
+                    </div>
+                )}
             </div>
 
             {/* Data View */}
@@ -363,16 +562,11 @@ const VehicleList = ({ initialData }: VehicleListProps) => {
                 )}
             </div>
 
-            {/* Quick Stats Bar */}
-            {!isLoading && vehicles.length > 0 && (
-                <div className="flex items-center gap-4 rounded-xl border border-border bg-card/50 px-4 py-3 text-sm">
-                    <Boxes className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">Total: <strong className="text-foreground">{meta?.total ?? 0}</strong></span>
-                    <span className="text-muted-foreground">•</span>
-                    <span className="text-muted-foreground">In Stock: <strong className="text-emerald-400">{vehicles.filter((v) => v.status === "in_stock").length}</strong></span>
-                    <span className="text-muted-foreground">•</span>
-                    <span className="text-muted-foreground">Sold: <strong className="text-indigo-400">{vehicles.filter((v) => v.status === "sold").length}</strong></span>
-                </div>
+            {/* Result count */}
+            {!isLoading && meta && (
+                <p className="text-xs text-muted-foreground">
+                    Showing <strong className="text-foreground">{vehicles.length}</strong> of <strong className="text-foreground">{meta.total}</strong> vehicles
+                </p>
             )}
         </div>
     );

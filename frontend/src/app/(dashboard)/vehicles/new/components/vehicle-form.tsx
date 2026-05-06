@@ -17,8 +17,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Bike, Car, ChevronRight, ChevronLeft, Check, Loader2, Users, IndianRupee, Calendar, FileText } from "lucide-react";
-import { VEHICLE_MAKES_2W, VEHICLE_MAKES_4W, COST_CATEGORIES, FUNDING_SOURCES, NOC_STATUSES } from "@data/vehicle-constants";
+import { Bike, Car, ChevronRight, ChevronLeft, ChevronDown, Check, Loader2, IndianRupee, Calendar, FileText, Plus, Trash2, Wrench } from "lucide-react";
+import { VEHICLE_MAKES_2W, VEHICLE_MAKES_4W, COST_CATEGORIES, NOC_STATUSES } from "@data/vehicle-constants";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { formatCurrency } from "@lib/currency";
 
 type FormData = z.infer<typeof createVehicleSchema>;
 
@@ -26,13 +28,21 @@ const STEPS = [
     { id: 1, label: "Vehicle Details", icon: Car },
     { id: 2, label: "Purchase & Payment", icon: IndianRupee },
     { id: 3, label: "Reconditioning Costs", icon: FileText },
-    { id: 4, label: "Funding Source", icon: Users },
-    { id: 5, label: "Review & Submit", icon: Check },
+    { id: 4, label: "Review & Submit", icon: Check },
 ];
+
+type BreakdownItem = { id: string; name: string; amount: number; date: string; notes: string };
+type BreakdownMap = Record<string, BreakdownItem[]>;
 
 const VehicleForm = () => {
     const [step, setStep] = useState(1);
     const [isPending, setIsPending] = useState(false);
+    const [breakdownMap, setBreakdownMap] = useState<BreakdownMap>({});
+    const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>({});
+    const [dialog, setDialog] = useState<{ open: boolean; catKey: string; catLabel: string; catIcon: string }>({
+        open: false, catKey: "", catLabel: "", catIcon: "",
+    });
+    const [newItem, setNewItem] = useState({ name: "", amount: "", date: new Date().toISOString().split("T")[0], notes: "" });
     const router = useRouter();
     const queryClient = useQueryClient();
 
@@ -71,11 +81,46 @@ const VehicleForm = () => {
     const totalInvestment = purchasePrice + totalCosts;
     const makes = vehicleType === "two_wheeler" ? VEHICLE_MAKES_2W : VEHICLE_MAKES_4W;
 
+    const openDialog = (cat: typeof COST_CATEGORIES[number]) => {
+        setDialog({ open: true, catKey: cat.key, catLabel: cat.label, catIcon: cat.icon });
+        setNewItem({ name: "", amount: "", date: new Date().toISOString().split("T")[0], notes: "" });
+    };
+
+    const addBreakdownItem = () => {
+        if (!newItem.name.trim() || !newItem.amount) return;
+        const key = dialog.catKey;
+        const item: BreakdownItem = { id: Date.now().toString(), name: newItem.name, amount: parseFloat(newItem.amount) || 0, date: newItem.date, notes: newItem.notes };
+        const updated: BreakdownMap = { ...breakdownMap, [key]: [...(breakdownMap[key] || []), item] };
+        setBreakdownMap(updated);
+        form.setValue(key as keyof FormData, updated[key].reduce((s, i) => s + i.amount, 0) as never);
+        setExpandedCats(e => ({ ...e, [key]: true }));
+        setDialog(d => ({ ...d, open: false }));
+    };
+
+    const removeBreakdownItem = (catKey: string, itemId: string) => {
+        const updated: BreakdownMap = { ...breakdownMap, [catKey]: (breakdownMap[catKey] || []).filter(i => i.id !== itemId) };
+        setBreakdownMap(updated);
+        form.setValue(catKey as keyof FormData, updated[catKey].reduce((s, i) => s + i.amount, 0) as never);
+    };
+
     const onSubmit = async (values: FormData) => {
         setIsPending(true);
         const tid = toast.loading("Creating vehicle...", { description: "Saving purchase record" });
         try {
-            await axios.post("/vehicles", { ...values, purchasePrice: Number(values.purchasePrice) });
+            const res = await axios.post<ApiResponse<IVehicle>>("/vehicles", { ...values, purchasePrice: Number(values.purchasePrice) });
+            const vehicleId = res.data.data?._id;
+            if (vehicleId) {
+                for (const cat of COST_CATEGORIES) {
+                    for (const item of (breakdownMap[cat.key] || [])) {
+                        try {
+                            await axios.post(`/vehicles/${vehicleId}/costs/breakdown`, {
+                                category: cat.category, name: item.name, amount: item.amount,
+                                date: item.date || undefined, notes: item.notes || undefined,
+                            });
+                        } catch { /* non-critical */ }
+                    }
+                }
+            }
             toast.success("Vehicle added!", { id: tid, description: `${values.make} ${values.model} successfully registered` });
             queryClient.invalidateQueries({ queryKey: ["vehicles"] });
             queryClient.invalidateQueries({ queryKey: ["vehicle-stats"] });
@@ -93,9 +138,8 @@ const VehicleForm = () => {
             ["vehicleType", "make", "model", "registrationNo", "purchasedFrom"],
             ["datePurchased", "purchasePrice"],
             [],
-            ["fundingSource"],
         ];
-        if (step < 5) {
+        if (step < 4) {
             const fields = fieldsToValidate[step - 1];
             if (fields.length > 0) {
                 const valid = await form.trigger(fields);
@@ -295,9 +339,19 @@ const VehicleForm = () => {
                                     </FormItem>
                                 )} />
                                 {/* Summary */}
-                                <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
-                                    <p className="text-xs font-semibold text-primary/70 uppercase tracking-widest mb-1">Purchase Price</p>
-                                    <p className="text-2xl font-bold text-primary">₹{formatINR(purchasePrice)}</p>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    <div className="rounded-xl border border-border bg-card p-4 text-center">
+                                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Purchase Price</p>
+                                        <p className="text-base font-bold text-foreground">₹{formatINR(purchasePrice)}</p>
+                                    </div>
+                                    <div className="rounded-xl border border-border bg-card p-4 text-center">
+                                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Reconditioning</p>
+                                        <p className="text-base font-bold text-orange-400">+₹{formatINR(totalCosts)}</p>
+                                    </div>
+                                    <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-center">
+                                        <p className="text-[10px] font-bold uppercase tracking-widest text-primary mb-1">Total Investment</p>
+                                        <p className="text-base font-bold text-primary">₹{formatINR(totalInvestment)}</p>
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -307,77 +361,120 @@ const VehicleForm = () => {
                             <div className="p-6 space-y-5">
                                 <div className="glass-header -mx-6 -mt-6 mb-6 px-6 py-4">
                                     <h2 className="font-bold text-foreground text-lg">Reconditioning Costs</h2>
-                                    <p className="text-xs text-muted-foreground mt-0.5">All 10 cost categories (optional)</p>
+                                    <p className="text-xs text-muted-foreground mt-0.5">Tap ✏️ to enter amount · Tap + to add named breakdown items</p>
                                 </div>
-                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                    {COST_CATEGORIES.map((cat) => (
-                                        <div key={cat.key}>
-                                            <label className="mb-1.5 block text-xs font-semibold text-foreground">{cat.icon} {cat.label}</label>
-                                            <Controller
-                                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                                control={form.control as any}
-                                                name={cat.key}
-                                                render={({ field }) => (
-                                                    <div className="relative">
-                                                        <IndianRupee className="absolute left-3 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
-                                                        <Input type="number" min="0" step="1" className="h-9 bg-muted/50 border-border pl-8 text-sm" value={(field.value as number) || ""} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} />
+                                {/* Cost rows */}
+                                <div className="rounded-xl border border-border bg-card overflow-hidden">
+                                    <div className="divide-y divide-border">
+                                        {COST_CATEGORIES.map((cat) => {
+                                            const items = breakdownMap[cat.key] || [];
+                                            const hasItems = items.length > 0;
+                                            const isExpanded = expandedCats[cat.key];
+                                            const catAmount = (watched[cat.key as keyof FormData] as number) || 0;
+                                            return (
+                                                <div key={cat.key}>
+                                                    <div className={cn("group flex items-center gap-2 px-5 py-3 hover:bg-muted/20 transition-colors", catAmount === 0 && !hasItems ? "opacity-60" : "")}>
+                                                        <button type="button" onClick={() => hasItems && setExpandedCats(e => ({ ...e, [cat.key]: !isExpanded }))} className="flex items-center gap-2 flex-1 min-w-0 text-left">
+                                                            <span className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                                                                <span className="text-base">{cat.icon}</span>
+                                                                <span className="truncate">{cat.label}</span>
+                                                            </span>
+                                                            {hasItems && <span className="ml-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">{items.length}</span>}
+                                                            {hasItems && (isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />)}
+                                                        </button>
+                                                        {hasItems ? (
+                                                            <span className="font-bold text-sm text-primary mr-1">{formatCurrency(catAmount)}</span>
+                                                        ) : (
+                                                            <Controller
+                                                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                                                control={form.control as any}
+                                                                name={cat.key}
+                                                                render={({ field }) => (
+                                                                    <div className="relative w-32">
+                                                                        <IndianRupee className="absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+                                                                        <Input type="number" min="0" step="1" className="h-8 bg-muted/50 border-border pl-7 text-sm text-right" value={(field.value as number) || ""} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} />
+                                                                    </div>
+                                                                )}
+                                                            />
+                                                        )}
+                                                        <button type="button" onClick={() => openDialog(cat)} className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 flex h-7 w-7 items-center justify-center rounded bg-muted hover:bg-primary/10 hover:text-primary text-muted-foreground transition-all" title={`Add ${cat.label} item`}>
+                                                            <Plus className="h-4 w-4" />
+                                                        </button>
                                                     </div>
-                                                )}
-                                            />
+                                                    {isExpanded && hasItems && (
+                                                        <div className="mx-5 mb-2 space-y-1.5">
+                                                            {items.map(item => (
+                                                                <div key={item.id} className="group/item flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2 border border-border/50">
+                                                                    <div className="flex items-start gap-2 min-w-0">
+                                                                        <div className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary/10"><FileText className="h-2.5 w-2.5 text-primary" /></div>
+                                                                        <div className="min-w-0">
+                                                                            <p className="text-xs font-medium text-foreground truncate">{item.name}</p>
+                                                                            <div className="flex items-center gap-2 mt-0.5">
+                                                                                {item.date && <span className="text-[10px] text-muted-foreground">{item.date}</span>}
+                                                                                {item.notes && <span className="text-[10px] text-muted-foreground italic truncate">{item.notes}</span>}
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2 shrink-0 ml-2">
+                                                                        <span className="text-xs font-bold text-primary">{formatCurrency(item.amount)}</span>
+                                                                        <button type="button" onClick={() => removeBreakdownItem(cat.key, item.id)} className="opacity-100 sm:opacity-0 sm:group-hover/item:opacity-100 flex h-6 w-6 items-center justify-center rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all"><Trash2 className="h-3.5 w-3.5" /></button>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    {/* Footer total */}
+                                    <div className="border-t-2 border-primary/20 px-5 py-4 flex justify-between items-center bg-primary/5">
+                                        <div>
+                                            <span className="font-bold text-foreground">Total Investment</span>
+                                            <p className="text-[10px] text-muted-foreground mt-0.5">Purchase Price + all reconditioning costs</p>
                                         </div>
-                                    ))}
-                                </div>
-                                {/* Investment Summary */}
-                                <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-2">
-                                    <div className="flex justify-between text-sm text-muted-foreground">
-                                        <span>Purchase Price</span>
-                                        <span>₹{formatINR(purchasePrice)}</span>
-                                    </div>
-                                    <div className="flex justify-between text-sm text-muted-foreground">
-                                        <span>Total Reconditioning</span>
-                                        <span>₹{formatINR(totalCosts)}</span>
-                                    </div>
-                                    <div className="border-t border-border pt-2 flex justify-between font-bold text-foreground">
-                                        <span>Total Investment</span>
-                                        <span className="text-primary">₹{formatINR(totalInvestment)}</span>
+                                        <span className="text-2xl font-bold text-primary">₹{formatINR(totalInvestment)}</span>
                                     </div>
                                 </div>
                             </div>
                         )}
 
-                        {/* ───── STEP 4: Funding Source ───── */}
+                        {/* ── Add Breakdown Item Dialog ── */}
+                        <Dialog open={dialog.open} onOpenChange={(v) => !v && setDialog(d => ({ ...d, open: false }))}>
+                            <DialogContent className="w-[96vw] max-w-sm p-0 overflow-hidden flex flex-col rounded-2xl bg-card border-border">
+                                <div className="glass-header relative p-5">
+                                    <div className="absolute -top-12 -right-12 h-24 w-24 rounded-full bg-primary/10 blur-3xl" />
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-brand shadow-lg"><Wrench className="h-4 w-4 text-white" /></div>
+                                        <div>
+                                            <DialogTitle className="text-base font-bold text-foreground">{dialog.catIcon} Add {dialog.catLabel} Item</DialogTitle>
+                                            <DialogDescription className="text-xs text-muted-foreground">Add a detailed breakdown entry</DialogDescription>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="p-5 space-y-4">
+                                    <div>
+                                        <label className="text-xs font-semibold text-foreground">Item Name <span className="text-destructive">*</span></label>
+                                        <Input placeholder="e.g. Engine repair" className="h-9 bg-muted/50 border-border text-sm mt-1.5" value={newItem.name} onChange={e => setNewItem(n => ({ ...n, name: e.target.value }))} onKeyDown={e => e.key === "Enter" && addBreakdownItem()} />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-semibold text-foreground">Amount (₹) <span className="text-destructive">*</span></label>
+                                        <div className="relative mt-1.5"><IndianRupee className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" /><Input type="number" min="0" className="h-9 bg-muted/50 border-border pl-7 text-sm" value={newItem.amount} onChange={e => setNewItem(n => ({ ...n, amount: e.target.value }))} /></div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div><label className="text-xs font-semibold text-foreground">Date</label><Input type="date" className="h-9 bg-muted/50 border-border text-sm mt-1.5" value={newItem.date} onChange={e => setNewItem(n => ({ ...n, date: e.target.value }))} /></div>
+                                        <div><label className="text-xs font-semibold text-foreground">Notes</label><Input placeholder="Optional" className="h-9 bg-muted/50 border-border text-sm mt-1.5" value={newItem.notes} onChange={e => setNewItem(n => ({ ...n, notes: e.target.value }))} /></div>
+                                    </div>
+                                </div>
+                                <div className="border-t border-border bg-muted/20 p-4 flex justify-end gap-2">
+                                    <Button type="button" variant="outline" onClick={() => setDialog(d => ({ ...d, open: false }))}>Cancel</Button>
+                                    <Button type="button" disabled={!newItem.name.trim() || !newItem.amount} onClick={addBreakdownItem} className="bg-gradient-brand text-white hover:opacity-90"><Plus className="mr-1.5 h-3.5 w-3.5" />Add Item</Button>
+                                </div>
+                            </DialogContent>
+                        </Dialog>
+
+                        {/* ───── STEP 4: Review & Submit ───── */}
                         {step === 4 && (
-                            <div className="p-6 space-y-5">
-                                <div className="glass-header -mx-6 -mt-6 mb-6 px-6 py-4">
-                                    <h2 className="font-bold text-foreground text-lg">Funding Source</h2>
-                                    <p className="text-xs text-muted-foreground mt-0.5">How was this purchase funded?</p>
-                                </div>
-                                <FormField control={form.control} name="fundingSource" render={({ field }) => (
-                                    <FormItem>
-                                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                                            {FUNDING_SOURCES.map((fs) => (
-                                                <button key={fs.value} type="button" onClick={() => field.onChange(fs.value)}
-                                                    className={cn("rounded-xl border-2 p-4 text-left transition-all", field.value === fs.value ? "border-primary bg-primary/10" : "border-border bg-muted/20 hover:border-primary/40")}>
-                                                    <div className="text-2xl mb-2">{fs.icon}</div>
-                                                    <p className={cn("font-bold text-sm", field.value === fs.value ? "text-primary" : "text-foreground")}>{fs.label}</p>
-                                                    <p className="text-xs text-muted-foreground mt-0.5">{fs.description}</p>
-                                                </button>
-                                            ))}
-                                        </div>
-                                        <FormMessage />
-                                    </FormItem>
-                                )} />
-
-                                {form.watch("fundingSource") !== "own" && (
-                                    <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4 text-sm text-yellow-400">
-                                        ℹ️ Investor funding details can be added after saving the vehicle from the vehicle detail page.
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* ───── STEP 5: Review & Submit ───── */}
-                        {step === 5 && (
                             <div className="p-6 space-y-4">
                                 <div className="glass-header -mx-6 -mt-6 mb-6 px-6 py-4">
                                     <h2 className="font-bold text-foreground text-lg">Review & Confirm</h2>
@@ -391,7 +488,6 @@ const VehicleForm = () => {
                                     { label: "Date Purchased", value: watched.datePurchased },
                                     { label: "Purchase Price", value: `₹${formatINR(purchasePrice)}` },
                                     { label: "Total Investment", value: `₹${formatINR(totalInvestment)}` },
-                                    { label: "Funding Source", value: FUNDING_SOURCES.find((f) => f.value === watched.fundingSource)?.label || "-" },
                                     ...(watched.color ? [{ label: "Color", value: watched.color }] : []),
                                     ...(watched.nocStatus && watched.nocStatus !== "not_applicable" ? [{ label: "NOC Status", value: watched.nocStatus }] : []),
                                     ...(watched.remarks ? [{ label: "Remarks", value: watched.remarks }] : []),
@@ -420,7 +516,7 @@ const VehicleForm = () => {
                             <Button type="button" variant="outline" onClick={() => step > 1 ? setStep((s) => s - 1) : router.push("/vehicles")} className="border-border">
                                 <ChevronLeft className="mr-1.5 h-4 w-4" /> {step === 1 ? "Cancel" : "Back"}
                             </Button>
-                            {step < 5 ? (
+                            {step < 4 ? (
                                 <Button key="next-btn" type="button" onClick={nextStep} className="bg-gradient-brand text-white hover:opacity-90">
                                     Next <ChevronRight className="ml-1.5 h-4 w-4" />
                                 </Button>

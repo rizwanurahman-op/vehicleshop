@@ -62,10 +62,13 @@ export const updatePurchasePaymentSchema = addPurchasePaymentSchema.partial();
 
 export const addSalePaymentSchema = z.object({
     date: z.string().min(1),
-    amount: z.number().min(1, { message: "Amount must be > 0" }),
+    amount: z.number().min(0, { message: "Amount is required" }),
     mode: z.enum(["Cash", "Online", "Cheque", "UPI", "GPay", "Finance", "Bank Transfer"]),
     type: z.enum(["cash", "exchange"]).default("cash"),
     source: z.string().optional(),
+    financeCompany: z.string().optional(),
+    loanRef: z.string().optional(),
+    financeAmount: z.number().min(0).optional(),
     exchangeDetails: z.string().optional(),
     exchangeVehicleMake: z.string().optional(),
     exchangeVehicleRegNo: z.string().optional(),

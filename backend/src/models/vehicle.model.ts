@@ -60,6 +60,9 @@ export interface IVehicle extends Omit<Document, 'model'> {
     exchangeSourceCollection?: "vehicles" | "consignmentVehicles";
     exchangeDetails?: string;
     nocStatus: "not_applicable" | "pending" | "received" | "submitted" | "completed";
+    financeCompany?: string;
+    financeAmount?: number;
+    financeStatus: "none" | "pending" | "partial" | "disbursed";
     salePayments: Array<{
         _id: mongoose.Types.ObjectId;
         date: Date;
@@ -67,6 +70,8 @@ export interface IVehicle extends Omit<Document, 'model'> {
         mode: "Cash" | "Online" | "Cheque" | "UPI" | "GPay" | "Finance" | "Bank Transfer";
         type: "cash" | "exchange";
         source?: string;
+        financeCompany?: string;
+        loanRef?: string;
         exchangeDetails?: string;
         exchangeVehicleMake?: string;
         exchangeVehicleRegNo?: string;
@@ -108,6 +113,8 @@ const SalePaymentSchema = new Schema({
     mode: { type: String, enum: ["Cash", "Online", "Cheque", "UPI", "GPay", "Finance", "Bank Transfer"], required: true },
     type: { type: String, enum: ["cash", "exchange"], default: "cash" },
     source: String,
+    financeCompany: String,
+    loanRef: String,
     exchangeDetails: String,
     exchangeVehicleMake: String,
     exchangeVehicleRegNo: String,
@@ -184,6 +191,9 @@ const VehicleSchema = new Schema<IVehicle>({
     exchangeSourceCollection: { type: String, enum: ["vehicles", "consignmentVehicles"] },
     exchangeDetails: String,
     nocStatus: { type: String, enum: ["not_applicable", "pending", "received", "submitted", "completed"], default: "not_applicable" },
+    financeCompany: String,
+    financeAmount: { type: Number, default: 0 },
+    financeStatus: { type: String, enum: ["none", "pending", "partial", "disbursed"], default: "none" },
     salePayments: { type: [SalePaymentSchema], default: [] },
     receivedAmount: { type: Number, default: 0 },
     balanceAmount: { type: Number, default: 0 },
@@ -201,6 +211,7 @@ const VehicleSchema = new Schema<IVehicle>({
 VehicleSchema.index({ vehicleType: 1 });
 VehicleSchema.index({ saleStatus: 1 });
 VehicleSchema.index({ datePurchased: -1 });
+VehicleSchema.index({ createdAt: -1 });   // primary list sort field
 VehicleSchema.index({ dateSold: -1 });
 VehicleSchema.index({ vehicleType: 1, status: 1 });
 VehicleSchema.index({ fundingSource: 1 });
@@ -232,6 +243,17 @@ VehicleSchema.pre("save", function (next) {
     // 3. Sale Amounts
     this.receivedAmount = this.salePayments.reduce((s, p) => s + p.amount, 0);
     this.balanceAmount = Math.max(0, (this.soldPrice || 0) - this.receivedAmount);
+
+    // 3b. Finance status — aggregate from Finance-mode payments
+    const financePayments = this.salePayments.filter(p => p.mode === "Finance");
+    const totalFinanceDisbursed = financePayments.reduce((s, p) => s + p.amount, 0);
+    if (this.financeAmount && this.financeAmount > 0) {
+        if (totalFinanceDisbursed <= 0) this.financeStatus = "pending";
+        else if (totalFinanceDisbursed < this.financeAmount) this.financeStatus = "partial";
+        else this.financeStatus = "disbursed";
+    } else {
+        this.financeStatus = financePayments.length > 0 ? "disbursed" : "none";
+    }
 
     // 4. Profit/Loss
     if (this.dateSold && this.soldPrice) {
