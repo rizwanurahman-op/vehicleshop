@@ -82,7 +82,16 @@ export const deleteVehicle = async (id: string): Promise<boolean> => {
     return !!result;
 };
 
-export const getVehicleStats = async (): Promise<unknown> => {
+interface VehicleStatsFilter {
+    vehicleType?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    status?: string;
+    isFromExchange?: string;
+    search?: string;
+}
+
+export const getVehicleStats = async (_filter?: VehicleStatsFilter): Promise<unknown> => {
     const stats = await Vehicle.aggregate([
         { $match: { isActive: true } },
         {
@@ -219,6 +228,66 @@ export const undoSale = async (id: string) => {
     const vehicle = await Vehicle.findOne({ _id: id, isActive: true });
     if (!vehicle) return null;
 
+    // ── Restore exchange vehicles/consignments to their original state ──
+    // Three scenarios:
+    //  A) Created as brand-new Vehicle (phase2_purchase, no prior consignment) → soft-delete
+    //  B) Migrated from Consignment → Vehicle (park/finance sale exchanged in) → re-activate consignment + soft-delete Vehicle
+    //  C) Created as new ConsignmentVehicle (phase3_park/finance) → soft-delete
+    const { ConsignmentVehicle: CV } = await import("../models/consignment-vehicle.model");
+
+    const exchangeRefs = vehicle.salePayments
+        .filter((p) => p.exchangeCreatedRef)
+        .map((p) => ({ ref: p.exchangeCreatedRef!, collection: p.exchangeCreatedIn }));
+
+    for (const { ref, collection } of exchangeRefs) {
+        if (collection === "vehicles") {
+            // Find the exchange Vehicle to get its registrationNo
+            const exVehicle = await Vehicle.findById(ref);
+            if (exVehicle) {
+                // Check if it was migrated from an existing consignment
+                // (a consignment with same regNo that was soft-deleted via "migrated" action)
+                const originalConsignment = await CV.findOne({
+                    registrationNo: exVehicle.registrationNo,
+                    isActive: false,
+                    "activityLog.action": "migrated",
+                });
+
+                if (originalConsignment) {
+                    // Scenario B: Restore the original consignment back to active
+                    originalConsignment.isActive = true;
+                    originalConsignment.activityLog.push({
+                        action: "restored",
+                        description: `Restored: migration reversed when parent sale of ${vehicle.make} ${vehicle.model} (${vehicle.registrationNo}) was reverted`,
+                        date: new Date(),
+                    });
+                    await originalConsignment.save();
+                }
+
+                // Soft-delete the exchange Vehicle (whether migrated or brand-new)
+                exVehicle.isActive = false;
+                exVehicle.activityLog.push({
+                    action: "reverted",
+                    description: `Deactivated: parent sale undone for ${vehicle.make} ${vehicle.model} (${vehicle.registrationNo})`,
+                    date: new Date(),
+                });
+                await exVehicle.save();
+            }
+        } else if (collection === "consignmentVehicles") {
+            // Scenario C: Soft-delete the newly-created consignment
+            const exConsignment = await CV.findById(ref);
+            if (exConsignment) {
+                exConsignment.isActive = false;
+                exConsignment.activityLog.push({
+                    action: "reverted",
+                    description: `Deactivated: parent sale undone for ${vehicle.make} ${vehicle.model} (${vehicle.registrationNo})`,
+                    date: new Date(),
+                });
+                await exConsignment.save();
+            }
+        }
+    }
+
+    // ── Reset all sale-related fields ──
     vehicle.dateSold = undefined;
     vehicle.soldPrice = undefined;
     vehicle.soldTo = undefined;
@@ -228,6 +297,9 @@ export const undoSale = async (id: string) => {
     vehicle.salePayments = [];
     vehicle.receivedAmount = 0;
     vehicle.balanceAmount = 0;
+    // Clear exchange flags — removes "Sold via Exchange" badge/banner/tab
+    vehicle.isExchange = false;
+    vehicle.exchangeVehicleRef = undefined;
     vehicle.activityLog.push({ action: "sale_undone", description: "Sale record reverted", date: new Date() });
     await vehicle.save();
     return vehicle;
@@ -307,7 +379,7 @@ export const addSalePayment = async (id: string, payment: {
         const exModel = makeParts.slice(1).join(" ") || exMake;
 
         // ── Smart duplicate resolution ─────────────────────────────
-        // Rule 1: If regNo exists in Purchased Vehicles → hard block (true duplicate)
+        // Rule 1: If regNo exists in ACTIVE Purchased Vehicles → hard block (true duplicate, different vehicle)
         const existsInVehicles = await Vehicle.findOne({ registrationNo: regNo, isActive: true }).lean();
         if (existsInVehicles) {
             throw new Error(
@@ -315,14 +387,12 @@ export const addSalePayment = async (id: string, payment: {
             );
         }
 
-        // Rule 2: If regNo exists in Consignment and target is phase2_purchase →
-        //   Migrate: soft-delete the consignment and create a new Vehicle entry.
-        //   This is the "park sale / finance sale vehicle exchanged into purchased inventory" flow.
-        // Rule 3: If regNo exists in Consignment and target is also consignment → hard block
+        // Rule 2: If regNo exists in ACTIVE Consignment and target is phase2_purchase →
+        //   Migrate: soft-delete the consignment and create/re-activate a Vehicle entry.
+        // Rule 3: If regNo exists in ACTIVE Consignment and target is also consignment → hard block
         const existsInConsignments = await ConsignmentVehicle.findOne({ registrationNo: regNo, isActive: true });
         if (existsInConsignments) {
             if (exchangeTarget !== "phase2_purchase") {
-                // Would create a second consignment record — block it
                 throw new Error(
                     `Vehicle with registration ${regNo} already exists in Consignment Inventory (${existsInConsignments.consignmentId}). Cannot add again as consignment.`
                 );
@@ -338,37 +408,74 @@ export const addSalePayment = async (id: string, payment: {
         }
 
         if (exchangeTarget === "phase2_purchase") {
-            const newVehicleId = await getNextId("vehicle");
-            // If migrating from consignment, carry over its details
             const sourceConsignment = existsInConsignments;
-            const exVehicle = new Vehicle({
-                vehicleId: newVehicleId,
-                vehicleType: sourceConsignment?.vehicleType || vType,
-                make: sourceConsignment?.make || exMake,
-                model: sourceConsignment?.model || exModel,
-                year: sourceConsignment?.year,
-                registrationNo: regNo,
-                purchasedFrom: vehicle.soldTo || "Exchange",
-                datePurchased: new Date(payment.date),
-                purchasePrice: payment.amount,
-                fundingSource: "own",
-                isFromExchange: true,
-                exchangeSourceRef: vehicle._id as mongoose.Types.ObjectId,
-                exchangeSourceCollection: "vehicles",
-                exchangeDetails: sourceConsignment
+
+            // ── Re-activate-or-create pattern ──────────────────────
+            // Check for a previously soft-deleted Vehicle with the same regNo
+            // (created by a prior exchange that was then deleted/reverted)
+            const previouslyDeactivated = await Vehicle.findOne({ registrationNo: regNo, isActive: false });
+
+            let exVehicle;
+            if (previouslyDeactivated) {
+                // Re-activate and update the existing document (avoids unique index violation)
+                previouslyDeactivated.isActive = true;
+                previouslyDeactivated.datePurchased = new Date(payment.date);
+                previouslyDeactivated.purchasePrice = payment.amount;
+                previouslyDeactivated.purchasedFrom = vehicle.soldTo || "Exchange";
+                previouslyDeactivated.status = "in_stock";
+                previouslyDeactivated.isFromExchange = true;
+                previouslyDeactivated.exchangeSourceRef = vehicle._id as mongoose.Types.ObjectId;
+                previouslyDeactivated.exchangeSourceCollection = "vehicles";
+                previouslyDeactivated.exchangeDetails = sourceConsignment
                     ? `Migrated from Consignment (${sourceConsignment.consignmentId}) via exchange from ${vehicle.make} ${vehicle.model} (${vehicle.registrationNo})`
-                    : `Exchange from ${vehicle.make} ${vehicle.model} (${vehicle.registrationNo})`,
-                status: "in_stock",
-                // Auto-record purchase payment — exchange vehicles are "paid" via trade-in
-                purchasePayments: [{
+                    : `Exchange from ${vehicle.make} ${vehicle.model} (${vehicle.registrationNo})`;
+                // Reset purchase payments to reflect the new exchange value
+                previouslyDeactivated.purchasePayments = [{
                     _id: new mongoose.Types.ObjectId(),
                     date: new Date(payment.date),
                     amount: payment.amount,
                     mode: "Cash" as const,
-                    notes: `Paid via exchange (trade-in from ${vehicle.make} ${vehicle.model} sale)`,
-                }],
-            });
-            await exVehicle.save();
+                    notes: `Re-added via exchange (trade-in from ${vehicle.make} ${vehicle.model} sale)`,
+                }];
+                previouslyDeactivated.activityLog.push({
+                    action: "reactivated",
+                    description: `Re-added to inventory via exchange from ${vehicle.make} ${vehicle.model} (${vehicle.registrationNo})`,
+                    date: new Date(),
+                });
+                await previouslyDeactivated.save();
+                exVehicle = previouslyDeactivated;
+            } else {
+                // No prior record — create fresh
+                const newVehicleId = await getNextId("vehicle");
+                exVehicle = new Vehicle({
+                    vehicleId: newVehicleId,
+                    vehicleType: sourceConsignment?.vehicleType || vType,
+                    make: sourceConsignment?.make || exMake,
+                    model: sourceConsignment?.model || exModel,
+                    year: sourceConsignment?.year,
+                    registrationNo: regNo,
+                    purchasedFrom: vehicle.soldTo || "Exchange",
+                    datePurchased: new Date(payment.date),
+                    purchasePrice: payment.amount,
+                    fundingSource: "own",
+                    isFromExchange: true,
+                    exchangeSourceRef: vehicle._id as mongoose.Types.ObjectId,
+                    exchangeSourceCollection: "vehicles",
+                    exchangeDetails: sourceConsignment
+                        ? `Migrated from Consignment (${sourceConsignment.consignmentId}) via exchange from ${vehicle.make} ${vehicle.model} (${vehicle.registrationNo})`
+                        : `Exchange from ${vehicle.make} ${vehicle.model} (${vehicle.registrationNo})`,
+                    status: "in_stock",
+                    purchasePayments: [{
+                        _id: new mongoose.Types.ObjectId(),
+                        date: new Date(payment.date),
+                        amount: payment.amount,
+                        mode: "Cash" as const,
+                        notes: `Paid via exchange (trade-in from ${vehicle.make} ${vehicle.model} sale)`,
+                    }],
+                });
+                await exVehicle.save();
+            }
+
             paymentEntry.exchangeCreatedRef = exVehicle._id as mongoose.Types.ObjectId;
             paymentEntry.exchangeCreatedIn = "vehicles";
             vehicle.isExchange = true;
@@ -377,33 +484,64 @@ export const addSalePayment = async (id: string, payment: {
                 id: exVehicle._id, vehicleId: exVehicle.vehicleId,
                 make: exVehicle.make, registrationNo: exVehicle.registrationNo,
                 collection: "vehicles",
-                message: sourceConsignment
-                    ? `Migrated from Consignment (${sourceConsignment.consignmentId}) to Purchased Inventory`
-                    : "Created as Phase 2 purchase",
+                message: previouslyDeactivated
+                    ? "Re-activated from previous exchange record"
+                    : sourceConsignment
+                        ? `Migrated from Consignment (${sourceConsignment.consignmentId}) to Purchased Inventory`
+                        : "Created as Phase 2 purchase",
             };
         } else {
             // phase3_park_sale or phase3_finance_sale
             const { ConsignmentVehicle: CV } = await import("../models/consignment-vehicle.model");
             const saleType = exchangeTarget === "phase3_park_sale" ? "park_sale" : "finance_sale";
-            const newConsignmentId = await getNextId("consignment");
-            const exConsignment = new CV({
-                consignmentId: newConsignmentId,
-                saleType,
-                vehicleType: vType,
-                make: exMake,
-                model: exModel,
-                registrationNo: regNo,
-                previousOwner: vehicle.soldTo || "Exchange",
-                previousOwnerPhone: vehicle.soldToPhone,
-                dateReceived: new Date(payment.date),
-                purchasePrice: payment.amount,
-                isFromExchange: true,
-                exchangeSourceRef: vehicle._id as mongoose.Types.ObjectId,
-                exchangeSourceCollection: "vehicles",
-                exchangeDetails: `Exchange from sale: ${vehicle.make} ${vehicle.model} (${vehicle.registrationNo}) — sold to ${vehicle.soldTo || "buyer"} for ₹${(vehicle.soldPrice || 0).toLocaleString("en-IN")}`,
-                status: "received",
-            });
-            await exConsignment.save();
+
+            // ── Re-activate-or-create pattern for consignments ──────
+            const previouslyDeactivatedCV = await CV.findOne({ registrationNo: regNo, isActive: false });
+
+            let exConsignment;
+            if (previouslyDeactivatedCV) {
+                // Re-activate the existing consignment document
+                previouslyDeactivatedCV.isActive = true;
+                previouslyDeactivatedCV.saleType = saleType;
+                previouslyDeactivatedCV.dateReceived = new Date(payment.date);
+                previouslyDeactivatedCV.purchasePrice = payment.amount;
+                previouslyDeactivatedCV.previousOwner = vehicle.soldTo || "Exchange";
+                previouslyDeactivatedCV.previousOwnerPhone = vehicle.soldToPhone;
+                previouslyDeactivatedCV.isFromExchange = true;
+                previouslyDeactivatedCV.exchangeSourceRef = vehicle._id as mongoose.Types.ObjectId;
+                previouslyDeactivatedCV.exchangeSourceCollection = "vehicles";
+                previouslyDeactivatedCV.exchangeDetails = `Exchange from sale: ${vehicle.make} ${vehicle.model} (${vehicle.registrationNo}) — sold to ${vehicle.soldTo || "buyer"} for ₹${(vehicle.soldPrice || 0).toLocaleString("en-IN")}`;
+                previouslyDeactivatedCV.status = "received";
+                previouslyDeactivatedCV.activityLog.push({
+                    action: "reactivated",
+                    description: `Re-added to consignment inventory via exchange from ${vehicle.make} ${vehicle.model} (${vehicle.registrationNo})`,
+                    date: new Date(),
+                });
+                await previouslyDeactivatedCV.save();
+                exConsignment = previouslyDeactivatedCV;
+            } else {
+                // No prior record — create fresh
+                const newConsignmentId = await getNextId("consignment");
+                exConsignment = new CV({
+                    consignmentId: newConsignmentId,
+                    saleType,
+                    vehicleType: vType,
+                    make: exMake,
+                    model: exModel,
+                    registrationNo: regNo,
+                    previousOwner: vehicle.soldTo || "Exchange",
+                    previousOwnerPhone: vehicle.soldToPhone,
+                    dateReceived: new Date(payment.date),
+                    purchasePrice: payment.amount,
+                    isFromExchange: true,
+                    exchangeSourceRef: vehicle._id as mongoose.Types.ObjectId,
+                    exchangeSourceCollection: "vehicles",
+                    exchangeDetails: `Exchange from sale: ${vehicle.make} ${vehicle.model} (${vehicle.registrationNo}) — sold to ${vehicle.soldTo || "buyer"} for ₹${(vehicle.soldPrice || 0).toLocaleString("en-IN")}`,
+                    status: "received",
+                });
+                await exConsignment.save();
+            }
+
             paymentEntry.exchangeCreatedRef = exConsignment._id as mongoose.Types.ObjectId;
             paymentEntry.exchangeCreatedIn = "consignmentVehicles";
             vehicle.isExchange = true;
@@ -412,16 +550,22 @@ export const addSalePayment = async (id: string, payment: {
                 id: exConsignment._id, consignmentId: exConsignment.consignmentId,
                 make: exConsignment.make, registrationNo: exConsignment.registrationNo,
                 collection: "consignmentVehicles",
-                message: `Created as Phase 3 ${saleType.replace("_", " ")}`,
+                message: previouslyDeactivatedCV
+                    ? "Re-activated from previous exchange record"
+                    : `Created as Phase 3 ${saleType.replace("_", " ")}`,
             };
         }
     }
 
 
     vehicle.salePayments.push(paymentEntry);
+    // Build a clear activity log description — for exchange payments, include the vehicle details
+    const paymentLogLabel = payment.type === "exchange"
+        ? `Exchange${payment.exchangeVehicleMake ? ` — ${payment.exchangeVehicleMake}${payment.exchangeVehicleRegNo ? ` (${payment.exchangeVehicleRegNo})` : ""}` : ""}`
+        : `${payment.mode}${payment.source ? ` (${payment.source})` : ""}`;
     vehicle.activityLog.push({
         action: "sale_payment",
-        description: `Sale payment received: ₹${payment.amount.toLocaleString("en-IN")} via ${payment.mode}`,
+        description: `Sale payment received: ₹${payment.amount.toLocaleString("en-IN")} via ${paymentLogLabel}`,
         amount: payment.amount,
         date: new Date(),
     });
@@ -433,7 +577,87 @@ export const deleteSalePayment = async (id: string, paymentId: string) => {
     if (!mongoose.Types.ObjectId.isValid(id) || !mongoose.Types.ObjectId.isValid(paymentId)) return null;
     const vehicle = await Vehicle.findOne({ _id: id, isActive: true });
     if (!vehicle) return null;
+
+    // Find the payment being deleted BEFORE removing it
+    const paymentToDelete = vehicle.salePayments.find((p) => p._id.toString() === paymentId);
+
+    // ── Handle any exchange vehicle/consignment linked to this payment ──
+    if (paymentToDelete?.exchangeCreatedRef && paymentToDelete?.exchangeCreatedIn) {
+        const { ConsignmentVehicle: CV } = await import("../models/consignment-vehicle.model");
+        const collection = paymentToDelete.exchangeCreatedIn;
+        const ref = paymentToDelete.exchangeCreatedRef;
+
+        if (collection === "vehicles") {
+            const exVehicle = await Vehicle.findById(ref);
+            if (exVehicle) {
+                // Check if this exchange vehicle was migrated from a consignment
+                const originalConsignment = await CV.findOne({
+                    registrationNo: exVehicle.registrationNo,
+                    isActive: false,
+                    "activityLog.action": "migrated",
+                });
+                if (originalConsignment) {
+                    // Restore the original consignment
+                    originalConsignment.isActive = true;
+                    originalConsignment.activityLog.push({
+                        action: "restored",
+                        description: `Restored: exchange payment removed from sale of ${vehicle.make} ${vehicle.model} (${vehicle.registrationNo})`,
+                        date: new Date(),
+                    });
+                    await originalConsignment.save();
+                }
+                // Soft-delete the exchange vehicle
+                exVehicle.isActive = false;
+                exVehicle.activityLog.push({
+                    action: "removed",
+                    description: `Deactivated: exchange payment deleted from sale of ${vehicle.make} ${vehicle.model} (${vehicle.registrationNo})`,
+                    date: new Date(),
+                });
+                await exVehicle.save();
+            }
+        } else if (collection === "consignmentVehicles") {
+            const exConsignment = await CV.findById(ref);
+            if (exConsignment) {
+                exConsignment.isActive = false;
+                exConsignment.activityLog.push({
+                    action: "removed",
+                    description: `Deactivated: exchange payment deleted from sale of ${vehicle.make} ${vehicle.model} (${vehicle.registrationNo})`,
+                    date: new Date(),
+                });
+                await exConsignment.save();
+            }
+        }
+    }
+
+    // Remove the payment from the array
     vehicle.salePayments = vehicle.salePayments.filter((p) => p._id.toString() !== paymentId);
+
+    // If no exchange payments remain, clear the exchange flags on the parent vehicle
+    const remainingExchangePayments = vehicle.salePayments.filter((p) => p.type === "exchange");
+    if (remainingExchangePayments.length === 0) {
+        vehicle.isExchange = false;
+        vehicle.exchangeVehicleRef = undefined;
+    } else {
+        // Update ref to the last remaining exchange payment's created vehicle
+        const lastExchangePayment = remainingExchangePayments[remainingExchangePayments.length - 1];
+        if (lastExchangePayment.exchangeCreatedRef) {
+            vehicle.exchangeVehicleRef = lastExchangePayment.exchangeCreatedRef;
+        }
+    }
+
+    // Log the deletion with a clear description of what was removed
+    if (paymentToDelete) {
+        const deletedLabel = paymentToDelete.type === "exchange"
+            ? `Exchange${paymentToDelete.exchangeVehicleMake ? ` — ${paymentToDelete.exchangeVehicleMake}${paymentToDelete.exchangeVehicleRegNo ? ` (${paymentToDelete.exchangeVehicleRegNo})` : ""}` : ""}`
+            : `${paymentToDelete.mode}`;
+        vehicle.activityLog.push({
+            action: "sale_payment_deleted",
+            description: `Sale payment removed: ₹${paymentToDelete.amount.toLocaleString("en-IN")} via ${deletedLabel}`,
+            amount: paymentToDelete.amount,
+            date: new Date(),
+        });
+    }
+
     await vehicle.save();
     return vehicle;
 };
@@ -723,3 +947,7 @@ export const lookupVehiclesByRegNo = async (q: string) => {
         })),
     ];
 };
+
+// ── Export helpers re-exported so the controller can reach them via vs.* ──────
+export { exportVehicleDetailCSV, exportVehicleDetailPDF } from "./vehicle_detail_export";
+export { exportVehiclesCSV, exportVehiclesPDF } from "./vehicle_list_export";

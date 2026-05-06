@@ -49,8 +49,9 @@ export const deleteVehicle = async (req: Request, res: Response): Promise<void> 
     res.json({ success: true, statusCode: 200, message: "Vehicle deleted" });
 };
 
-export const getVehicleStats = async (_req: Request, res: Response): Promise<void> => {
-    const stats = await vs.getVehicleStats();
+export const getVehicleStats = async (req: Request, res: Response): Promise<void> => {
+    const { vehicleType, dateFrom, dateTo, status, isFromExchange, search } = req.query as Record<string, string>;
+    const stats = await vs.getVehicleStats({ vehicleType, dateFrom, dateTo, status, isFromExchange, search });
     res.json({ success: true, statusCode: 200, message: "Stats fetched", data: stats });
 };
 
@@ -189,3 +190,60 @@ export const lookupVehicles = async (req: Request, res: Response): Promise<void>
     const results = await vs.lookupVehiclesByRegNo(q || "");
     res.json({ success: true, statusCode: 200, message: "Lookup results", data: results });
 };
+
+// ── Export ─────────────────────────────────────────────────────────
+export const exportVehicles = async (req: Request, res: Response): Promise<void> => {
+    const { vehicleType, status, isFromExchange, search, dateFrom, dateTo, format } = req.query as Record<string, string>;
+
+    if (format !== "csv" && format !== "pdf") {
+        res.status(400).json({ success: false, message: "format must be 'csv' or 'pdf'" });
+        return;
+    }
+
+    const query = { vehicleType, status, isFromExchange, search, dateFrom, dateTo, format } as Parameters<typeof vs.exportVehiclesCSV>[0];
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const filename = `vehicles_${timestamp}`;
+
+    if (format === "csv") {
+        const csv = await vs.exportVehiclesCSV(query);
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader("Content-Disposition", `attachment; filename="${filename}.csv"`);
+        res.send("\uFEFF" + csv); // BOM prefix for Excel UTF-8 compatibility
+        return;
+    }
+
+    // PDF
+    const pdfBuffer = await vs.exportVehiclesPDF(query);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}.pdf"`);
+    res.send(pdfBuffer);
+};
+
+// ── Single Vehicle Export ──────────────────────────────────────────
+export const exportVehicleDetail = async (req: Request, res: Response): Promise<void> => {
+    const { format } = req.query as Record<string, string>;
+    const id = req.params.id as string;
+
+    if (format !== "csv" && format !== "pdf") {
+        res.status(400).json({ success: false, message: "format must be 'csv' or 'pdf'" });
+        return;
+    }
+
+    const timestamp = new Date().toISOString().slice(0, 10);
+
+    if (format === "csv") {
+        const csv = await vs.exportVehicleDetailCSV(id);
+        if (!csv) { res.status(404).json({ success: false, message: "Vehicle not found" }); return; }
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader("Content-Disposition", `attachment; filename="vehicle_${id}_${timestamp}.csv"`);
+        res.send("\uFEFF" + csv);
+        return;
+    }
+
+    const pdf = await vs.exportVehicleDetailPDF(id);
+    if (!pdf) { res.status(404).json({ success: false, message: "Vehicle not found" }); return; }
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="vehicle_${id}_${timestamp}.pdf"`);
+    res.send(pdf);
+};
+

@@ -8,7 +8,7 @@ import { useUiStore } from "@stores/ui";
 import { LogoutDialog } from ".";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-const SidebarFallback = ({ collapsed: _collapsed }: { collapsed: boolean }) => (
+const SidebarFallback = () => (
     <div className="flex-1 overflow-y-auto p-3 space-y-2">
         <div className="h-8 w-full animate-pulse rounded-md bg-muted" />
         <div className="h-8 w-full animate-pulse rounded-md bg-muted" />
@@ -41,7 +41,7 @@ const Sidebar = () => {
             </div>
 
             {/* Navigation */}
-            <Suspense fallback={<SidebarFallback collapsed={collapsed} />}>
+            <Suspense fallback={<SidebarFallback />}>
                 <SidebarNav collapsed={collapsed} />
             </Suspense>
 

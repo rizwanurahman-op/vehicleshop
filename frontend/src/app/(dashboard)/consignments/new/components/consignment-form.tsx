@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { z } from "zod";
@@ -13,6 +13,7 @@ import { formatApiErrors } from "@lib/formatApiErrors";
 import { formatCurrency } from "@lib/currency";
 import { cn } from "@/lib/utils";
 import { createConsignmentSchema } from "@schemas/consignment";
+import { COST_CATEGORIES } from "@data/vehicle-constants";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,22 +22,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import {
     Store, CreditCard, Bike, Car, ArrowLeft, ArrowRight, Check,
-    IndianRupee, User, FileText, ChevronDown, ChevronUp
+    IndianRupee, User, FileText, ChevronDown, ChevronUp, Plus, Trash2, Wrench
 } from "lucide-react";
 import Link from "next/link";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 type FormData = z.input<typeof createConsignmentSchema>;
 
-const COST_FIELDS = [
-    { key: "workshopRepairCost", label: "Workshop / Repair" },
-    { key: "sparePartsAccessories", label: "Spare Parts" },
-    { key: "paintingPolishingCost", label: "Painting / Polishing" },
-    { key: "washingDetailingCost", label: "Washing / Detailing" },
-    { key: "fuelCost", label: "Fuel" },
-    { key: "paperworkTaxInsurance", label: "Paperwork / Tax / Insurance" },
-    { key: "commission", label: "Commission" },
-    { key: "otherExpenses", label: "Other Expenses" },
-] as const;
+
 
 
 // ── Type Selector ─────────────────────────────────────────────────
@@ -108,20 +101,7 @@ const Stepper = ({ step, saleType }: { step: number; saleType: SaleType }) => (
     </div>
 );
 
-// ── Cost Number Input ─────────────────────────────────────────────
-const CostInput = ({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) => (
-    <div className="flex items-center justify-between gap-3 py-2 border-b border-border/50">
-        <span className="text-sm text-muted-foreground">{label}</span>
-        <div className="relative w-32">
-            <IndianRupee className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
-            <Input type="number" min="0" className="h-8 pl-6 text-sm text-right bg-muted/50 border-border"
-                value={value || ""}
-                onChange={e => onChange(parseFloat(e.target.value) || 0)} />
-        </div>
-    </div>
-);
 
-// ── Owner Search ──────────────────────────────────────────────────
 const OwnerSearch = ({ value, onChange }: { value: string; onChange: (id: string, name: string) => void }) => {
     const [open, setOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
@@ -171,6 +151,9 @@ const OwnerSearch = ({ value, onChange }: { value: string; onChange: (id: string
     );
 };
 
+type BreakdownItem = { id: string; name: string; amount: number; date: string; notes: string };
+type BreakdownMap = Record<string, BreakdownItem[]>;
+
 // ── Main Form ─────────────────────────────────────────────────────
 export const ConsignmentForm = () => {
     const router = useRouter();
@@ -178,6 +161,13 @@ export const ConsignmentForm = () => {
     const [step, setStep] = useState(0);
     const [tid, setTid] = useState<string | number | undefined>();
     const [selectedOwnerName, setSelectedOwnerName] = useState("");
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [breakdownMap, setBreakdownMap] = useState<BreakdownMap>({});
+    const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>({});
+    const [dialog, setDialog] = useState<{ open: boolean; catKey: string; catLabel: string; catIcon: string }>({
+        open: false, catKey: "", catLabel: "", catIcon: "",
+    });
+    const [newItem, setNewItem] = useState({ name: "", amount: "", date: new Date().toISOString().split("T")[0], notes: "" });
 
     const form = useForm<FormData>({
         resolver: zodResolver(createConsignmentSchema),
@@ -188,19 +178,34 @@ export const ConsignmentForm = () => {
             previousOwner: "", dateReceived: new Date().toISOString().split("T")[0],
             sourceType: "owner",
             purchasePrice: 0,
-            workshopRepairCost: 0, sparePartsAccessories: 0, paintingPolishingCost: 0,
-            washingDetailingCost: 0, fuelCost: 0, paperworkTaxInsurance: 0, commission: 0, otherExpenses: 0,
+            travelCost: 0, workshopRepairCost: 0, sparePartsAccessories: 0,
+            alignmentWork: 0, paintingPolishingCost: 0, washingDetailingCost: 0,
+            fuelCost: 0, paperworkTaxInsurance: 0, commission: 0, otherExpenses: 0,
         },
     });
 
-    const { mutate, isPending } = useMutation({
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { mutate, isPending: _isPending } = useMutation({
         mutationFn: async (values: FormData) => {
             setTid(toast.loading("Registering consignment..."));
             return axios.post<ApiResponse<IConsignmentVehicle>>("/consignments", values);
         },
-        onSuccess: (res) => {
+        onSuccess: async (res) => {
+            const consignmentId = res.data.data?._id;
+            if (consignmentId) {
+                for (const cat of COST_CATEGORIES) {
+                    for (const item of (breakdownMap[cat.key] || [])) {
+                        try {
+                            await axios.post(`/consignments/${consignmentId}/costs/breakdown`, {
+                                category: cat.category, name: item.name, amount: item.amount,
+                                date: item.date || undefined, notes: item.notes || undefined,
+                            });
+                        } catch { /* non-critical */ }
+                    }
+                }
+            }
             toast.success("Consignment registered!", { id: tid });
-            router.push(`/consignments/${res.data.data?._id}`);
+            router.push(`/consignments/${consignmentId}`);
         },
         onError: (err: unknown) => {
             const e = (err as AxiosError)?.response?.data as ErrorData;
@@ -208,8 +213,30 @@ export const ConsignmentForm = () => {
         },
     });
 
+    const openDialog = (cat: typeof COST_CATEGORIES[number]) => {
+        setDialog({ open: true, catKey: cat.key, catLabel: cat.label, catIcon: cat.icon });
+        setNewItem({ name: "", amount: "", date: new Date().toISOString().split("T")[0], notes: "" });
+    };
+
+    const addBreakdownItem = () => {
+        if (!newItem.name.trim() || !newItem.amount) return;
+        const key = dialog.catKey;
+        const item: BreakdownItem = { id: Date.now().toString(), name: newItem.name, amount: parseFloat(newItem.amount) || 0, date: newItem.date, notes: newItem.notes };
+        const updated: BreakdownMap = { ...breakdownMap, [key]: [...(breakdownMap[key] || []), item] };
+        setBreakdownMap(updated);
+        form.setValue(key as keyof FormData, updated[key].reduce((s, i) => s + i.amount, 0) as never);
+        setExpandedCats(e => ({ ...e, [key]: true }));
+        setDialog(d => ({ ...d, open: false }));
+    };
+
+    const removeBreakdownItem = (catKey: string, itemId: string) => {
+        const updated: BreakdownMap = { ...breakdownMap, [catKey]: (breakdownMap[catKey] || []).filter(i => i.id !== itemId) };
+        setBreakdownMap(updated);
+        form.setValue(catKey as keyof FormData, updated[catKey].reduce((s, i) => s + i.amount, 0) as never);
+    };
+
     const watchedValues = form.watch();
-    const totalRecon = COST_FIELDS.reduce((s, f) => s + (watchedValues[f.key as keyof FormData] as number || 0), 0);
+    const totalRecon = COST_CATEGORIES.reduce((s, c) => s + (watchedValues[c.key as keyof FormData] as number || 0), 0);
     const totalInvestment = (watchedValues.purchasePrice || 0) + totalRecon;
 
     if (!saleType) return <TypeSelector onSelect={(t) => { setSaleType(t); form.setValue("saleType", t); }} />;
@@ -409,37 +436,140 @@ export const ConsignmentForm = () => {
                     {/* ── Step 1: Costs ── */}
                     {step === 1 && (
                         <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
-                            <div className={cn("px-5 py-4 border-b border-border", accentColor === "violet" ? "bg-violet-500/5" : "bg-blue-500/5")}>
+                            {/* Summary bar */}
+                            <div className="grid grid-cols-3 divide-x divide-border border-b border-border">
+                                <div className="p-4 text-center">
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Purchase Price</p>
+                                    <p className="text-sm font-bold text-foreground">{formatCurrency(watchedValues.purchasePrice || 0)}</p>
+                                </div>
+                                <div className="p-4 text-center">
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Reconditioning</p>
+                                    <p className="text-sm font-bold text-orange-400">+{formatCurrency(totalRecon)}</p>
+                                </div>
+                                <div className="p-4 text-center">
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-primary mb-1">Total Investment</p>
+                                    <p className="text-sm font-bold text-primary">{formatCurrency(totalInvestment)}</p>
+                                </div>
+                            </div>
+
+                            {/* Category header */}
+                            <div className={cn("px-5 py-3 border-b border-border", accentColor === "violet" ? "bg-violet-500/5" : "bg-blue-500/5")}>
                                 <div className="flex items-center gap-2">
                                     <IndianRupee className="h-4 w-4 text-muted-foreground" />
                                     <p className="text-sm font-bold text-foreground">Reconditioning Costs</p>
+                                    <span className="text-[10px] text-muted-foreground italic ml-1">— tap + to add named items</span>
                                 </div>
                             </div>
-                            <div className="p-5">
-                                {COST_FIELDS.map(f => (
-                                    <FormField key={f.key} control={form.control} name={f.key as keyof FormData} render={({ field }) => (
-                                        <CostInput label={f.label} value={Number(field.value) || 0} onChange={field.onChange} />
-                                    )} />
-                                ))}
 
-                                {/* Totals summary */}
-                                <div className="mt-5 rounded-xl bg-muted/30 border border-border p-4 space-y-2">
-                                    <div className="flex justify-between text-sm text-muted-foreground">
-                                        <span>Purchase Price</span>
-                                        <span>{formatCurrency(watchedValues.purchasePrice || 0)}</span>
-                                    </div>
-                                    <div className="flex justify-between text-sm text-muted-foreground">
-                                        <span>Reconditioning</span>
-                                        <span>{formatCurrency(totalRecon)}</span>
-                                    </div>
-                                    <div className="flex justify-between text-base font-bold text-foreground border-t border-border pt-2 mt-2">
-                                        <span>Total Investment</span>
-                                        <span>{formatCurrency(totalInvestment)}</span>
-                                    </div>
+                            {/* Cost rows */}
+                            <div className="divide-y divide-border/50">
+                                {COST_CATEGORIES.map(cat => {
+                                    const items = breakdownMap[cat.key] || [];
+                                    const hasItems = items.length > 0;
+                                    const isExpanded = expandedCats[cat.key];
+                                    const catAmount = (watchedValues[cat.key as keyof FormData] as number) || 0;
+                                    return (
+                                        <div key={cat.key}>
+                                            <div className={cn("group flex items-center gap-2 px-5 py-3 hover:bg-muted/20 transition-colors", catAmount === 0 && !hasItems ? "opacity-60" : "")}>
+                                                <button type="button" onClick={() => hasItems && setExpandedCats(e => ({ ...e, [cat.key]: !isExpanded }))} className="flex items-center gap-2 flex-1 min-w-0 text-left">
+                                                    <span className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                                                        <span className="text-base">{cat.icon}</span>
+                                                        <span className="truncate">{cat.label}</span>
+                                                    </span>
+                                                    {hasItems && <span className="ml-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">{items.length}</span>}
+                                                    {hasItems && (isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronUp className="h-3.5 w-3.5 text-muted-foreground rotate-180" />)}
+                                                </button>
+                                                {hasItems ? (
+                                                    <span className="font-bold text-sm text-primary mr-1">{formatCurrency(catAmount)}</span>
+                                                ) : (
+                                                    <Controller
+                                                        key={cat.key}
+                                                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                                        control={form.control as any}
+                                                        name={cat.key as keyof FormData}
+                                                        render={({ field }) => (
+                                                            <div className="relative w-32">
+                                                                <IndianRupee className="absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+                                                                <input type="number" min="0" className="h-8 w-full bg-muted/50 border border-border rounded-md pl-7 pr-2 text-sm text-right" value={Number(field.value) || ""} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} />
+                                                            </div>
+                                                        )}
+                                                    />
+                                                )}
+                                                <button type="button" onClick={() => openDialog(cat)} className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 flex h-7 w-7 items-center justify-center rounded bg-muted hover:bg-primary/10 hover:text-primary text-muted-foreground transition-all" title={`Add ${cat.label} item`}>
+                                                    <Plus className="h-4 w-4" />
+                                                </button>
+                                            </div>
+                                            {isExpanded && hasItems && (
+                                                <div className="mx-5 mb-2 space-y-1.5">
+                                                    {items.map(item => (
+                                                        <div key={item.id} className="group/item flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2 border border-border/50">
+                                                            <div className="flex items-start gap-2 min-w-0">
+                                                                <div className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary/10"><FileText className="h-2.5 w-2.5 text-primary" /></div>
+                                                                <div className="min-w-0">
+                                                                    <p className="text-xs font-medium text-foreground truncate">{item.name}</p>
+                                                                    <div className="flex items-center gap-2 mt-0.5">
+                                                                        {item.date && <span className="text-[10px] text-muted-foreground">{item.date}</span>}
+                                                                        {item.notes && <span className="text-[10px] text-muted-foreground italic truncate">{item.notes}</span>}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-2 shrink-0 ml-2">
+                                                                <span className="text-xs font-bold text-primary">{formatCurrency(item.amount)}</span>
+                                                                <button type="button" onClick={() => removeBreakdownItem(cat.key, item.id)} className="opacity-100 sm:opacity-0 sm:group-hover/item:opacity-100 flex h-6 w-6 items-center justify-center rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all"><Trash2 className="h-3.5 w-3.5" /></button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Footer total */}
+                            <div className="border-t-2 border-primary/20 px-5 py-4 flex justify-between items-center bg-primary/5">
+                                <div>
+                                    <span className="font-bold text-foreground">Total Investment</span>
+                                    <p className="text-[10px] text-muted-foreground mt-0.5">Purchase Price + all reconditioning</p>
                                 </div>
+                                <span className="text-xl font-bold text-primary">{formatCurrency(totalInvestment)}</span>
                             </div>
                         </div>
                     )}
+
+                    {/* ── Add Breakdown Item Dialog ── */}
+                    <Dialog open={dialog.open} onOpenChange={(v) => !v && setDialog(d => ({ ...d, open: false }))}>
+                        <DialogContent className="w-[96vw] max-w-sm p-0 overflow-hidden flex flex-col rounded-2xl bg-card border-border">
+                            <div className="glass-header relative p-5">
+                                <div className="absolute -top-12 -right-12 h-24 w-24 rounded-full bg-primary/10 blur-3xl" />
+                                <div className="flex items-center gap-3">
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-brand shadow-lg"><Wrench className="h-4 w-4 text-white" /></div>
+                                    <div>
+                                        <DialogTitle className="text-base font-bold text-foreground">{dialog.catIcon} Add {dialog.catLabel} Item</DialogTitle>
+                                        <DialogDescription className="text-xs text-muted-foreground">Add a detailed breakdown entry</DialogDescription>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="p-5 space-y-4">
+                                <div>
+                                    <label className="text-xs font-semibold text-foreground">Item Name <span className="text-destructive">*</span></label>
+                                    <Input placeholder="e.g. Brake pads" className="h-9 bg-muted/50 border-border text-sm mt-1.5" value={newItem.name} onChange={e => setNewItem(n => ({ ...n, name: e.target.value }))} onKeyDown={e => e.key === "Enter" && addBreakdownItem()} />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-semibold text-foreground">Amount (₹) <span className="text-destructive">*</span></label>
+                                    <div className="relative mt-1.5"><IndianRupee className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" /><Input type="number" min="0" className="h-9 bg-muted/50 border-border pl-7 text-sm" value={newItem.amount} onChange={e => setNewItem(n => ({ ...n, amount: e.target.value }))} /></div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div><label className="text-xs font-semibold text-foreground">Date</label><Input type="date" className="h-9 bg-muted/50 border-border text-sm mt-1.5" value={newItem.date} onChange={e => setNewItem(n => ({ ...n, date: e.target.value }))} /></div>
+                                    <div><label className="text-xs font-semibold text-foreground">Notes</label><Input placeholder="Optional" className="h-9 bg-muted/50 border-border text-sm mt-1.5" value={newItem.notes} onChange={e => setNewItem(n => ({ ...n, notes: e.target.value }))} /></div>
+                                </div>
+                            </div>
+                            <div className="border-t border-border bg-muted/20 p-4 flex justify-end gap-2">
+                                <Button type="button" variant="outline" onClick={() => setDialog(d => ({ ...d, open: false }))}>Cancel</Button>
+                                <Button type="button" disabled={!newItem.name.trim() || !newItem.amount} onClick={addBreakdownItem} className={cn("text-white", accentColor === "violet" ? "bg-violet-600 hover:bg-violet-700" : "bg-blue-600 hover:bg-blue-700")}><Plus className="mr-1.5 h-3.5 w-3.5" />Add Item</Button>
+                            </div>
+                        </DialogContent>
+                    </Dialog>
 
                     {/* ── Step 2: Review ── */}
                     {step === 2 && (
@@ -491,11 +621,17 @@ export const ConsignmentForm = () => {
                                 Next <ArrowRight className="ml-2 h-4 w-4" />
                             </Button>
                         ) : (
-                            <Button key="submit-btn" type="button" disabled={isPending}
-                                onClick={() => form.handleSubmit((v) => mutate(v))()} 
+                            <Button key="submit-btn" type="button" disabled={isSubmitting}
+                                onClick={() => {
+                                    setIsSubmitting(true);
+                                    form.handleSubmit(
+                                        (v) => mutate(v),
+                                        () => setIsSubmitting(false)   // re-enable if validation fails
+                                    )();
+                                }}
                                 className={cn("text-white", accentColor === "violet" ? "bg-violet-600 hover:bg-violet-700" : "bg-blue-600 hover:bg-blue-700")}>
-                                {isPending ? "Registering..." : "Register Consignment"}
-                                {!isPending && <Check className="ml-2 h-4 w-4" />}
+                                {isSubmitting ? "Registering..." : "Register Consignment"}
+                                {!isSubmitting && <Check className="ml-2 h-4 w-4" />}
                             </Button>
                         )}
                     </div>

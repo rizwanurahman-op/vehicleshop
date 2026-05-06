@@ -35,9 +35,11 @@ export interface IConsignmentVehicle extends Omit<Document, 'model'> {
     // Purchase Price (optional for both)
     purchasePrice: number;
 
-    // Reconditioning Costs (SHARED — 8 categories)
+    // Reconditioning Costs (SHARED — 10 categories, same as vehicle)
+    travelCost: number;
     workshopRepairCost: number;
     sparePartsAccessories: number;
+    alignmentWork: number;
     paintingPolishingCost: number;
     washingDetailingCost: number;
     fuelCost: number;
@@ -47,7 +49,7 @@ export interface IConsignmentVehicle extends Omit<Document, 'model'> {
 
     // Itemized Cost Breakdowns (SHARED)
     costBreakdowns: Array<{
-        category: "workshop" | "spareParts" | "painting" | "washing" | "fuel" | "paperwork" | "commission" | "other";
+        category: "travel" | "workshop" | "spareParts" | "alignment" | "painting" | "washing" | "fuel" | "paperwork" | "commission" | "other";
         items: Array<{
             _id: mongoose.Types.ObjectId;
             name: string;
@@ -148,7 +150,7 @@ const CostItemSchema = new Schema(
 const CostBreakdownSchema = new Schema({
     category: {
         type: String,
-        enum: ["workshop", "spareParts", "painting", "washing", "fuel", "paperwork", "commission", "other"],
+        enum: ["travel", "workshop", "spareParts", "alignment", "painting", "washing", "fuel", "paperwork", "commission", "other"],
         required: true,
     },
     items: [CostItemSchema],
@@ -222,8 +224,10 @@ const ConsignmentVehicleSchema = new Schema<IConsignmentVehicle>({
 
     purchasePrice: { type: Number, default: 0 },
 
+    travelCost: { type: Number, default: 0 },
     workshopRepairCost: { type: Number, default: 0 },
     sparePartsAccessories: { type: Number, default: 0 },
+    alignmentWork: { type: Number, default: 0 },
     paintingPolishingCost: { type: Number, default: 0 },
     washingDetailingCost: { type: Number, default: 0 },
     fuelCost: { type: Number, default: 0 },
@@ -293,8 +297,10 @@ ConsignmentVehicleSchema.index({ previousOwner: "text", make: "text", model: "te
 // ── Pre-save hook: auto-calculations ─────────────────────────────
 ConsignmentVehicleSchema.pre("save", function (next) {
     // 1. Total Reconditioning Cost
-    this.totalReconCost = (this.workshopRepairCost || 0)
+    this.totalReconCost = (this.travelCost || 0)
+        + (this.workshopRepairCost || 0)
         + (this.sparePartsAccessories || 0)
+        + (this.alignmentWork || 0)
         + (this.paintingPolishingCost || 0)
         + (this.washingDetailingCost || 0)
         + (this.fuelCost || 0)

@@ -69,6 +69,19 @@ export const SALE_PAYMENT_METHODS = [
 
 export type SalePaymentMethodValue = typeof SALE_PAYMENT_METHODS[number]["value"];
 
+/**
+ * Buyer payment methods — cash-only (no Exchange or Finance).
+ * Used in consignment buyer payment dialogs.
+ */
+export const BUYER_PAYMENT_METHODS = [
+    { value: "Cash",          label: "Cash",          icon: "💵", backendMode: "Cash" },
+    { value: "UPI",           label: "UPI",           icon: "📱", backendMode: "UPI" },
+    { value: "GPay",          label: "GPay",          icon: "📱", backendMode: "GPay" },
+    { value: "Online",        label: "Online",        icon: "💻", backendMode: "Online" },
+    { value: "Bank Transfer", label: "Bank Transfer", icon: "🏦", backendMode: "Bank Transfer" },
+    { value: "Cheque",        label: "Cheque",        icon: "✅", backendMode: "Cheque" },
+] as const;
+
 export const FUNDING_SOURCES = [
     { value: "own", label: "Own Money", icon: "👤", description: "Shop owner's personal capital" },
     { value: "investor", label: "Investor", icon: "🏦", description: "Borrowed from a single investor" },

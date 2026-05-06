@@ -10,6 +10,7 @@ router.use(authenticate);
 
 // ── Stats & Reports (before /:id to avoid conflicts) ─────────────
 router.get("/stats", asyncHandler(vc.getVehicleStats));
+router.get("/export", asyncHandler(vc.exportVehicles));
 router.get("/reports/profit-loss", asyncHandler(vc.getProfitLossReport));
 router.get("/reports/monthly", asyncHandler(vc.getMonthlyReport));
 router.get("/reports/pending", asyncHandler(vc.getPendingReport));
@@ -23,6 +24,8 @@ router.get("/lookup", asyncHandler(vc.lookupVehicles));   // must be BEFORE /:id
 router.get("/:id", asyncHandler(vc.getVehicle));
 router.patch("/:id", asyncHandler(vc.updateVehicle));
 router.delete("/:id", asyncHandler(vc.deleteVehicle));
+router.get("/:id/export", asyncHandler(vc.exportVehicleDetail));
+
 
 // ── Costs ─────────────────────────────────────────────────────────
 router.patch("/:id/costs", asyncHandler(vc.updateCosts));

@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import {
     Plus, Trash2, Pencil, Check, X, IndianRupee,
     Loader2, Wrench, ChevronDown, ChevronRight, CalendarDays, FileText
@@ -301,6 +302,60 @@ const CategoryRow = ({
         onError: () => toast.error("Failed to delete item"),
     });
 
+    // ── Delete Cost Item Dialog ──────────────────────────────
+    const DeleteCostItemDialog = ({ item, onDelete }: { item: { _id: string; name: string; amount: number; date?: string; notes?: string }; onDelete: () => void }) => {
+        return (
+            <AlertDialog>
+                <AlertDialogTrigger asChild>
+                    <button
+                        className="opacity-100 sm:opacity-0 sm:group-hover/item:opacity-100 flex h-6 w-6 items-center justify-center rounded bg-destructive/10 sm:bg-transparent text-destructive sm:text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
+                        title="Remove item"
+                    >
+                        {isDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                    </button>
+                </AlertDialogTrigger>
+                <AlertDialogContent className="w-[96vw] max-w-sm rounded-3xl bg-card border-border p-0 overflow-hidden gap-0 sm:w-full shadow-2xl">
+                    {/* Glassmorphic Danger Header */}
+                    <div className="relative overflow-hidden bg-red-500/5 border-b border-red-500/10 px-6 pt-6 pb-5">
+                        <div className="absolute -top-12 -right-12 h-32 w-32 rounded-full bg-red-500/20 blur-[40px] pointer-events-none" />
+                        <div className="relative flex flex-col items-center text-center gap-3">
+                            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-red-500/10 border border-red-500/20 shadow-inner">
+                                <Trash2 className="h-6 w-6 text-red-500 drop-shadow-sm" />
+                            </div>
+                            <div>
+                                <AlertDialogTitle className="text-foreground text-lg font-bold leading-tight">
+                                    Remove Cost Item
+                                </AlertDialogTitle>
+                                <p className="text-xs text-muted-foreground mt-1">This action cannot be undone</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="px-6 py-6 space-y-4">
+                        <div className="rounded-xl border border-border bg-muted/30 p-4 text-center">
+                            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">{cat.label}</p>
+                            <p className="text-xl font-bold text-foreground truncate">{item.name}</p>
+                            <p className="text-sm font-bold text-red-500 mt-1">{formatCurrency(item.amount)}</p>
+                        </div>
+                        <AlertDialogDescription className="text-sm text-center text-muted-foreground leading-relaxed">
+                            Are you sure you want to permanently remove this cost item? Total investment will be automatically recalculated.
+                        </AlertDialogDescription>
+                    </div>
+
+                    <AlertDialogFooter className="px-6 pb-6 pt-0 flex-col sm:flex-row gap-3">
+                        <AlertDialogCancel className="w-full sm:w-1/2 border-border hover:bg-muted m-0">Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={onDelete}
+                            className="w-full sm:w-1/2 bg-red-500 hover:bg-red-600 text-white shadow-md shadow-red-500/20 m-0"
+                        >
+                            Remove Item
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        );
+    };
+
     return (
         <>
             <div
@@ -381,14 +436,7 @@ const CategoryRow = ({
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0 ml-2">
                                     <span className="text-xs font-bold text-primary">{formatCurrency(item.amount)}</span>
-                                    <button
-                                        onClick={() => deleteItem(item._id)}
-                                        disabled={isDeleting}
-                                        className="opacity-100 sm:opacity-0 sm:group-hover/item:opacity-100 flex h-6 w-6 items-center justify-center rounded bg-destructive/10 sm:bg-transparent text-destructive sm:text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
-                                        title="Remove item"
-                                    >
-                                        {isDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                                    </button>
+                                    <DeleteCostItemDialog item={item} onDelete={() => deleteItem(item._id)} />
                                 </div>
                             </div>
                         ))}

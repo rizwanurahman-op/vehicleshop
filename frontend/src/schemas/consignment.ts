@@ -26,8 +26,10 @@ export const createConsignmentSchema = z.object({
     financeCompany: z.string().optional(),
 
     purchasePrice: z.number().min(0).default(0),
+    travelCost: z.number().min(0).default(0),
     workshopRepairCost: z.number().min(0).default(0),
     sparePartsAccessories: z.number().min(0).default(0),
+    alignmentWork: z.number().min(0).default(0),
     paintingPolishingCost: z.number().min(0).default(0),
     washingDetailingCost: z.number().min(0).default(0),
     fuelCost: z.number().min(0).default(0),
@@ -71,7 +73,7 @@ export const addPayeePaymentSchema = z.object({
 });
 
 export const addConsignmentCostBreakdownItemSchema = z.object({
-    category: z.enum(["workshop", "spareParts", "painting", "washing", "fuel", "paperwork", "commission", "other"]),
+    category: z.enum(["travel", "workshop", "spareParts", "alignment", "painting", "washing", "fuel", "paperwork", "commission", "other"]),
     name: z.string().min(1, "Item name is required"),
     amount: z.number().min(0),
     date: z.string().optional(),

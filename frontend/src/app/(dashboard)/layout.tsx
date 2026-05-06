@@ -1,8 +1,12 @@
 import { Sidebar, Navbar, BottomNav } from "@components/common";
+import { SessionGuard } from "./components/session-guard";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     return (
         <div className="flex h-screen overflow-hidden bg-background">
+            {/* Proactive token refresh — keeps the session alive silently */}
+            <SessionGuard />
+
             {/* Sidebar — desktop only */}
             <Sidebar />
 
@@ -17,3 +21,4 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
     );
 }
+
