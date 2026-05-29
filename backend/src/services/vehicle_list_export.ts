@@ -61,36 +61,34 @@ export const exportVehiclesCSV = async (query: VehicleListExportQuery): Promise<
         "Date Sold", "Sold To", "Sold Price",
         "Received Amount", "Balance Amount",
         "Profit / Loss", "P/L %",
-        "Funding Source", "Is Exchange", "NOC Status",
+        "Funding Source", "From Exchange", "Sold via Exchange", "NOC Status",
     ];
 
-    const rows = vehicles.map((v) => {
-        const isExch = (v as any).isFromExchange ? "Yes" : "No";
-        return [
-            v.vehicleId,
-            v.vehicleType === "two_wheeler" ? "Two Wheeler" : "Four Wheeler",
-            v.make,
-            v.model,
-            v.year ?? "",
-            v.registrationNo,
-            v.purchasedFrom,
-            dFmt(v.datePurchased),
-            v.purchasePrice,
-            v.totalInvestment,
-            dSl(v.status),
-            dSl(v.saleStatus ?? ""),
-            dFmt((v as any).dateSold),
-            (v as any).soldTo ?? "",
-            (v as any).soldPrice ?? "",
-            v.receivedAmount,
-            v.balanceAmount,
-            v.profitLoss ?? "",
-            v.profitLossPercentage != null ? v.profitLossPercentage.toFixed(1) + "%" : "",
-            dSl((v as any).fundingSource ?? ""),
-            isExch,
-            dSl(v.nocStatus),
-        ].map(esc).join(",");
-    });
+    const rows = vehicles.map((v) => [
+        v.vehicleId,
+        v.vehicleType === "two_wheeler" ? "Two Wheeler" : "Four Wheeler",
+        v.make,
+        v.model,
+        v.year ?? "",
+        v.registrationNo,
+        v.purchasedFrom,
+        dFmt(v.datePurchased),
+        v.purchasePrice,
+        v.totalInvestment,
+        dSl(v.status),
+        dSl((v as any).saleStatus ?? ""),
+        dFmt((v as any).dateSold),
+        (v as any).soldTo ?? "",
+        (v as any).soldPrice ?? "",
+        v.receivedAmount,
+        v.balanceAmount,
+        v.profitLoss ?? "",
+        v.profitLossPercentage != null ? v.profitLossPercentage.toFixed(1) + "%" : "",
+        dSl((v as any).fundingSource ?? ""),
+        (v as any).isFromExchange ? "Yes" : "No",
+        (v as any).isExchange ? "Yes" : "No",
+        dSl(v.nocStatus),
+    ].map(esc).join(","));
 
     return [headers.map(esc).join(","), ...rows].join("\r\n");
 };
@@ -111,14 +109,15 @@ export const exportVehiclesPDF = async (query: VehicleListExportQuery): Promise<
         doc.on("end", () => resolve(Buffer.concat(chunks)));
         doc.on("error", reject);
 
-        const PW = doc.page.width;   // landscape: ~841
-        const PH = doc.page.height;  // landscape: ~595
+        const PW = doc.page.width;   // landscape A4: ~841
+        const PH = doc.page.height;  // landscape A4: ~595
         const MG = 28;
-        const CW = PW - MG * 2;
+        const CW = PW - MG * 2;     // ~785
 
         const C = {
             navy: "#0f172a", indigo: "#6366f1", green: "#16a34a",
             red: "#dc2626", amber: "#d97706", slate: "#64748b",
+            cyan: "#0891b2", purple: "#7c3aed",
             white: "#ffffff", border: "#e2e8f0", light: "#f8fafc",
             text: "#1e293b", muted: "#94a3b8",
         };
@@ -157,13 +156,12 @@ export const exportVehiclesPDF = async (query: VehicleListExportQuery): Promise<
 
         const summaryY = 56;
         const mW = CW / 4;
-        const summaryMetrics = [
-            { label: "TOTAL VEHICLES", value: vehicles.length.toString(), accent: C.indigo },
-            { label: "IN STOCK", value: inStockCount.toString(), accent: C.green },
-            { label: "TOTAL INVESTED", value: dINR(totalInvested), accent: C.amber },
-            { label: "NET PROFIT (SOLD)", value: dINR(totalProfit), accent: totalProfit >= 0 ? C.green : C.red },
-        ];
-        summaryMetrics.forEach((m, i) => {
+        [
+            { label: "TOTAL VEHICLES",  value: vehicles.length.toString(),  accent: C.indigo },
+            { label: "IN STOCK",         value: inStockCount.toString(),      accent: C.green },
+            { label: "TOTAL INVESTED",   value: dINR(totalInvested),          accent: C.amber },
+            { label: "NET PROFIT (SOLD)",value: dINR(totalProfit),            accent: totalProfit >= 0 ? C.green : C.red },
+        ].forEach((m, i) => {
             const mx = MG + i * (mW + 3);
             doc.rect(mx, summaryY, mW - 3, 34).fill(C.light).strokeColor(m.accent + "40").lineWidth(0.5).stroke();
             doc.rect(mx, summaryY, 3, 34).fill(m.accent);
@@ -176,47 +174,52 @@ export const exportVehiclesPDF = async (query: VehicleListExportQuery): Promise<
         // ── TABLE ────────────────────────────────────────────────────────
         const tableY = summaryY + 42;
 
-        // Column definitions [label, width, align]
+        // 12 columns totalling CW (~785px)
+        // [label, width, align]
         const cols: [string, number, "left" | "right" | "center"][] = [
-            ["#",          20, "center"],
-            ["ID",         36, "left"],
-            ["Type",       50, "left"],
-            ["Make / Model", 100, "left"],
-            ["Reg No",     70, "left"],
-            ["Date Purchased", 60, "left"],
-            ["Purchase",   58, "right"],
-            ["Invested",   58, "right"],
-            ["Status",     56, "left"],
-            ["Sold Price", 58, "right"],
-            ["P/L",        58, "right"],
+            ["#",              18, "center"],
+            ["ID",             52, "left"],
+            ["Type",           44, "left"],
+            ["Make / Model",  118, "left"],
+            ["Reg No",         70, "left"],
+            ["Date Purchased", 58, "left"],
+            ["Purchase",       58, "right"],
+            ["Invested",       60, "right"],
+            ["Status",         62, "left"],   // main inventory status only
+            ["Flags",         100, "left"],   // payment status · exchange flags
+            ["Sold Price",     64, "right"],
+            ["P/L",            63, "right"],
         ];
-
-        // Table header
-        let y = tableY;
-        doc.rect(MG, y, CW, 16).fill(C.navy);
-        let cx = MG;
-        cols.forEach(([label, w, align]) => {
-            doc.fontSize(6).font("Helvetica-Bold").fillColor(C.white)
-                .text(label, cx + 3, y + 4, { width: w - 6, align, lineBreak: false });
-            cx += w;
-        });
-        y += 16;
+        // 18+52+44+118+70+58+58+60+62+100+64+63 = 767 (pad ~18 into flags for readability)
 
         const ROW_H = 16;
+
+        const statusColorMap: Record<string, string> = {
+            in_stock: C.green, reconditioning: C.amber,
+            ready_for_sale: C.cyan, sold: C.green,
+            sold_pending: C.amber, exchanged: C.purple,
+        };
+
+        const drawHeader = (startY: number) => {
+            doc.rect(MG, startY, CW, 16).fill(C.navy);
+            let hx = MG;
+            cols.forEach(([label, w, align]) => {
+                doc.fontSize(6).font("Helvetica-Bold").fillColor(C.white)
+                    .text(label, hx + 3, startY + 5, { width: w - 6, align, lineBreak: false });
+                hx += w;
+            });
+        };
+
+        let y = tableY;
+        drawHeader(y);
+        y += 16;
 
         const need = (h: number) => {
             if (y + h > PH - 30) {
                 addFooter();
                 doc.addPage({ margin: 0, size: "A4", layout: "landscape" });
                 y = MG;
-                // Repeat header
-                doc.rect(MG, y, CW, 16).fill(C.navy);
-                let hx = MG;
-                cols.forEach(([label, w, align]) => {
-                    doc.fontSize(6).font("Helvetica-Bold").fillColor(C.white)
-                        .text(label, hx + 3, y + 4, { width: w - 6, align, lineBreak: false });
-                    hx += w;
-                });
+                drawHeader(y);
                 y += 16;
             }
         };
@@ -230,42 +233,81 @@ export const exportVehiclesPDF = async (query: VehicleListExportQuery): Promise<
         } else {
             vehicles.forEach((v, idx) => {
                 need(ROW_H);
-                const rowBg = idx % 2 === 0 ? "#f8fafc" : C.white;
+
+                const rowBg = idx % 2 === 0 ? C.light : C.white;
                 doc.rect(MG, y, CW, ROW_H).fill(rowBg);
                 doc.moveTo(MG, y + ROW_H).lineTo(MG + CW, y + ROW_H)
                     .strokeColor(C.border).lineWidth(0.15).stroke();
 
+                const textY = y + 5;
                 const pl = v.profitLoss ?? 0;
                 const plColor = pl > 0 ? C.green : pl < 0 ? C.red : C.muted;
                 const isSold = !!(v as any).dateSold;
 
-                const statusColor: Record<string, string> = {
-                    in_stock: C.green, reconditioning: C.amber,
-                    ready_for_sale: "#0891b2", sold: C.green,
-                    sold_pending: C.amber, exchanged: "#a855f7",
+                // Build flag parts
+                const flagParts: { label: string; color: string }[] = [];
+                const saleStatus = (v as any).saleStatus as string | undefined;
+                if (saleStatus === "balance_pending")     flagParts.push({ label: "Bal. Pending",    color: C.amber });
+                else if (saleStatus === "noc_pending")    flagParts.push({ label: "NOC Pending",     color: "#ca8a04" });
+                else if (saleStatus === "fully_received") flagParts.push({ label: "Fully Received",  color: C.green });
+                if ((v as any).isFromExchange)            flagParts.push({ label: "From Exchange",   color: C.cyan });
+                if ((v as any).isExchange)                flagParts.push({ label: "Sold via Exch.",  color: C.purple });
+
+                // Render standard cells
+                let rx = MG;
+
+                const cell = (text: string, colIdx: number, color?: string) => {
+                    const [, w, align] = cols[colIdx];
+                    doc.fontSize(6.5).font("Helvetica").fillColor(color ?? C.text)
+                        .text(text, rx + 3, textY, { width: w - 6, align, lineBreak: false });
+                    rx += w;
                 };
 
-                const cells: [string, string, "left" | "right" | "center", string?][] = [
-                    [`${idx + 1}`, "6", "center"],
-                    [v.vehicleId ?? "—", "6.5", "left"],
-                    [v.vehicleType === "two_wheeler" ? "Two Wheeler" : "Four Wheeler", "6.5", "left"],
-                    [`${v.make} ${v.model}${v.year ? " " + v.year : ""}`, "6.5", "left"],
-                    [v.registrationNo, "6.5", "left"],
-                    [dFmt(v.datePurchased), "6", "left"],
-                    [dINR(v.purchasePrice), "6.5", "right"],
-                    [dINR(v.totalInvestment), "6.5", "right"],
-                    [dSl(v.status), "6", "left", statusColor[v.status] ?? C.slate],
-                    [isSold ? dINR((v as any).soldPrice) : "—", "6.5", "right"],
-                    [isSold ? (pl >= 0 ? "+" : "") + dINR(pl) : "—", "6.5", "right", isSold ? plColor : C.muted],
-                ];
+                cell(`${idx + 1}`,                                                     0);
+                cell(v.vehicleId ?? "—",                                               1);
+                cell(v.vehicleType === "two_wheeler" ? "Two Whlr" : "Four Whlr",      2, C.slate);
+                cell(`${v.make} ${v.model}${v.year ? " " + v.year : ""}`,             3);
+                cell(v.registrationNo,                                                 4);
+                cell(dFmt(v.datePurchased),                                            5, C.slate);
+                cell(dINR(v.purchasePrice),                                            6);
+                cell(dINR(v.totalInvestment),                                          7);
 
-                let rx = MG;
-                cells.forEach(([text, , align, color], ci) => {
-                    const [, w] = cols[ci];
-                    doc.fontSize(6.5).font("Helvetica").fillColor(color ?? C.text)
-                        .text(text, rx + 3, y + 4, { width: w - 6, align, lineBreak: false });
-                    rx += w;
-                });
+                // Status column — inventory status with colour
+                const [, stW] = cols[8];
+                doc.fontSize(6.5).font("Helvetica-Bold").fillColor(statusColorMap[v.status] ?? C.slate)
+                    .text(dSl(v.status), rx + 3, textY, { width: stW - 6, lineBreak: false });
+                rx += stW;
+
+                // Flags column — inline dot-separated flag pills
+                const [, flagW] = cols[9];
+                if (flagParts.length === 0) {
+                    doc.fontSize(6.5).font("Helvetica").fillColor(C.muted)
+                        .text("—", rx + 3, textY, { width: flagW - 6, lineBreak: false });
+                } else {
+                    let fx = rx + 3;
+                    flagParts.forEach((fp, fi) => {
+                        doc.fontSize(6).font("Helvetica-Bold").fillColor(fp.color)
+                            .text(fp.label, fx, textY, { lineBreak: false });
+                        fx += doc.widthOfString(fp.label);
+                        if (fi < flagParts.length - 1) {
+                            doc.fontSize(6).font("Helvetica").fillColor(C.muted)
+                                .text(" · ", fx, textY, { lineBreak: false });
+                            fx += doc.widthOfString(" · ");
+                        }
+                    });
+                }
+                rx += flagW;
+
+                // Sold Price
+                const [, soldW] = cols[10];
+                doc.fontSize(6.5).font("Helvetica").fillColor(isSold ? C.text : C.muted)
+                    .text(isSold ? dINR((v as any).soldPrice) : "—", rx + 3, textY, { width: soldW - 6, align: "right", lineBreak: false });
+                rx += soldW;
+
+                // P/L
+                const [, plW] = cols[11];
+                doc.fontSize(6.5).font("Helvetica").fillColor(isSold ? plColor : C.muted)
+                    .text(isSold ? (pl >= 0 ? "+" : "") + dINR(pl) : "—", rx + 3, textY, { width: plW - 6, align: "right", lineBreak: false });
 
                 y += ROW_H;
             });
@@ -275,8 +317,10 @@ export const exportVehiclesPDF = async (query: VehicleListExportQuery): Promise<
         need(20);
         doc.rect(MG, y, CW, 20).fill(C.navy);
         doc.fontSize(6.5).font("Helvetica-Bold").fillColor(C.white)
-            .text(`${vehicles.length} vehicles  ·  Total Invested: ${dINR(totalInvested)}  ·  Total Revenue: ${dINR(totalRevenue)}  ·  Net P/L (sold): ${dINR(totalProfit)}`,
-                MG + 8, y + 6, { lineBreak: false });
+            .text(
+                `${vehicles.length} vehicles  ·  Total Invested: ${dINR(totalInvested)}  ·  Total Revenue: ${dINR(totalRevenue)}  ·  Net P/L (sold): ${dINR(totalProfit)}`,
+                MG + 8, y + 6, { lineBreak: false },
+            );
         y += 20;
 
         addFooter();

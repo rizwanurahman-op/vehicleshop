@@ -1,27 +1,25 @@
 import { Router } from "express";
 import {
-    createInvestment,
-    listInvestments,
-    getInvestment,
-    updateInvestment,
-    deleteInvestment,
-    getInvestmentsByLender,
-    exportInvestments,
+    createInvestment, listInvestments, getInvestment,
+    updateInvestment, deleteInvestment, getInvestmentsByLender,
+    exportInvestments, getInvestmentStats,
 } from "../controllers/investment.controller";
 import { validate } from "../middleware/validate.middleware";
-import { authenticate } from "../middleware/auth.middleware";
+import { authenticate, isAdmin } from "../middleware/auth.middleware";
 import { asyncHandler } from "../utils/async-handler";
 import { createInvestmentSchema, updateInvestmentSchema } from "../schemas/investment.schema";
 
 const router = Router();
 router.use(authenticate);
 
-router.get("/export/csv", asyncHandler(exportInvestments));
+router.get("/stats",               asyncHandler(getInvestmentStats));
+router.get("/export",              asyncHandler(exportInvestments));
+router.get("/export/csv",          asyncHandler(exportInvestments)); // legacy compat
 router.get("/by-lender/:lenderId", asyncHandler(getInvestmentsByLender));
-router.get("/", asyncHandler(listInvestments));
-router.post("/", validate(createInvestmentSchema), asyncHandler(createInvestment));
-router.get("/:id", asyncHandler(getInvestment));
-router.patch("/:id", validate(updateInvestmentSchema), asyncHandler(updateInvestment));
-router.delete("/:id", asyncHandler(deleteInvestment));
+router.get("/",                    asyncHandler(listInvestments));
+router.post("/",                   isAdmin, validate(createInvestmentSchema), asyncHandler(createInvestment));
+router.get("/:id",                 asyncHandler(getInvestment));
+router.patch("/:id",               isAdmin, validate(updateInvestmentSchema), asyncHandler(updateInvestment));
+router.delete("/:id",              isAdmin, asyncHandler(deleteInvestment));
 
 export default router;

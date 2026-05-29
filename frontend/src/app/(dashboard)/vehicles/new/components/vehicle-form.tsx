@@ -17,7 +17,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Bike, Car, ChevronRight, ChevronLeft, ChevronDown, Check, Loader2, IndianRupee, Calendar, FileText, Plus, Trash2, Wrench } from "lucide-react";
+import { Bike, Car, ChevronRight, ChevronLeft, ChevronDown, Check, Loader2, IndianRupee, Calendar, FileText, Plus, Trash2, Wrench, ChevronsUpDown } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { VEHICLE_MAKES_2W, VEHICLE_MAKES_4W, COST_CATEGORIES, NOC_STATUSES } from "@data/vehicle-constants";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { formatCurrency } from "@lib/currency";
@@ -43,6 +45,8 @@ const VehicleForm = () => {
         open: false, catKey: "", catLabel: "", catIcon: "",
     });
     const [newItem, setNewItem] = useState({ name: "", amount: "", date: new Date().toISOString().split("T")[0], notes: "" });
+    const [openMake, setOpenMake] = useState(false);
+    const [makeSearchValue, setMakeSearchValue] = useState("");
     const router = useRouter();
     const queryClient = useQueryClient();
 
@@ -221,14 +225,95 @@ const VehicleForm = () => {
 
                                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                     <FormField control={form.control} name="make" render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel className="font-semibold text-foreground">Make <span className="text-destructive">*</span></FormLabel>
-                                            <Select onValueChange={field.onChange} value={field.value}>
-                                                <FormControl>
-                                                    <SelectTrigger className="h-10 bg-muted/50 border-border"><SelectValue placeholder="Select make" /></SelectTrigger>
-                                                </FormControl>
-                                                <SelectContent>{makes.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
-                                            </Select>
+                                        <FormItem className="flex flex-col">
+                                            <FormLabel className="font-semibold text-foreground">Vehicle Brand / Make <span className="text-destructive">*</span></FormLabel>
+                                            <Popover open={openMake} onOpenChange={setOpenMake}>
+                                                <PopoverTrigger asChild>
+                                                    <FormControl>
+                                                        <Button
+                                                            variant="outline"
+                                                            role="combobox"
+                                                            aria-expanded={openMake}
+                                                            className={cn(
+                                                                "h-10 w-full justify-between bg-muted/50 border-border text-left font-normal hover:bg-muted/70 hover:text-foreground",
+                                                                !field.value && "text-muted-foreground"
+                                                            )}
+                                                        >
+                                                            {field.value
+                                                                ? makes.includes(field.value)
+                                                                    ? field.value
+                                                                    : `${field.value} (Custom)`
+                                                                : "Select or type brand..."}
+                                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                        </Button>
+                                                    </FormControl>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-80 p-0 bg-card border-border shadow-2xl" align="start">
+                                                    <Command className="bg-card">
+                                                        <CommandInput 
+                                                            placeholder="Search brand (e.g. Honda, Suzuki)..." 
+                                                            className="h-10 text-foreground"
+                                                            onValueChange={(val) => setMakeSearchValue(val)}
+                                                        />
+                                                        <CommandList className="max-h-[220px] overflow-y-auto">
+                                                            <CommandEmpty className="py-3 px-4 text-xs text-muted-foreground">
+                                                                No matching brand found.
+                                                            </CommandEmpty>
+                                                            <CommandGroup className="text-foreground">
+                                                                {makeSearchValue.trim() && !makes.some(m => m.toLowerCase() === makeSearchValue.trim().toLowerCase()) && (
+                                                                    <CommandItem
+                                                                        value={makeSearchValue.trim()}
+                                                                        onSelect={() => {
+                                                                            field.onChange(makeSearchValue.trim());
+                                                                            setOpenMake(false);
+                                                                            setMakeSearchValue("");
+                                                                        }}
+                                                                        className="cursor-pointer text-sm font-semibold text-primary py-2 hover:bg-muted/50 flex items-center gap-1.5"
+                                                                    >
+                                                                        <Plus className="h-4 w-4" />
+                                                                        <span>Add custom brand: &quot;{makeSearchValue.trim()}&quot;</span>
+                                                                    </CommandItem>
+                                                                )}
+                                                                {makes.map((m) => (
+                                                                    <CommandItem
+                                                                        key={m}
+                                                                        value={m}
+                                                                        onSelect={() => {
+                                                                            field.onChange(m);
+                                                                            setOpenMake(false);
+                                                                            setMakeSearchValue("");
+                                                                        }}
+                                                                        className="cursor-pointer text-sm py-2 hover:bg-muted/50 flex items-center justify-between"
+                                                                    >
+                                                                        <span className="flex items-center">
+                                                                            <Check
+                                                                                className={cn(
+                                                                                    "mr-2 h-4 w-4 text-primary",
+                                                                                    m === field.value ? "opacity-100" : "opacity-0"
+                                                                                )}
+                                                                            />
+                                                                            {m}
+                                                                        </span>
+                                                                    </CommandItem>
+                                                                ))}
+                                                                {field.value && !makes.includes(field.value) && (
+                                                                    <CommandItem
+                                                                        value={field.value}
+                                                                        onSelect={() => {
+                                                                            setOpenMake(false);
+                                                                            setMakeSearchValue("");
+                                                                        }}
+                                                                        className="cursor-pointer font-semibold text-primary py-2 hover:bg-muted/50"
+                                                                    >
+                                                                        <Check className="mr-2 h-4 w-4 opacity-100" />
+                                                                        {field.value} (Custom)
+                                                                    </CommandItem>
+                                                                )}
+                                                            </CommandGroup>
+                                                        </CommandList>
+                                                    </Command>
+                                                </PopoverContent>
+                                            </Popover>
                                             <FormMessage />
                                         </FormItem>
                                     )} />

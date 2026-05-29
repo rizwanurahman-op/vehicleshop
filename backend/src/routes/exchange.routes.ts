@@ -7,7 +7,8 @@ const router = Router();
 
 router.use(authenticate);
 
-router.get("/stats", asyncHandler(ec.getExchangeStats));
-router.get("/", asyncHandler(ec.getExchanges));
+router.get("/stats",  asyncHandler(ec.getExchangeStats));
+router.get("/export", asyncHandler(ec.exportExchanges));
+router.get("/",       asyncHandler(ec.getExchanges));
 
 export default router;

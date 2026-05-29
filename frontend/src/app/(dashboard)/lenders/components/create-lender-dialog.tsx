@@ -40,6 +40,7 @@ const CreateLenderDialog = () => {
         onSuccess: () => {
             toast.success("Success!", { id: onAddToast, description: "Lender created successfully!" });
             queryClient.invalidateQueries({ queryKey: ["lenders"] });
+            queryClient.invalidateQueries({ queryKey: ["lender-stats"] });
             queryClient.invalidateQueries({ queryKey: ["lender-summary"] });
             queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
             form.reset();

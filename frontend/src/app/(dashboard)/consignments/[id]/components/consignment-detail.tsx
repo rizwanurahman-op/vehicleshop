@@ -2,7 +2,9 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "@config/axios";
-import { useState } from "react";
+import { getClientSession } from "@/lib/auth";
+import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { AxiosError } from "axios";
 import { formatApiErrors } from "@lib/formatApiErrors";
@@ -12,7 +14,7 @@ import { cn } from "@/lib/utils";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { recordConsignmentSaleSchema, addBuyerPaymentSchema, addPayeePaymentSchema, addConsignmentCostBreakdownItemSchema } from "@schemas/consignment";
+import { recordConsignmentSaleSchema, addBuyerPaymentSchema, addPayeePaymentSchema, addConsignmentCostBreakdownItemSchema, editConsignmentSchema } from "@schemas/consignment";
 import { BUYER_PAYMENT_METHODS } from "@data/vehicle-constants";
 
 import { Button } from "@/components/ui/button";
@@ -22,13 +24,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
     ArrowLeft, Bike, Car, Store, CreditCard, TrendingUp, TrendingDown,
     IndianRupee, Plus, Trash2, Loader2, Activity, FileText,
     DollarSign, Sparkles, RotateCcw, CheckCircle2, Package,
-    User, ArrowUpRight, ArrowDownLeft, ArrowLeftRight, ExternalLink
+    User, ArrowUpRight, ArrowDownLeft, ArrowLeftRight, ExternalLink,
+    Download, FileSpreadsheet, ChevronDown, Pencil
 } from "lucide-react";
 import Link from "next/link";
+import { AdminOnly } from "@components/shared";
 
 const fetchConsignment = async (id: string): Promise<IConsignmentVehicle | null> => {
     const res = await axios.get<ApiResponse<IConsignmentVehicle>>(`/consignments/${id}`);
@@ -45,6 +51,214 @@ const SaleTypePill = ({ type }: { type: SaleType }) => (
 );
 
 const COST_CATEGORIES = ["workshop", "spareParts", "painting", "washing", "fuel", "paperwork", "commission", "other"] as const;
+
+// ── Edit Consignment Dialog ───────────────────────────────────────
+const EditConsignmentDialog = ({ vehicle }: { vehicle: IConsignmentVehicle }) => {
+    const [open, setOpen] = useState(false);
+    const [tid, setTid] = useState<string | number | undefined>();
+    const qc = useQueryClient();
+    const isParkSale = vehicle.saleType === "park_sale";
+
+    const toDateStr = (d: Date | string | undefined | null) =>
+        d ? new Date(d).toISOString().split("T")[0] : new Date().toISOString().split("T")[0];
+
+    const defaultVals = () => ({
+        vehicleType: vehicle.vehicleType,
+        make: vehicle.make,
+        model: vehicle.model,
+        year: vehicle.year ?? undefined,
+        registrationNo: vehicle.registrationNo,
+        color: vehicle.color ?? "",
+        engineNo: vehicle.engineNo ?? "",
+        chassisNo: vehicle.chassisNo ?? "",
+        previousOwner: vehicle.previousOwner,
+        previousOwnerPhone: vehicle.previousOwnerPhone ?? "",
+        financeCompany: vehicle.financeCompany ?? "",
+        dateReceived: toDateStr(vehicle.dateReceived),
+        purchasePrice: vehicle.purchasePrice ?? 0,
+        status: (["received", "reconditioning", "ready_for_sale"] as const).includes(vehicle.status as never)
+            ? vehicle.status as "received" | "reconditioning" | "ready_for_sale"
+            : undefined,
+        remarks: vehicle.remarks ?? "",
+        notes: vehicle.notes ?? "",
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const form = useForm({ resolver: zodResolver(editConsignmentSchema) as any, defaultValues: defaultVals() });
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => { if (open) form.reset(defaultVals()); }, [open]);
+
+    const { mutate, isPending } = useMutation({
+        mutationFn: async (values: z.infer<typeof editConsignmentSchema>) => {
+            setTid(toast.loading("Saving changes..."));
+            return axios.put(`/consignments/${vehicle._id}`, values);
+        },
+        onSuccess: () => {
+            toast.success("Consignment updated!", { id: tid });
+            qc.invalidateQueries({ queryKey: ["consignment", vehicle._id] });
+            qc.invalidateQueries({ queryKey: ["consignments"] });
+            setOpen(false);
+        },
+        onError: (err: unknown) => {
+            const e = (err as AxiosError)?.response?.data as ErrorData;
+            toast.error("Update failed", { id: tid, description: formatApiErrors(e?.errors) || e?.message });
+        },
+    });
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button size="sm" variant="outline" className="h-7 gap-1.5 text-xs border-border text-muted-foreground hover:text-foreground">
+                    <Pencil className="h-3 w-3" /> Edit
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="w-[96vw] max-w-2xl p-0 overflow-hidden flex flex-col rounded-2xl bg-card border-border max-h-[92vh] sm:w-full">
+                <div className="glass-header relative p-5">
+                    <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-brand shadow-lg">
+                            <Pencil className="h-4 w-4 text-white" />
+                        </div>
+                        <div>
+                            <DialogTitle className="text-base font-bold text-foreground">Edit Consignment</DialogTitle>
+                            <DialogDescription className="text-xs text-muted-foreground">{vehicle.make} {vehicle.model} &mdash; {vehicle.registrationNo}</DialogDescription>
+                        </div>
+                    </div>
+                </div>
+                <Form {...form}>
+                    <form onSubmit={form.handleSubmit((v) => mutate(v))} className="flex flex-col flex-1 overflow-hidden min-h-0">
+                        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+
+                            {/* ── Vehicle Identity ── */}
+                            <div className="space-y-3">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Vehicle Identity</p>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    <FormField control={form.control} name="vehicleType" render={({ field }) => (
+                                        <FormItem><FormLabel className="text-xs font-semibold">Type *</FormLabel>
+                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                <FormControl><SelectTrigger className="h-9 bg-muted/50 border-border text-sm"><SelectValue /></SelectTrigger></FormControl>
+                                                <SelectContent>
+                                                    <SelectItem value="two_wheeler">Two Wheeler</SelectItem>
+                                                    <SelectItem value="four_wheeler">Four Wheeler</SelectItem>
+                                                </SelectContent>
+                                            </Select><FormMessage /></FormItem>
+                                    )} />
+                                    <FormField control={form.control} name="make" render={({ field }) => (
+                                        <FormItem><FormLabel className="text-xs font-semibold">Make *</FormLabel>
+                                            <FormControl><Input className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl><FormMessage /></FormItem>
+                                    )} />
+                                    <FormField control={form.control} name="model" render={({ field }) => (
+                                        <FormItem><FormLabel className="text-xs font-semibold">Model *</FormLabel>
+                                            <FormControl><Input className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl><FormMessage /></FormItem>
+                                    )} />
+                                </div>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                    <FormField control={form.control} name="year" render={({ field }) => (
+                                        <FormItem><FormLabel className="text-xs font-semibold">Year</FormLabel>
+                                            <FormControl><Input type="number" placeholder="2022" className="h-9 bg-muted/50 border-border text-sm"
+                                                value={field.value ?? ""}
+                                                onChange={(e) => field.onChange(e.target.value === "" ? null : parseInt(e.target.value))} /></FormControl></FormItem>
+                                    )} />
+                                    <FormField control={form.control} name="registrationNo" render={({ field }) => (
+                                        <FormItem><FormLabel className="text-xs font-semibold">Reg. No. *</FormLabel>
+                                            <FormControl><Input className="h-9 bg-muted/50 border-border text-sm uppercase" {...field}
+                                                onChange={(e) => field.onChange(e.target.value.toUpperCase())} /></FormControl><FormMessage /></FormItem>
+                                    )} />
+                                    <FormField control={form.control} name="color" render={({ field }) => (
+                                        <FormItem><FormLabel className="text-xs font-semibold">Color</FormLabel>
+                                            <FormControl><Input placeholder="Red" className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl></FormItem>
+                                    )} />
+                                    {!vehicle.dateSold && (
+                                        <FormField control={form.control} name="status" render={({ field }) => (
+                                            <FormItem><FormLabel className="text-xs font-semibold">Status</FormLabel>
+                                                <Select onValueChange={field.onChange} value={field.value}>
+                                                    <FormControl><SelectTrigger className="h-9 bg-muted/50 border-border text-sm"><SelectValue placeholder="Keep current" /></SelectTrigger></FormControl>
+                                                    <SelectContent>
+                                                        <SelectItem value="received">Received</SelectItem>
+                                                        <SelectItem value="reconditioning">Reconditioning</SelectItem>
+                                                        <SelectItem value="ready_for_sale">Ready for Sale</SelectItem>
+                                                    </SelectContent>
+                                                </Select></FormItem>
+                                        )} />
+                                    )}
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <FormField control={form.control} name="engineNo" render={({ field }) => (
+                                        <FormItem><FormLabel className="text-xs font-semibold">Engine No.</FormLabel>
+                                            <FormControl><Input className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl></FormItem>
+                                    )} />
+                                    <FormField control={form.control} name="chassisNo" render={({ field }) => (
+                                        <FormItem><FormLabel className="text-xs font-semibold">Chassis No.</FormLabel>
+                                            <FormControl><Input className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl></FormItem>
+                                    )} />
+                                </div>
+                            </div>
+
+                            {/* ── Owner Info ── */}
+                            <div className="space-y-3">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{isParkSale ? "Owner" : "Finance Owner"} Information</p>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <FormField control={form.control} name="previousOwner" render={({ field }) => (
+                                        <FormItem><FormLabel className="text-xs font-semibold">{isParkSale ? "Owner" : "Finance Owner"} Name *</FormLabel>
+                                            <FormControl><Input className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl><FormMessage /></FormItem>
+                                    )} />
+                                    <FormField control={form.control} name="previousOwnerPhone" render={({ field }) => (
+                                        <FormItem><FormLabel className="text-xs font-semibold">Phone</FormLabel>
+                                            <FormControl><Input placeholder="+91 9876543210" className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl></FormItem>
+                                    )} />
+                                </div>
+                                {!isParkSale && (
+                                    <FormField control={form.control} name="financeCompany" render={({ field }) => (
+                                        <FormItem><FormLabel className="text-xs font-semibold">Finance Company</FormLabel>
+                                            <FormControl><Input placeholder="HDFC, Bajaj Finance..." className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl></FormItem>
+                                    )} />
+                                )}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <FormField control={form.control} name="dateReceived" render={({ field }) => (
+                                        <FormItem><FormLabel className="text-xs font-semibold">Date Received *</FormLabel>
+                                            <FormControl><Input type="date" className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl><FormMessage /></FormItem>
+                                    )} />
+                                    <FormField control={form.control} name="purchasePrice" render={({ field }) => (
+                                        <FormItem><FormLabel className="text-xs font-semibold">Purchase Price ₹</FormLabel>
+                                            <FormControl>
+                                                <div className="relative">
+                                                    <IndianRupee className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+                                                    <Input type="number" min="0" className="h-9 bg-muted/50 border-border pl-7 text-sm"
+                                                        value={field.value ?? ""} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} />
+                                                </div>
+                                            </FormControl><FormMessage /></FormItem>
+                                    )} />
+                                </div>
+                            </div>
+
+                            {/* ── Notes ── */}
+                            <div className="space-y-3">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Notes &amp; Remarks</p>
+                                <FormField control={form.control} name="remarks" render={({ field }) => (
+                                    <FormItem><FormLabel className="text-xs font-semibold">Remarks</FormLabel>
+                                        <FormControl><Textarea placeholder="Any remarks..." rows={2} className="resize-none bg-muted/50 border-border text-sm" {...field} /></FormControl></FormItem>
+                                )} />
+                                <FormField control={form.control} name="notes" render={({ field }) => (
+                                    <FormItem><FormLabel className="text-xs font-semibold">Internal Notes</FormLabel>
+                                        <FormControl><Textarea placeholder="Internal notes..." rows={2} className="resize-none bg-muted/50 border-border text-sm" {...field} /></FormControl></FormItem>
+                                )} />
+                            </div>
+                        </div>
+
+                        <div className="border-t border-border bg-muted/20 p-4">
+                            <div className="flex flex-col-reverse items-stretch justify-end gap-2 sm:flex-row sm:items-center sm:gap-3">
+                                <Button type="button" variant="outline" onClick={() => setOpen(false)} className="border-border hover:bg-muted">Cancel</Button>
+                                <Button type="submit" disabled={isPending} className="bg-gradient-brand text-white hover:opacity-90">
+                                    {isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : "Save Changes"}
+                                </Button>
+                            </div>
+                        </div>
+                    </form>
+                </Form>
+            </DialogContent>
+        </Dialog>
+    );
+};
 
 // ── Record Sale Dialog ─────────────────────────────────────────────
 const RecordSaleDialog = ({ vehicle }: { vehicle: IConsignmentVehicle }) => {
@@ -371,10 +585,204 @@ const AddCostBreakdownDialog = ({ vehicle }: { vehicle: IConsignmentVehicle }) =
     );
 };
 
+// ── Export Detail Button ──────────────────────────────────────────
+const ExportDetailButton = ({ consignmentId, name }: { consignmentId: string; name: string }) => {
+    const [isExporting, setIsExporting] = useState<"pdf" | "csv" | null>(null);
+
+    const handleExport = async (format: "pdf" | "csv") => {
+        setIsExporting(format);
+        try {
+            const baseURL = (axios.defaults.baseURL ?? "").replace(/\/$/, "");
+            const url = `${baseURL}/consignments/${consignmentId}/export?format=${format}`;
+            const token = getClientSession();
+            const res = await fetch(url, {
+                credentials: "include",
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
+            });
+            if (!res.ok) throw new Error("Export failed");
+            const blob = await res.blob();
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = `${name}_${new Date().toISOString().slice(0, 10)}.${format}`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(link.href);
+            toast.success(`${format.toUpperCase()} downloaded successfully`);
+        } catch {
+            toast.error("Export failed. Please try again.");
+        } finally {
+            setIsExporting(null);
+        }
+    };
+
+
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5 border-border text-muted-foreground hover:text-foreground" disabled={!!isExporting}>
+                    {isExporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                    Export
+                    <ChevronDown className="h-3 w-3 opacity-60" />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48 bg-card border-border">
+                <DropdownMenuLabel className="text-xs text-muted-foreground">Download as</DropdownMenuLabel>
+                <DropdownMenuSeparator className="bg-border" />
+                <DropdownMenuItem onClick={() => handleExport("pdf")} disabled={isExporting === "pdf"} className="gap-2 cursor-pointer">
+                    <FileText className="h-4 w-4 text-red-400" />
+                    <div><p className="text-sm font-medium">Export PDF</p><p className="text-[10px] text-muted-foreground">Full detail report</p></div>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport("csv")} disabled={isExporting === "csv"} className="gap-2 cursor-pointer">
+                    <FileSpreadsheet className="h-4 w-4 text-green-400" />
+                    <div><p className="text-sm font-medium">Export CSV</p><p className="text-[10px] text-muted-foreground">Open in Excel / Sheets</p></div>
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
+};
+
+// ── Revert Sale Button ─────────────────────────────────────────────
+const RevertSaleConfirmButton = ({ vehicle, onRevert, isPending }: { vehicle: IConsignmentVehicle; onRevert: () => void; isPending: boolean }) => (
+    <AlertDialog>
+        <AlertDialogTrigger asChild>
+            <Button variant="outline" className="gap-2 border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300">
+                {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                Revert Sale
+            </Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent className="w-[96vw] max-w-md rounded-3xl bg-card border-border p-0 overflow-hidden gap-0 sm:w-full shadow-2xl">
+            <div className="relative overflow-hidden bg-orange-500/5 border-b border-orange-500/10 px-6 pt-6 pb-5">
+                <div className="absolute -top-12 -right-12 h-32 w-32 rounded-full bg-orange-500/20 blur-[40px] pointer-events-none" />
+                <div className="relative flex items-center gap-4">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-orange-500/10 border border-orange-500/20 shadow-inner">
+                        <RotateCcw className="h-5 w-5 text-orange-500 drop-shadow-sm" />
+                    </div>
+                    <div>
+                        <AlertDialogTitle className="text-foreground text-lg font-bold leading-tight">Revert Sale</AlertDialogTitle>
+                        <p className="text-xs text-muted-foreground mt-1">Undo consignment sale transaction</p>
+                    </div>
+                </div>
+            </div>
+            <div className="px-6 py-6 space-y-4">
+                <AlertDialogDescription className="text-sm text-muted-foreground leading-relaxed">
+                    This will permanently undo the sale of <strong className="text-foreground">{vehicle.make} {vehicle.model}</strong> and restore it to its previous status.
+                </AlertDialogDescription>
+                <div className="flex items-start gap-3 rounded-xl bg-orange-500/5 border border-orange-500/20 p-3.5">
+                    <span className="text-orange-500 mt-0.5 shrink-0 text-base leading-none">⚠️</span>
+                    <p className="text-xs text-orange-500/90 font-medium leading-relaxed">All recorded sale payments and related data for this consignment will be completely cleared. This action cannot be undone.</p>
+                </div>
+            </div>
+            <AlertDialogFooter className="px-6 pb-6 pt-0 flex-col sm:flex-row gap-3">
+                <AlertDialogCancel className="w-full sm:w-1/2 border-border hover:bg-muted m-0">Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={onRevert} className="w-full sm:w-1/2 bg-orange-500 hover:bg-orange-600 text-white shadow-md shadow-orange-500/20 m-0">
+                    <RotateCcw className="h-4 w-4 mr-2" />Revert Sale
+                </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+    </AlertDialog>
+);
+
+// ── Delete Consignment Dialog ──────────────────────────────────────
+const DeleteConsignmentDialog = ({ vehicle }: { vehicle: IConsignmentVehicle }) => {
+    const router = useRouter();
+    const [open, setOpen] = useState(false);
+    const [confirmText, setConfirmText] = useState("");
+    const inputRef = useRef<HTMLInputElement>(null);
+    const confirmKey = vehicle.registrationNo;
+    const isConfirmed = confirmText.trim().toUpperCase() === confirmKey.toUpperCase();
+
+    const { mutate, isPending } = useMutation({
+        mutationFn: () => axios.delete(`/consignments/${vehicle._id}`),
+        onSuccess: () => { toast.success(`${vehicle.make} ${vehicle.model} deleted successfully`); router.push("/consignments"); },
+        onError: (err: unknown) => { const e = (err as AxiosError)?.response?.data as ErrorData; toast.error(e?.message ?? "Failed to delete consignment"); },
+    });
+
+    useEffect(() => { if (open) { setConfirmText(""); setTimeout(() => inputRef.current?.focus(), 100); } }, [open]);
+
+    return (
+        <AlertDialog open={open} onOpenChange={setOpen}>
+            <AlertDialogTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 w-8 p-0 border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300 hover:border-red-500/50 transition-all" title="Delete consignment">
+                    <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent className="w-[96vw] max-w-md rounded-3xl bg-card border-border p-0 overflow-hidden gap-0 sm:w-full shadow-2xl">
+                <div className="relative overflow-hidden bg-red-500/5 border-b border-red-500/10 px-6 pt-6 pb-5">
+                    <div className="absolute -top-12 -right-12 h-32 w-32 rounded-full bg-red-500/20 blur-[40px] pointer-events-none" />
+                    <div className="relative flex items-center gap-4">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-red-500/10 border border-red-500/20 shadow-inner">
+                            <Trash2 className="h-5 w-5 text-red-500 drop-shadow-sm" />
+                        </div>
+                        <div>
+                            <AlertDialogTitle className="text-foreground text-lg font-bold leading-tight">Delete Consignment</AlertDialogTitle>
+                            <p className="text-xs text-muted-foreground mt-1">Permanent &amp; irreversible action</p>
+                        </div>
+                    </div>
+                </div>
+                <div className="px-6 py-6 space-y-5">
+                    <div className="flex items-center gap-3 rounded-xl bg-muted/40 border border-border px-4 py-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-brand shadow-inner text-white">
+                            {vehicle.vehicleType === "two_wheeler" ? <Bike className="h-4 w-4" /> : <Car className="h-4 w-4" />}
+                        </div>
+                        <div className="min-w-0">
+                            <p className="text-sm font-bold text-foreground truncate">{vehicle.make} {vehicle.model}{vehicle.year ? ` (${vehicle.year})` : ""}</p>
+                            <p className="text-xs text-muted-foreground font-mono mt-0.5">{vehicle.registrationNo}</p>
+                        </div>
+                    </div>
+                    <AlertDialogDescription className="text-sm text-muted-foreground leading-relaxed">
+                        Deleting this consignment will permanently remove all associated payments, costs, sale records, and activity history.
+                    </AlertDialogDescription>
+                    <div className="space-y-2.5">
+                        <p className="text-xs font-medium text-foreground">
+                            Type <span className="font-mono font-bold text-red-500 bg-red-500/10 border border-red-500/20 px-1.5 py-0.5 rounded">{confirmKey}</span> to confirm
+                        </p>
+                        <input ref={inputRef} value={confirmText} onChange={(e) => setConfirmText(e.target.value)}
+                            onKeyDown={(e) => e.key === "Enter" && isConfirmed && !isPending && mutate()}
+                            placeholder={`Type ${confirmKey} here...`}
+                            className={cn("w-full rounded-xl border bg-background px-4 py-2.5 text-sm font-mono outline-none transition-all shadow-sm placeholder:text-muted-foreground/50",
+                                isConfirmed ? "border-red-500/60 ring-4 ring-red-500/10 text-red-500 font-bold" : "border-border focus:border-red-500/50 focus:ring-4 focus:ring-red-500/10")} />
+                    </div>
+                    <div className="flex items-start gap-3 rounded-xl bg-red-500/5 border border-red-500/20 p-3.5">
+                        <span className="text-red-500 mt-0.5 shrink-0 text-base leading-none">⚠️</span>
+                        <p className="text-xs text-red-500/90 font-medium leading-relaxed">This cannot be undone. All records will be permanently deleted.</p>
+                    </div>
+                </div>
+                <AlertDialogFooter className="px-6 pb-6 pt-0 flex-col sm:flex-row gap-3">
+                    <AlertDialogCancel onClick={() => setOpen(false)} className="w-full sm:w-1/2 border-border hover:bg-muted m-0" disabled={isPending}>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => mutate()} disabled={!isConfirmed || isPending} className="w-full sm:w-1/2 bg-red-500 hover:bg-red-600 text-white shadow-md shadow-red-500/20 disabled:opacity-40 m-0">
+                        {isPending ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Deleting...</> : <><Trash2 className="h-4 w-4 mr-2" />Delete Consignment</>}
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+    );
+};
+
 // ── Main Detail Component ─────────────────────────────────────────
 const ConsignmentDetail = ({ id, initialData }: { id: string; initialData: IConsignmentVehicle | null }) => {
     const [activeTab, setActiveTab] = useState("overview");
+    const [animateProgress, setAnimateProgress] = useState(false);
     const qc = useQueryClient();
+
+    useEffect(() => {
+        const timer = setTimeout(() => setAnimateProgress(true), 150);
+        return () => clearTimeout(timer);
+    }, []);
+
+    const scrollToTabs = () => {
+        document.getElementById("consignment-detail-tabs")?.scrollIntoView({ behavior: "smooth" });
+    };
+
+    const handleBuyerClick = () => {
+        setActiveTab("buyer");
+        setTimeout(scrollToTabs, 50);
+    };
+
+    const handlePayeeClick = () => {
+        setActiveTab("payee");
+        setTimeout(scrollToTabs, 50);
+    };
 
     const { data: vehicle } = useQuery<IConsignmentVehicle | null>({
         queryKey: ["consignment", id],
@@ -467,11 +875,18 @@ const ConsignmentDetail = ({ id, initialData }: { id: string; initialData: ICons
                                 </p>
                             </div>
                         </div>
-                        {!isSold && (
-                            <div className="w-full sm:w-auto mt-2 sm:mt-0">
-                                <RecordSaleDialog vehicle={vehicle} />
-                            </div>
-                        )}
+                        {/* Action buttons */}
+                        <div className="flex items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0 flex-wrap">
+                            <ExportDetailButton consignmentId={vehicle._id} name={`${vehicle.make}_${vehicle.model}`} />
+                            <AdminOnly>
+                                {!isSold ? (
+                                    <RecordSaleDialog vehicle={vehicle} />
+                                ) : (
+                                    <RevertSaleConfirmButton vehicle={vehicle} onRevert={undoSale} isPending={undoingSale} />
+                                )}
+                                <DeleteConsignmentDialog vehicle={vehicle} />
+                            </AdminOnly>
+                        </div>
                     </div>
                 </div>
 
@@ -540,27 +955,121 @@ const ConsignmentDetail = ({ id, initialData }: { id: string; initialData: ICons
                     ))}
                 </div>
 
-                {/* Progress bars */}
+                {/* Progress bars — Premium Interactive (parity with Vehicle Detail) */}
                 {isSold && vehicle.soldPrice && (
-                    <div className="border-t border-border px-5 py-3 space-y-2">
-                        <div>
-                            <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                                <span>Buyer: <strong className="text-emerald-400">{formatCurrency(vehicle.receivedAmount)}</strong></span>
-                                <span>Balance: <strong className={vehicle.buyerBalance > 0 ? "text-orange-400" : "text-emerald-400"}>{formatCurrency(vehicle.buyerBalance)}</strong></span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border border-t border-border bg-muted/5">
+                        {/* Buyer Payment Progress */}
+                        <div
+                            onClick={handleBuyerClick}
+                            className={cn(
+                                "p-5 flex flex-col gap-2.5 transition-all duration-300 hover:bg-muted/20 cursor-pointer relative group bg-gradient-to-br from-card to-background/50",
+                                vehicle.buyerBalance <= 0 ? "hover:border-l-4 hover:border-l-emerald-500" : "hover:border-l-4 hover:border-l-blue-500"
+                            )}
+                        >
+                            <div className="flex justify-between items-center text-xs">
+                                <span className="font-semibold text-muted-foreground uppercase tracking-wider text-[9px] sm:text-[10px] flex items-center gap-1.5">
+                                    <ArrowDownLeft className="h-3.5 w-3.5 text-success shrink-0" />
+                                    Buyer Payment Progress
+                                </span>
+                                <span className="font-bold text-foreground bg-muted/60 px-2 py-0.5 rounded-md border border-border/40 font-mono text-[10px]">
+                                    {Math.min(100, Math.round((vehicle.receivedAmount / vehicle.soldPrice) * 100))}%
+                                </span>
                             </div>
-                            <div className="h-1.5 bg-muted/40 rounded-full overflow-hidden">
-                                <div className="h-full bg-gradient-success rounded-full" style={{ width: `${Math.min(100, (vehicle.receivedAmount / vehicle.soldPrice) * 100)}%` }} />
+
+                            <div className="flex justify-between items-baseline mt-1">
+                                <p className="text-xl sm:text-2xl font-bold text-foreground">
+                                    {formatCurrency(vehicle.receivedAmount)}
+                                    <span className="text-xs font-normal text-muted-foreground ml-1">received of {formatCurrency(vehicle.soldPrice)}</span>
+                                </p>
+                                <span className="text-[10px] text-success group-hover:translate-x-1 transition-transform flex items-center gap-0.5">
+                                    {vehicle.buyerBalance <= 0 ? "View" : "Manage"} <ExternalLink className="h-2.5 w-2.5" />
+                                </span>
+                            </div>
+
+                            <div className="h-2 bg-muted/40 rounded-full overflow-hidden relative shadow-inner">
+                                <div
+                                    className={cn(
+                                        "h-full rounded-full transition-all duration-1000 ease-out shadow-sm",
+                                        vehicle.buyerBalance <= 0
+                                            ? "bg-gradient-to-r from-emerald-500 to-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.4)]"
+                                            : "bg-gradient-to-r from-blue-500 to-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.4)]"
+                                    )}
+                                    style={{ width: `${animateProgress ? Math.min(100, (vehicle.receivedAmount / vehicle.soldPrice) * 100) : 0}%` }}
+                                />
+                            </div>
+
+                            <div className="flex items-center mt-0.5">
+                                {vehicle.buyerBalance > 0 ? (
+                                    <p className="text-[10px] text-amber-400 font-medium flex items-center gap-1">
+                                        <span className="animate-pulse h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" />
+                                        {formatCurrency(vehicle.buyerBalance)} outstanding from buyer
+                                    </p>
+                                ) : (
+                                    <p className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
+                                        Fully collected from buyer
+                                    </p>
+                                )}
                             </div>
                         </div>
-                        <div>
-                            <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                                <span>{label}: <strong className="text-primary">{formatCurrency(vehicle.paidToPayee)}</strong></span>
-                                <Badge className={cn("text-[10px]", vehicle.payeePaymentStatus === "closed" ? "bg-emerald-500/10 text-emerald-400" : vehicle.payeePaymentStatus === "not_started" ? "bg-muted text-muted-foreground" : "bg-orange-500/10 text-orange-400")}>
-                                    {vehicle.payeePaymentStatus.replace(/_/g, " ").toUpperCase()}
-                                </Badge>
+
+                        {/* Payee Payment Progress */}
+                        <div
+                            onClick={handlePayeeClick}
+                            className={cn(
+                                "p-5 flex flex-col gap-2.5 transition-all duration-300 hover:bg-muted/20 cursor-pointer relative group bg-gradient-to-br from-card to-background/50",
+                                vehicle.payeePaymentStatus === "closed" ? "hover:border-l-4 hover:border-l-emerald-500" : "hover:border-l-4 hover:border-l-amber-500"
+                            )}
+                        >
+                            <div className="flex justify-between items-center text-xs">
+                                <span className="font-semibold text-muted-foreground uppercase tracking-wider text-[9px] sm:text-[10px] flex items-center gap-1.5">
+                                    <ArrowUpRight className="h-3.5 w-3.5 text-primary shrink-0" />
+                                    {label} Payment Progress
+                                </span>
+                                <span className="font-bold text-foreground bg-muted/60 px-2 py-0.5 rounded-md border border-border/40 font-mono text-[10px]">
+                                    {vehicle.payeePaymentStatus === "closed" ? "Closed" : vehicle.payeePaymentStatus.replace(/_/g, " ")}
+                                </span>
                             </div>
-                            <div className="h-1.5 bg-muted/40 rounded-full overflow-hidden">
-                                <div className="h-full bg-gradient-brand rounded-full" style={{ width: `${vehicle.soldPrice > 0 ? Math.min(100, (vehicle.paidToPayee / (vehicle.soldPrice - vehicle.totalReconCost)) * 100) : 0}%` }} />
+
+                            <div className="flex justify-between items-baseline mt-1">
+                                <p className="text-xl sm:text-2xl font-bold text-foreground">
+                                    {formatCurrency(vehicle.paidToPayee)}
+                                    <span className="text-xs font-normal text-muted-foreground ml-1">paid to {label.toLowerCase()}</span>
+                                </p>
+                                <span className="text-[10px] text-primary group-hover:translate-x-1 transition-transform flex items-center gap-0.5">
+                                    Manage <ExternalLink className="h-2.5 w-2.5" />
+                                </span>
+                            </div>
+
+                            <div className="h-2 bg-muted/40 rounded-full overflow-hidden relative shadow-inner">
+                                <div
+                                    className={cn(
+                                        "h-full rounded-full transition-all duration-1000 ease-out shadow-sm",
+                                        vehicle.payeePaymentStatus === "closed"
+                                            ? "bg-gradient-to-r from-emerald-500 to-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.4)]"
+                                            : "bg-gradient-to-r from-amber-500 to-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.4)]"
+                                    )}
+                                    style={{ width: `${animateProgress ? (vehicle.soldPrice > 0 ? Math.min(100, (vehicle.paidToPayee / Math.max(1, vehicle.soldPrice - vehicle.totalReconCost)) * 100) : 0) : 0}%` }}
+                                />
+                            </div>
+
+                            <div className="flex items-center mt-0.5">
+                                {vehicle.payeePaymentStatus === "closed" ? (
+                                    <p className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
+                                        Settlement fully closed
+                                    </p>
+                                ) : vehicle.payeeBalance > 0 ? (
+                                    <p className="text-[10px] text-amber-400 font-medium flex items-center gap-1">
+                                        <span className="animate-pulse h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" />
+                                        {formatCurrency(vehicle.payeeBalance)} owed to {label.toLowerCase()}
+                                    </p>
+                                ) : (
+                                    <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-muted/40 shrink-0" />
+                                        No payments yet
+                                    </p>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -568,7 +1077,7 @@ const ConsignmentDetail = ({ id, initialData }: { id: string; initialData: ICons
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-0 border-b border-border overflow-x-auto">
+            <div id="consignment-detail-tabs" className="flex gap-0 border-b border-border overflow-x-auto scroll-mt-6">
                 {tabs.map(tab => {
                     const Icon = tab.icon;
                     return (
@@ -585,7 +1094,12 @@ const ConsignmentDetail = ({ id, initialData }: { id: string; initialData: ICons
             {activeTab === "overview" && (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="rounded-xl border border-border bg-card p-5 space-y-3">
-                        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Vehicle Details</p>
+                        <div className="flex items-center justify-between">
+                            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Vehicle Details</p>
+                            <AdminOnly>
+                                <EditConsignmentDialog vehicle={vehicle} />
+                            </AdminOnly>
+                        </div>
                         {[
                             { label: "Make & Model", value: `${vehicle.make} ${vehicle.model}${vehicle.year ? ` (${vehicle.year})` : ""}` },
                             { label: "Registration No", value: vehicle.registrationNo },
@@ -643,11 +1157,7 @@ const ConsignmentDetail = ({ id, initialData }: { id: string; initialData: ICons
                                     <span className={`font-medium text-right ${r.label === "Payment Method" && vehicle.isExchange ? "text-orange-400" : "text-foreground"}`}>{r.value}</span>
                                 </div>
                             ))}
-                            {vehicle.settlementStatus !== "fully_closed" && isSold && (
-                                <Button size="sm" variant="outline" className="w-full border-destructive text-destructive hover:bg-destructive/10" onClick={() => undoSale()} disabled={undoingSale}>
-                                    <RotateCcw className="mr-2 h-3.5 w-3.5" />{undoingSale ? "Reverting..." : "Undo Sale"}
-                                </Button>
-                            )}
+
                         </div>
                     )}
                     {vehicle.remarks && (
@@ -667,7 +1177,9 @@ const ConsignmentDetail = ({ id, initialData }: { id: string; initialData: ICons
                             <p className="font-bold text-foreground">Reconditioning Costs</p>
                             <p className="text-xs text-muted-foreground mt-0.5">Total: <strong>{formatCurrency(vehicle.totalReconCost)}</strong></p>
                         </div>
-                        <AddCostBreakdownDialog vehicle={vehicle} />
+                        <AdminOnly>
+                            <AddCostBreakdownDialog vehicle={vehicle} />
+                        </AdminOnly>
                     </div>
                     <div className="rounded-xl border border-border bg-card overflow-hidden">
                         {[
@@ -695,9 +1207,35 @@ const ConsignmentDetail = ({ id, initialData }: { id: string; initialData: ICons
                                                     <span>{item.name} {item.date ? `(${formatDate(item.date)})` : ""}</span>
                                                     <div className="flex items-center gap-2">
                                                         <span>{formatCurrency(item.amount)}</span>
-                                                        <Button size="sm" variant="ghost" className="h-5 w-5 p-0 text-destructive hover:bg-destructive/10" onClick={() => deleteCostItem(item._id)}>
-                                                            <Trash2 className="h-3 w-3" />
-                                                        </Button>
+                                                        <AdminOnly>
+                                                            <AlertDialog>
+                                                                <AlertDialogTrigger asChild>
+                                                                    <Button size="sm" variant="ghost" className="h-5 w-5 p-0 text-destructive hover:bg-destructive/10">
+                                                                        <Trash2 className="h-3 w-3" />
+                                                                    </Button>
+                                                                </AlertDialogTrigger>
+                                                                <AlertDialogContent className="w-[96vw] max-w-sm rounded-3xl bg-card border-border p-0 overflow-hidden gap-0 sm:w-full shadow-2xl">
+                                                                    <div className="relative overflow-hidden bg-red-500/5 border-b border-red-500/10 px-6 pt-6 pb-5">
+                                                                        <div className="absolute -top-12 -right-12 h-32 w-32 rounded-full bg-red-500/20 blur-[40px] pointer-events-none" />
+                                                                        <div className="relative flex items-center gap-4">
+                                                                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-red-500/10 border border-red-500/20">
+                                                                                <Trash2 className="h-5 w-5 text-red-500" />
+                                                                            </div>
+                                                                            <AlertDialogTitle className="text-foreground text-base font-bold">Delete Cost Item?</AlertDialogTitle>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="px-6 py-5 text-center">
+                                                                        <AlertDialogDescription className="text-sm text-muted-foreground">
+                                                                            Remove <strong className="text-foreground">{item.name}</strong> from costs? This cannot be undone.
+                                                                        </AlertDialogDescription>
+                                                                    </div>
+                                                                    <AlertDialogFooter className="px-6 pb-6 pt-0 flex-col sm:flex-row gap-3">
+                                                                        <AlertDialogCancel className="w-full sm:w-1/2 border-border hover:bg-muted m-0">Cancel</AlertDialogCancel>
+                                                                        <AlertDialogAction onClick={() => deleteCostItem(item._id)} className="w-full sm:w-1/2 bg-red-500 hover:bg-red-600 text-white m-0">Delete Item</AlertDialogAction>
+                                                                    </AlertDialogFooter>
+                                                                </AlertDialogContent>
+                                                            </AlertDialog>
+                                                        </AdminOnly>
                                                     </div>
                                                 </div>
                                             ))}
@@ -724,18 +1262,31 @@ const ConsignmentDetail = ({ id, initialData }: { id: string; initialData: ICons
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="font-bold text-foreground">Buyer Payments</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                                Status: <Badge variant={vehicle.buyerPaymentStatus === "paid" ? "default" : "secondary"} className="ml-1 text-[10px]">{vehicle.buyerPaymentStatus.toUpperCase()}</Badge>
-                                {vehicle.buyerBalance > 0 && <span className="ml-2 text-orange-400">Balance: {formatCurrency(vehicle.buyerBalance)}</span>}
-                            </p>
+                            <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                Status: <Badge variant={vehicle.buyerPaymentStatus === "paid" ? "default" : "secondary"} className="text-[10px]">{vehicle.buyerPaymentStatus.toUpperCase()}</Badge>
+                                {vehicle.buyerBalance > 0 && <span className="text-orange-400">· Balance: {formatCurrency(vehicle.buyerBalance)}</span>}
+                            </div>
                         </div>
-                        {isSold && <AddBuyerPaymentDialog vehicle={vehicle} />}
+                        {isSold && (
+                            <AdminOnly>
+                                {vehicle.buyerBalance > 0 ? (
+                                    <AddBuyerPaymentDialog vehicle={vehicle} />
+                                ) : (
+                                    <div className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full font-semibold shadow-inner select-none">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5 shrink-0"><path fillRule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clipRule="evenodd" /></svg>
+                                        Fully Collected
+                                    </div>
+                                )}
+                            </AdminOnly>
+                        )}
                     </div>
                     {!isSold ? (
                         <div className="rounded-xl border border-dashed border-border p-10 text-center">
                             <DollarSign className="mx-auto h-10 w-10 text-muted-foreground/30 mb-3" />
                             <p className="text-muted-foreground mb-4">Record the sale first to start tracking buyer payments</p>
-                            <RecordSaleDialog vehicle={vehicle} />
+                            <AdminOnly>
+                                <RecordSaleDialog vehicle={vehicle} />
+                            </AdminOnly>
                         </div>
                     ) : vehicle.buyerPayments.length === 0 ? (
                         <div className="rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground text-sm">No buyer payments recorded yet</div>
@@ -771,9 +1322,35 @@ const ConsignmentDetail = ({ id, initialData }: { id: string; initialData: ICons
                                             )}
                                         </div>
                                     </div>
-                                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10" onClick={() => deleteBuyerPayment(p._id)}>
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                    </Button>
+                                    <AdminOnly>
+                                        <AlertDialog>
+                                            <AlertDialogTrigger asChild>
+                                                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10">
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                </Button>
+                                            </AlertDialogTrigger>
+                                            <AlertDialogContent className="w-[96vw] max-w-sm rounded-3xl bg-card border-border p-0 overflow-hidden gap-0 sm:w-full shadow-2xl">
+                                                <div className="relative overflow-hidden bg-red-500/5 border-b border-red-500/10 px-6 pt-6 pb-5">
+                                                    <div className="absolute -top-12 -right-12 h-32 w-32 rounded-full bg-red-500/20 blur-[40px] pointer-events-none" />
+                                                    <div className="relative flex items-center gap-4">
+                                                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-red-500/10 border border-red-500/20">
+                                                            <Trash2 className="h-5 w-5 text-red-500" />
+                                                        </div>
+                                                        <AlertDialogTitle className="text-foreground text-base font-bold">Delete Payment?</AlertDialogTitle>
+                                                    </div>
+                                                </div>
+                                                <div className="px-6 py-5 text-center">
+                                                    <AlertDialogDescription className="text-sm text-muted-foreground">
+                                                        Are you sure you want to permanently remove this buyer payment record?
+                                                    </AlertDialogDescription>
+                                                </div>
+                                                <AlertDialogFooter className="px-6 pb-6 pt-0 flex-col sm:flex-row gap-3">
+                                                    <AlertDialogCancel className="w-full sm:w-1/2 border-border hover:bg-muted m-0">Cancel</AlertDialogCancel>
+                                                    <AlertDialogAction onClick={() => deleteBuyerPayment(p._id)} className="w-full sm:w-1/2 bg-red-500 hover:bg-red-600 text-white m-0">Delete Payment</AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
+                                    </AdminOnly>
                                 </div>
                             ))}
                         </div>
@@ -787,21 +1364,32 @@ const ConsignmentDetail = ({ id, initialData }: { id: string; initialData: ICons
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="font-bold text-foreground">{label} Payments</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                                Status: <Badge className={cn("ml-1 text-[10px]", vehicle.payeePaymentStatus === "closed" ? "bg-emerald-500/10 text-emerald-400" : "bg-orange-500/10 text-orange-400")}>
+                            <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                Status: <Badge className={cn("text-[10px]", vehicle.payeePaymentStatus === "closed" ? "bg-emerald-500/10 text-emerald-400" : "bg-orange-500/10 text-orange-400")}>
                                     {vehicle.payeePaymentStatus.replace(/_/g, " ").toUpperCase()}
                                 </Badge>
-                                {vehicle.payeeBalance > 0 && <span className="ml-2 text-orange-400">Owed: {formatCurrency(vehicle.payeeBalance)}</span>}
-                            </p>
+                                {vehicle.payeeBalance > 0 && <span className="text-orange-400">· Owed: {formatCurrency(vehicle.payeeBalance)}</span>}
+                            </div>
                         </div>
-                        <div className="flex gap-2">
-                            {isSold && vehicle.payeePaymentStatus !== "closed" && (
-                                <Button size="sm" variant="outline" className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10" onClick={() => closeSale()}>
-                                    <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />Mark Closed
-                                </Button>
-                            )}
-                            {isSold && <AddPayeePaymentDialog vehicle={vehicle} />}
-                        </div>
+                        <AdminOnly>
+                            <div className="flex gap-2">
+                                {isSold && vehicle.payeePaymentStatus !== "closed" && (
+                                    <Button size="sm" variant="outline" className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10" onClick={() => closeSale()}>
+                                        <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />Mark Closed
+                                    </Button>
+                                )}
+                                {isSold && (
+                                    vehicle.payeePaymentStatus === "closed" || vehicle.payeeBalance <= 0 ? (
+                                        <div className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full font-semibold shadow-inner select-none">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5 shrink-0"><path fillRule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clipRule="evenodd" /></svg>
+                                            Fully Settled
+                                        </div>
+                                    ) : (
+                                        <AddPayeePaymentDialog vehicle={vehicle} />
+                                    )
+                                )}
+                            </div>
+                        </AdminOnly>
                     </div>
                     {!isSold ? (
                         <div className="rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground text-sm">Record the sale first</div>
@@ -818,9 +1406,35 @@ const ConsignmentDetail = ({ id, initialData }: { id: string; initialData: ICons
                                             <p className="text-xs text-muted-foreground">{formatDate(p.date)}{p.notes && ` — ${p.notes}`}</p>
                                         </div>
                                     </div>
-                                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10" onClick={() => deletePayeePayment(p._id)}>
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                    </Button>
+                                    <AdminOnly>
+                                        <AlertDialog>
+                                            <AlertDialogTrigger asChild>
+                                                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10">
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                </Button>
+                                            </AlertDialogTrigger>
+                                            <AlertDialogContent className="w-[96vw] max-w-sm rounded-3xl bg-card border-border p-0 overflow-hidden gap-0 sm:w-full shadow-2xl">
+                                                <div className="relative overflow-hidden bg-red-500/5 border-b border-red-500/10 px-6 pt-6 pb-5">
+                                                    <div className="absolute -top-12 -right-12 h-32 w-32 rounded-full bg-red-500/20 blur-[40px] pointer-events-none" />
+                                                    <div className="relative flex items-center gap-4">
+                                                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-red-500/10 border border-red-500/20">
+                                                            <Trash2 className="h-5 w-5 text-red-500" />
+                                                        </div>
+                                                        <AlertDialogTitle className="text-foreground text-base font-bold">Delete Payment?</AlertDialogTitle>
+                                                    </div>
+                                                </div>
+                                                <div className="px-6 py-5 text-center">
+                                                    <AlertDialogDescription className="text-sm text-muted-foreground">
+                                                        Are you sure you want to permanently remove this payee payment record?
+                                                    </AlertDialogDescription>
+                                                </div>
+                                                <AlertDialogFooter className="px-6 pb-6 pt-0 flex-col sm:flex-row gap-3">
+                                                    <AlertDialogCancel className="w-full sm:w-1/2 border-border hover:bg-muted m-0">Cancel</AlertDialogCancel>
+                                                    <AlertDialogAction onClick={() => deletePayeePayment(p._id)} className="w-full sm:w-1/2 bg-red-500 hover:bg-red-600 text-white m-0">Delete Payment</AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
+                                    </AdminOnly>
                                 </div>
                             ))}
                         </div>

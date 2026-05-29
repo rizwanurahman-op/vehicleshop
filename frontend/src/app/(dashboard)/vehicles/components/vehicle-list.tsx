@@ -19,6 +19,8 @@ import VehicleTypeIcon from "./vehicle-type-icon";
 import VehicleStatsCards from "./vehicle-stats-cards";
 import type { VehicleStatsFilters } from "./vehicle-stats-cards";
 import { VEHICLE_STATUSES } from "@data/vehicle-constants";
+import { toast } from "sonner";
+import { AdminOnly } from "@components/shared";
 
 type VehicleListProps = { initialData: VehiclePaginatedData | null };
 
@@ -126,6 +128,10 @@ const VehicleList = ({ initialData }: VehicleListProps) => {
 
     const handleExport = async (format: "csv" | "pdf") => {
         setIsExporting(format);
+        const tid = toast.loading(
+            `Preparing ${format.toUpperCase()} export…`,
+            { description: "Building your vehicle inventory report" }
+        );
         try {
             const params = new URLSearchParams({ format });
             if (debouncedSearch) params.set("search", debouncedSearch);
@@ -136,11 +142,8 @@ const VehicleList = ({ initialData }: VehicleListProps) => {
             if (dateRange.dateFrom) params.set("dateFrom", dateRange.dateFrom);
             if (dateRange.dateTo) params.set("dateTo", dateRange.dateTo);
 
-            // Use the configured axios base URL but trigger a real browser download
             const baseURL = (axios.defaults.baseURL ?? "").replace(/\/$/, "");
             const url = `${baseURL}/vehicles/export?${params.toString()}`;
-
-            // Carry auth token — same as the axios interceptor
             const token = getClientSession();
             const res = await fetch(url, {
                 credentials: "include",
@@ -150,13 +153,21 @@ const VehicleList = ({ initialData }: VehicleListProps) => {
             const blob = await res.blob();
             const link = document.createElement("a");
             link.href = URL.createObjectURL(blob);
-            link.download = `vehicles_${new Date().toISOString().slice(0, 10)}.${format}`;
+            const fileName = `vehicles_${new Date().toISOString().slice(0, 10)}.${format}`;
+            link.download = fileName;
             document.body.appendChild(link);
             link.click();
             link.remove();
             URL.revokeObjectURL(link.href);
+            toast.success(`${format.toUpperCase()} downloaded!`, {
+                id: tid,
+                description: `${fileName} saved to your downloads folder`,
+            });
         } catch {
-            // silently fail — could add toast here
+            toast.error("Export failed", {
+                id: tid,
+                description: "Could not generate the report. Please try again.",
+            });
         } finally {
             setIsExporting(null);
         }
@@ -221,11 +232,13 @@ const VehicleList = ({ initialData }: VehicleListProps) => {
                             )}
                         </DropdownMenuContent>
                     </DropdownMenu>
-                    <Link href="/vehicles/new">
-                        <Button className="bg-gradient-brand cursor-pointer text-white shadow-lg hover:opacity-90">
-                            <Plus className="mr-2 h-4 w-4" /> Add Vehicle
-                        </Button>
-                    </Link>
+                    <AdminOnly>
+                        <Link href="/vehicles/new">
+                            <Button className="bg-gradient-brand cursor-pointer text-white shadow-lg hover:opacity-90">
+                                <Plus className="mr-2 h-4 w-4" /> Add Vehicle
+                            </Button>
+                        </Link>
+                    </AdminOnly>
                 </div>
             </div>
 
@@ -471,11 +484,13 @@ const VehicleList = ({ initialData }: VehicleListProps) => {
                                                 <Package className="h-7 w-7 text-muted-foreground" />
                                             </div>
                                             <p className="font-medium text-muted-foreground">No vehicles found</p>
-                                            <Link href="/vehicles/new">
-                                                <Button size="sm" className="bg-gradient-brand text-white">
-                                                    <Plus className="mr-1.5 h-4 w-4" /> Add First Vehicle
-                                                </Button>
-                                            </Link>
+                                            <AdminOnly>
+                                                <Link href="/vehicles/new">
+                                                    <Button size="sm" className="bg-gradient-brand text-white">
+                                                        <Plus className="mr-1.5 h-4 w-4" /> Add First Vehicle
+                                                    </Button>
+                                                </Link>
+                                            </AdminOnly>
                                         </div>
                                     </td>
                                 </tr>

@@ -1,21 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import axios from "@config/axios";
 import { formatCurrency } from "@lib/currency";
 import { formatDate } from "@lib/date";
 import { cn } from "@/lib/utils";
+import { getClientSession } from "@/lib/auth";
+import { toast } from "sonner";
 import Link from "next/link";
 import {
-    ArrowLeftRight, Car, ExternalLink, CheckCircle2,
-    Clock, IndianRupee, AlertCircle, Filter, RefreshCw, Store
+    ArrowLeftRight, Car, ExternalLink, CheckCircle2, Clock, IndianRupee,
+    AlertCircle, Filter, RefreshCw, Store, Download, FileText,
+    FileSpreadsheet, ChevronDown, Calendar, X, Loader2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
-// ── Types ──────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 interface ExchangeDeal {
     sourceId: string;
     sourceCollection: "vehicles" | "consignmentVehicles";
@@ -64,7 +69,22 @@ interface ExchangePaginatedData {
     totalPages: number;
 }
 
-// ── Stat Card ─────────────────────────────────────────────────────
+// ── Date Preset Helper ────────────────────────────────────────────────────────
+type DatePreset = "all" | "today" | "this_week" | "this_month" | "this_year" | "last_year" | "custom";
+
+const getPresetRange = (preset: DatePreset): { dateFrom?: string; dateTo?: string } => {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    if (preset === "today")      { const t = fmt(now); return { dateFrom: t, dateTo: t }; }
+    if (preset === "this_week")  { const s = new Date(now); s.setDate(now.getDate() - now.getDay()); return { dateFrom: fmt(s), dateTo: fmt(now) }; }
+    if (preset === "this_month") return { dateFrom: fmt(new Date(now.getFullYear(), now.getMonth(), 1)), dateTo: fmt(now) };
+    if (preset === "this_year")  return { dateFrom: fmt(new Date(now.getFullYear(), 0, 1)), dateTo: fmt(now) };
+    if (preset === "last_year")  return { dateFrom: `${now.getFullYear() - 1}-01-01`, dateTo: `${now.getFullYear() - 1}-12-31` };
+    return {};
+};
+
+// ── Stat Card ─────────────────────────────────────────────────────────────────
 const StatCard = ({ label, value, sub, icon: Icon, color }: {
     label: string; value: string; sub?: string;
     icon: React.ComponentType<{ className?: string }>;
@@ -82,7 +102,7 @@ const StatCard = ({ label, value, sub, icon: Icon, color }: {
     </div>
 );
 
-// ── Source Vehicle Cell ───────────────────────────────────────────
+// ── Source Vehicle Cell ───────────────────────────────────────────────────────
 const SourceCell = ({ deal }: { deal: ExchangeDeal }) => {
     const isConsignment = deal.sourceCollection === "consignmentVehicles";
     const href = `/${isConsignment ? "consignments" : "vehicles"}/${deal.sourceId}`;
@@ -113,7 +133,7 @@ const SourceCell = ({ deal }: { deal: ExchangeDeal }) => {
     );
 };
 
-// ── Exchange Vehicle Cell ─────────────────────────────────────────
+// ── Exchange Vehicle Cell ─────────────────────────────────────────────────────
 const ExchangeCell = ({ deal }: { deal: ExchangeDeal }) => {
     const hasInventory = !!deal.exchangeCreatedRef && !!deal.exchangeCreatedIn;
     const href = hasInventory
@@ -150,7 +170,7 @@ const ExchangeCell = ({ deal }: { deal: ExchangeDeal }) => {
     );
 };
 
-// ── Settlement Cell ───────────────────────────────────────────────
+// ── Settlement Cell ───────────────────────────────────────────────────────────
 const SettlementCell = ({ deal }: { deal: ExchangeDeal }) => {
     const pct = deal.sourceSoldPrice > 0
         ? Math.min(100, (deal.sourceTotalReceived / deal.sourceSoldPrice) * 100)
@@ -191,7 +211,6 @@ const SettlementCell = ({ deal }: { deal: ExchangeDeal }) => {
                     </span>
                 </div>
             </div>
-            {/* Progress bar */}
             <div className="mt-2 h-1.5 bg-muted/40 rounded-full overflow-hidden">
                 <div
                     className={cn("h-full rounded-full transition-all", deal.isFullySettled ? "bg-emerald-500" : "bg-orange-500")}
@@ -203,55 +222,186 @@ const SettlementCell = ({ deal }: { deal: ExchangeDeal }) => {
     );
 };
 
-// ── Main Component ────────────────────────────────────────────────
+// ── Main Component ────────────────────────────────────────────────────────────
 export default function ExchangeList() {
     const [collectionFilter, setCollectionFilter] = useState("all");
-    const [page, setPage] = useState(1);
+    const [datePreset, setDatePreset]             = useState<DatePreset>("all");
+    const [customFrom, setCustomFrom]             = useState("");
+    const [customTo, setCustomTo]                 = useState("");
+    const [page, setPage]                         = useState(1);
+    const [isExporting, setIsExporting]           = useState<"csv" | "pdf" | null>(null);
 
+    const dateRange = useMemo(() => {
+        if (datePreset === "custom") return { dateFrom: customFrom || undefined, dateTo: customTo || undefined };
+        return getPresetRange(datePreset);
+    }, [datePreset, customFrom, customTo]);
+
+    const apiParams: Record<string, string> = {};
+    if (collectionFilter !== "all") apiParams.collection = collectionFilter;
+    if (dateRange.dateFrom)         apiParams.dateFrom   = dateRange.dateFrom;
+    if (dateRange.dateTo)           apiParams.dateTo     = dateRange.dateTo;
+
+    const isFilterActive = collectionFilter !== "all" || datePreset !== "all";
+    const clearFilters   = () => { setCollectionFilter("all"); setDatePreset("all"); setCustomFrom(""); setCustomTo(""); setPage(1); };
+
+    // ── Export handler ──────────────────────────────────────────────
+    const handleExport = async (format: "csv" | "pdf") => {
+        setIsExporting(format);
+        const tid = toast.loading(`Preparing ${format.toUpperCase()} export…`, { description: "Building exchange deals report" });
+        try {
+            const p = new URLSearchParams({ format, ...apiParams });
+            const baseURL = (axios.defaults.baseURL ?? "").replace(/\/$/, "");
+            const url = `${baseURL}/exchanges/export?${p.toString()}`;
+            const token = getClientSession();
+            const res = await fetch(url, { credentials: "include", headers: token ? { Authorization: `Bearer ${token}` } : {} });
+            if (!res.ok) throw new Error("Export failed");
+            const blob = await res.blob();
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            const fileName = `exchanges_${new Date().toISOString().slice(0, 10)}.${format}`;
+            link.download = fileName;
+            document.body.appendChild(link); link.click(); link.remove();
+            URL.revokeObjectURL(link.href);
+            toast.success(`${format.toUpperCase()} downloaded!`, { id: tid, description: `${fileName} saved to downloads` });
+        } catch {
+            toast.error("Export failed", { id: tid, description: "Could not generate the report. Please try again." });
+        } finally { setIsExporting(null); }
+    };
+
+    // ── Queries ─────────────────────────────────────────────────────
     const statsQuery = useQuery<ApiResponse<ExchangeStats>>({
-        queryKey: ["exchange-stats"],
-        queryFn: () => axios.get<ApiResponse<ExchangeStats>>("/exchanges/stats").then(r => r.data),
+        queryKey: ["exchange-stats", apiParams],
+        queryFn: () => axios.get<ApiResponse<ExchangeStats>>("/exchanges/stats", { params: apiParams }).then(r => r.data),
         staleTime: 60_000,
     });
 
     const listQuery = useQuery<ApiResponse<ExchangePaginatedData>>({
-        queryKey: ["exchanges", collectionFilter, page],
+        queryKey: ["exchanges", apiParams, page],
         queryFn: () => axios.get<ApiResponse<ExchangePaginatedData>>("/exchanges", {
-            params: {
-                collection: collectionFilter === "all" ? undefined : collectionFilter,
-                page,
-                limit: 15,
-            }
+            params: { ...apiParams, page, limit: 15 },
         }).then(r => r.data),
         staleTime: 30_000,
     });
 
-    const stats = statsQuery.data?.data;
+    const stats  = statsQuery.data?.data;
     const result = listQuery.data?.data;
-    const deals = result?.data ?? [];
+    const deals  = result?.data ?? [];
 
     return (
         <div className="space-y-6">
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                <div>
-                    <div className="flex items-center gap-2 mb-1">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-rose-500 shadow-md">
-                            <ArrowLeftRight className="h-4 w-4 text-white" />
+
+            {/* ── Header ── */}
+            <div className="flex flex-col gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                    <div>
+                        <div className="flex items-center gap-2 mb-1">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-rose-500 shadow-md">
+                                <ArrowLeftRight className="h-4 w-4 text-white" />
+                            </div>
+                            <h1 className="text-2xl font-bold text-foreground">Exchanges</h1>
                         </div>
-                        <h1 className="text-2xl font-bold text-foreground">Exchanges</h1>
+                        <p className="text-sm text-muted-foreground ml-11">
+                            All vehicle exchange deals across Phase 2 &amp; Phase 3 inventory
+                        </p>
                     </div>
-                    <p className="text-sm text-muted-foreground ml-11">
-                        All vehicle exchange deals across Phase 2 &amp; Phase 3 inventory
-                    </p>
+                    <div className="flex items-center gap-2 self-start">
+                        <Button variant="outline" size="sm" className="border-border"
+                            onClick={() => { statsQuery.refetch(); listQuery.refetch(); }}>
+                            <RefreshCw className="h-3.5 w-3.5 mr-1.5" />Refresh
+                        </Button>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="sm" className="border-border text-muted-foreground hover:text-foreground" disabled={!!isExporting}>
+                                    {isExporting ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Download className="mr-1.5 h-4 w-4" />}
+                                    Export
+                                    <ChevronDown className="ml-1 h-3 w-3 opacity-60" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-52">
+                                <DropdownMenuLabel className="text-xs text-muted-foreground">Exchange Report — Download as</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => handleExport("csv")} disabled={isExporting === "csv"} className="gap-2 cursor-pointer">
+                                    <FileSpreadsheet className="h-4 w-4 text-emerald-500" />
+                                    <div><p className="text-sm font-medium">Export CSV</p><p className="text-[10px] text-muted-foreground">Excel compatible</p></div>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleExport("pdf")} disabled={isExporting === "pdf"} className="gap-2 cursor-pointer">
+                                    <FileText className="h-4 w-4 text-red-500" />
+                                    <div><p className="text-sm font-medium">Export PDF</p><p className="text-[10px] text-muted-foreground">Formatted report</p></div>
+                                </DropdownMenuItem>
+                                {isFilterActive && (<><DropdownMenuSeparator /><p className="px-2 py-1 text-[10px] text-primary">✦ Exports respect active filters</p></>)}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
                 </div>
-                <Button variant="outline" size="sm" className="border-border self-start"
-                    onClick={() => { statsQuery.refetch(); listQuery.refetch(); }}>
-                    <RefreshCw className="h-3.5 w-3.5 mr-1.5" />Refresh
-                </Button>
+
+                {/* ── Filters ── */}
+                <div className="flex flex-col gap-3">
+                    <div className="flex flex-wrap gap-3 items-center">
+                        {/* Source type filter */}
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
+                            <Filter className="h-3.5 w-3.5" /><span className="font-medium">Source:</span>
+                        </div>
+                        <Select value={collectionFilter} onValueChange={v => { setCollectionFilter(v); setPage(1); }}>
+                            <SelectTrigger className="h-9 w-52 text-sm border-border bg-muted/50">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Exchanges</SelectItem>
+                                <SelectItem value="vehicles">Vehicles Only</SelectItem>
+                                <SelectItem value="consignmentVehicles">Consignments Only</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        {/* Date filter */}
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
+                            <Calendar className="h-3.5 w-3.5" /><span className="font-medium">Date:</span>
+                        </div>
+                        <Select value={datePreset} onValueChange={v => { setDatePreset(v as DatePreset); setPage(1); }}>
+                            <SelectTrigger className="h-9 w-44 border-border bg-muted/50">
+                                <SelectValue placeholder="All Time" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Time</SelectItem>
+                                <SelectItem value="today">Today</SelectItem>
+                                <SelectItem value="this_week">This Week</SelectItem>
+                                <SelectItem value="this_month">This Month</SelectItem>
+                                <SelectItem value="this_year">This Year</SelectItem>
+                                <SelectItem value="last_year">Last Year</SelectItem>
+                                <SelectItem value="custom">Custom Range…</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        {datePreset === "custom" && (
+                            <div className="flex items-center gap-2">
+                                <Input type="date" value={customFrom} onChange={e => { setCustomFrom(e.target.value); setPage(1); }} className="h-9 w-40 bg-muted/50 border-border text-sm" />
+                                <span className="text-xs text-muted-foreground">to</span>
+                                <Input type="date" value={customTo}   onChange={e => { setCustomTo(e.target.value);   setPage(1); }} className="h-9 w-40 bg-muted/50 border-border text-sm" />
+                            </div>
+                        )}
+
+                        {result && (
+                            <p className="text-xs text-muted-foreground ml-auto">
+                                {result.total} exchange{result.total !== 1 ? "s" : ""} found
+                            </p>
+                        )}
+                    </div>
+
+                    {/* Active filter banner */}
+                    {isFilterActive && (
+                        <div className="flex items-center justify-between rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
+                            <div className="flex items-center gap-2 text-xs text-primary">
+                                <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse inline-block" />
+                                <span className="font-medium">Filters active</span>
+                                <span className="text-muted-foreground">— results and exports are filtered</span>
+                            </div>
+                            <Button variant="ghost" size="sm" onClick={clearFilters} className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground">
+                                <X className="h-3 w-3" />Clear Filters
+                            </Button>
+                        </div>
+                    )}
+                </div>
             </div>
 
-            {/* Stats Cards */}
+            {/* ── Stats Cards ── */}
             {stats && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <StatCard
@@ -278,35 +428,16 @@ export default function ExchangeList() {
                     <StatCard
                         label="Fully Settled"
                         value={`${stats.fullySettled} / ${stats.totalExchanges}`}
-                        sub={stats.totalExchanges > 0 ? `${((stats.fullySettled / stats.totalExchanges) * 100).toFixed(0)}% settlement rate` : "No exchanges yet"}
+                        sub={stats.totalExchanges > 0
+                            ? `${((stats.fullySettled / stats.totalExchanges) * 100).toFixed(0)}% settlement rate`
+                            : "No exchanges yet"}
                         icon={CheckCircle2}
                         color="bg-gradient-to-br from-emerald-500 to-teal-600"
                     />
                 </div>
             )}
 
-            {/* Filter Bar */}
-            <div className="flex items-center gap-3">
-                <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
-                <p className="text-sm text-muted-foreground font-medium mr-1">Filter by:</p>
-                <Select value={collectionFilter} onValueChange={v => { setCollectionFilter(v); setPage(1); }}>
-                    <SelectTrigger className="h-8 w-44 text-sm border-border bg-muted/50">
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">All Exchanges</SelectItem>
-                        <SelectItem value="vehicles">Vehicles Only</SelectItem>
-                        <SelectItem value="consignmentVehicles">Consignments Only</SelectItem>
-                    </SelectContent>
-                </Select>
-                {result && (
-                    <p className="text-xs text-muted-foreground ml-auto">
-                        {result.total} exchange{result.total !== 1 ? "s" : ""} found
-                    </p>
-                )}
-            </div>
-
-            {/* List */}
+            {/* ── Deals List ── */}
             {listQuery.isLoading ? (
                 <div className="rounded-2xl border border-border bg-card p-12 text-center">
                     <RefreshCw className="h-8 w-8 text-muted-foreground/30 animate-spin mx-auto mb-3" />
@@ -317,10 +448,19 @@ export default function ExchangeList() {
                     <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-orange-500/10 mx-auto mb-4">
                         <ArrowLeftRight className="h-8 w-8 text-orange-400" />
                     </div>
-                    <h3 className="text-lg font-bold text-foreground mb-2">No Exchanges Yet</h3>
+                    <h3 className="text-lg font-bold text-foreground mb-2">
+                        {isFilterActive ? "No Results Found" : "No Exchanges Yet"}
+                    </h3>
                     <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-                        Exchange deals appear here when you record a payment with <strong>Exchange Vehicle</strong> type on a vehicle sale or consignment buyer payment.
+                        {isFilterActive
+                            ? "Try adjusting your filters to see more results."
+                            : "Exchange deals appear here when you record a payment with Exchange Vehicle type on a vehicle sale or consignment buyer payment."}
                     </p>
+                    {isFilterActive && (
+                        <Button variant="outline" size="sm" onClick={clearFilters} className="mt-4 border-border">
+                            <X className="h-3.5 w-3.5 mr-1.5" />Clear Filters
+                        </Button>
+                    )}
                 </div>
             ) : (
                 <div className="space-y-3">
@@ -354,26 +494,23 @@ export default function ExchangeList() {
 
                             {/* Card Body */}
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-0 md:divide-x divide-border">
-                                {/* Source Vehicle */}
                                 <div className="p-5">
                                     <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Sold Vehicle</p>
                                     <SourceCell deal={deal} />
                                 </div>
 
-                                {/* Arrow separator on mobile */}
+                                {/* Mobile separator */}
                                 <div className="flex md:hidden items-center px-5 py-2 border-t border-border/60">
                                     <div className="flex-1 h-px bg-gradient-to-r from-muted/30 via-orange-500/30 to-muted/30" />
                                     <ArrowLeftRight className="h-4 w-4 text-orange-400 mx-3" />
                                     <div className="flex-1 h-px bg-gradient-to-r from-muted/30 via-orange-500/30 to-muted/30" />
                                 </div>
 
-                                {/* Exchange Vehicle */}
                                 <div className="p-5">
                                     <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Exchange Vehicle Received</p>
                                     <ExchangeCell deal={deal} />
                                 </div>
 
-                                {/* Settlement */}
                                 <div className="p-5">
                                     <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Settlement</p>
                                     <SettlementCell deal={deal} />
@@ -384,17 +521,19 @@ export default function ExchangeList() {
                 </div>
             )}
 
-            {/* Pagination */}
+            {/* ── Pagination ── */}
             {result && result.totalPages > 1 && (
                 <div className="flex items-center justify-between pt-2">
                     <p className="text-xs text-muted-foreground">
                         Page {result.page} of {result.totalPages} · {result.total} total
                     </p>
                     <div className="flex gap-2">
-                        <Button variant="outline" size="sm" className="border-border" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
+                        <Button variant="outline" size="sm" className="border-border"
+                            onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
                             Previous
                         </Button>
-                        <Button variant="outline" size="sm" className="border-border" onClick={() => setPage(p => Math.min(result.totalPages, p + 1))} disabled={page === result.totalPages}>
+                        <Button variant="outline" size="sm" className="border-border"
+                            onClick={() => setPage(p => Math.min(result.totalPages, p + 1))} disabled={page === result.totalPages}>
                             Next
                         </Button>
                     </div>

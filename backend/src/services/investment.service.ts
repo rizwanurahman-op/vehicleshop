@@ -99,27 +99,62 @@ const getByLender = async (lenderId: string, query: { page?: string; limit?: str
     return { data: investments, meta: buildPaginationMeta(total, page, limit) };
 };
 
-const exportAll = async (query: ListInvestmentsQuery) => {
+const exportAll = async (query: { lenderId?: string; mode?: string; dateFrom?: string; dateTo?: string; search?: string } = {}) => {
     const filter: Record<string, unknown> = {};
     if (query.lenderId) filter.lender = query.lenderId;
-    if (query.mode) filter.mode = query.mode;
+    if (query.mode)     filter.mode   = query.mode;
+    if (query.dateFrom || query.dateTo) {
+        const df: Record<string, Date> = {};
+        if (query.dateFrom) df.$gte = new Date(query.dateFrom);
+        if (query.dateTo)   df.$lte = new Date(new Date(query.dateTo).setHours(23, 59, 59, 999));
+        filter.date = df;
+    }
 
     const investments = await Investment.find(filter)
         .populate<{ lender: { lenderId: string; name: string } }>("lender", "lenderId name")
         .sort({ date: -1 })
         .lean();
 
-    return investments.map(inv => ({
-        "Investment ID": inv.investmentId,
-        Date: new Date(inv.date).toLocaleDateString("en-IN"),
-        "Lender ID": inv.lender?.lenderId || "",
-        "Lender Name": inv.lender?.name || "",
-        "Amount Received (₹)": inv.amountReceived,
-        Mode: inv.mode,
-        "Reference No": inv.referenceNo || "",
-        Notes: inv.notes || "",
+    const searchLower = query.search?.toLowerCase();
+    const filtered = searchLower
+        ? investments.filter(i =>
+            i.investmentId?.toLowerCase().includes(searchLower) ||
+            i.lender?.name?.toLowerCase().includes(searchLower) ||
+            i.lender?.lenderId?.toLowerCase().includes(searchLower) ||
+            i.notes?.toLowerCase().includes(searchLower)
+          )
+        : investments;
+
+    return filtered.map(inv => ({
+        investmentId:   inv.investmentId,
+        date:           inv.date,
+        lender:         inv.lender,
+        amountReceived: inv.amountReceived,
+        mode:           inv.mode,
+        referenceNo:    inv.referenceNo || "",
+        notes:          inv.notes || "",
+        // CSV-friendly aliases
+        "Investment ID":          inv.investmentId,
+        "Date":                   new Date(inv.date).toLocaleDateString("en-IN"),
+        "Lender ID":              inv.lender?.lenderId || "",
+        "Lender Name":            inv.lender?.name || "",
+        "Amount Received (Rs.)":  inv.amountReceived,
+        "Mode":                   inv.mode,
+        "Reference No":           inv.referenceNo || "",
+        "Notes":                  inv.notes || "",
     }));
 };
 
-const investmentService = { create, list, getById, update, remove, getByLender, exportAll };
+const getStats = async (query: { lenderId?: string; mode?: string; dateFrom?: string; dateTo?: string } = {}) => {
+    const data = await exportAll(query);
+    const totalReceived = data.reduce((s, i) => s + i.amountReceived, 0);
+    const avgAmount = data.length > 0 ? Math.round(totalReceived / data.length) : 0;
+    const modeMap = new Map<string, number>();
+    data.forEach(i => modeMap.set(i.mode, (modeMap.get(i.mode) ?? 0) + i.amountReceived));
+    const byMode = Object.fromEntries(modeMap);
+    const uniqueLenders = new Set(data.map(i => typeof i.lender === "object" ? (i.lender as {name?:string})?.name : i.lender)).size;
+    return { totalInvestments: data.length, totalReceived, avgAmount, byMode, uniqueLenders };
+};
+
+const investmentService = { create, list, getById, update, remove, getByLender, exportAll, getStats };
 export default investmentService;

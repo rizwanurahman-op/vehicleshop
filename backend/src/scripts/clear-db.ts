@@ -21,6 +21,10 @@ const clearDb = async () => {
     console.log(`Found ${collections.length} collections.`);
     
     for (const collection of collections) {
+        if (collection.collectionName === "users") {
+            console.log(`   ⏭️ Skipping drop of collection: ${collection.collectionName}`);
+            continue;
+        }
         console.log(`   Attempting to drop collection: ${collection.collectionName}`);
         try {
             await collection.drop();

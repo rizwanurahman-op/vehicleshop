@@ -12,6 +12,7 @@ interface SessionStore {
     user: SessionUser | null;
     accessToken: string | null;
     setSession: (user: SessionUser, accessToken: string) => void;
+    updateUser: (user: Partial<SessionUser>) => void;
     clearSession: () => void;
 }
 
@@ -21,6 +22,9 @@ export const useSessionStore = create<SessionStore>()(
             user: null,
             accessToken: null,
             setSession: (user, accessToken) => set({ user, accessToken }),
+            updateUser: (updates) => set(state => ({
+                user: state.user ? { ...state.user, ...updates } : null,
+            })),
             clearSession: () => set({ user: null, accessToken: null }),
         }),
         {

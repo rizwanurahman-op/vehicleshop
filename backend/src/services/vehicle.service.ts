@@ -54,7 +54,24 @@ export const getVehicles = async (query: VehicleQuery): Promise<unknown> => {
         filter.datePurchased = dateFilter;
     }
     if (search) {
-        filter.$text = { $search: search };
+        const trimmed = search.trim();
+        if (trimmed) {
+            const words = trimmed.split(/\s+/);
+            const escWord = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            if (words.length === 1) {
+                const re = new RegExp(escWord(words[0]), "i");
+                filter.$or = [
+                    { make: re }, { model: re }, { registrationNo: re },
+                    { purchasedFrom: re }, { vehicleId: re },
+                ];
+            } else {
+                // Each word must appear in make OR model (exact phrase-style AND logic)
+                filter.$and = words.map((w) => {
+                    const re = new RegExp(escWord(w), "i");
+                    return { $or: [{ make: re }, { model: re }] };
+                });
+            }
+        }
     }
 
     const skip = (page - 1) * limit;
@@ -91,9 +108,22 @@ interface VehicleStatsFilter {
     search?: string;
 }
 
-export const getVehicleStats = async (_filter?: VehicleStatsFilter): Promise<unknown> => {
+export const getVehicleStats = async (filter?: VehicleStatsFilter): Promise<unknown> => {
+    // Build base match from filter params
+    const baseMatch: Record<string, unknown> = { isActive: true };
+    if (filter?.vehicleType) baseMatch.vehicleType = filter.vehicleType;
+    if (filter?.status) baseMatch.status = filter.status;
+    if (filter?.isFromExchange === "true") baseMatch.isFromExchange = true;
+    if (filter?.dateFrom || filter?.dateTo) {
+        const df: Record<string, Date> = {};
+        if (filter.dateFrom) df.$gte = new Date(filter.dateFrom);
+        if (filter.dateTo)   df.$lte = new Date(filter.dateTo);
+        // Date filter applies to dateSold (primary activity date)
+        baseMatch.dateSold = df;
+    }
+
     const stats = await Vehicle.aggregate([
-        { $match: { isActive: true } },
+        { $match: baseMatch },
         {
             $group: {
                 _id: "$vehicleType",
@@ -103,8 +133,6 @@ export const getVehicleStats = async (_filter?: VehicleStatsFilter): Promise<unk
                 soldPending: { $sum: { $cond: [{ $eq: ["$status", "sold_pending"] }, 1, 0] } },
                 exchanged: { $sum: { $cond: [{ $eq: ["$status", "exchanged"] }, 1, 0] } },
                 totalInvested: { $sum: "$totalInvestment" },
-                // Only count revenue & investment from actually-sold vehicles
-                // Note: $gt null correctly handles both null AND undefined/missing fields in MongoDB
                 totalRevenue: { $sum: { $cond: [{ $gt: ["$dateSold", null] }, { $ifNull: ["$soldPrice", 0] }, 0] } },
                 soldInvested: { $sum: { $cond: [{ $gt: ["$dateSold", null] }, "$totalInvestment", 0] } },
                 totalReceived: { $sum: "$receivedAmount" },
@@ -136,7 +164,7 @@ export const getVehicleStats = async (_filter?: VehicleStatsFilter): Promise<unk
 
 
     const pendingItems = await Vehicle.aggregate([
-        { $match: { isActive: true } },
+        { $match: baseMatch },
         {
             $facet: {
                 balancePending: [
@@ -158,7 +186,7 @@ export const getVehicleStats = async (_filter?: VehicleStatsFilter): Promise<unk
     const pi = pendingItems[0] as { balancePending: { amount: number }[]; nocPending: unknown[]; purchasePaymentsDue: { amount: number }[] };
 
     const fundingBreakdown = await Vehicle.aggregate([
-        { $match: { isActive: true } },
+        { $match: baseMatch },
         { $unwind: { path: "$fundingDetails", preserveNullAndEmptyArrays: true } },
         {
             $group: {
@@ -341,13 +369,20 @@ export const deletePurchasePayment = async (id: string, paymentId: string) => {
 // ── Sale Payments ────────────────────────────────────────────────
 export const addSalePayment = async (id: string, payment: {
     date: string; amount: number; mode: string; type?: string;
-    source?: string; exchangeDetails?: string; exchangeVehicleMake?: string;
-    exchangeVehicleRegNo?: string; referenceNo?: string; notes?: string;
+    source?: string;
+    // Finance-specific
+    financeCompany?: string; loanRef?: string; financeAmount?: number;
+    // Exchange-specific
+    exchangeDetails?: string; exchangeVehicleMake?: string;
+    exchangeVehicleRegNo?: string;
+    referenceNo?: string; notes?: string;
     createExchangeAs?: string; exchangeVehicleType?: string;
 }) => {
     if (!mongoose.Types.ObjectId.isValid(id)) return null;
     const vehicle = await Vehicle.findOne({ _id: id, isActive: true });
     if (!vehicle) return null;
+
+    const isFinanceMode = payment.mode === "Finance";
 
     const paymentEntry: IVehicle["salePayments"][0] = {
         _id: new mongoose.Types.ObjectId(),
@@ -356,12 +391,32 @@ export const addSalePayment = async (id: string, payment: {
         mode: payment.mode as IVehicle["salePayments"][0]["mode"],
         type: (payment.type as "cash" | "exchange") ?? "cash",
         source: payment.source,
+        // Finance fields — stored on each payment entry for traceability
+        financeCompany: isFinanceMode ? payment.financeCompany : undefined,
+        loanRef: isFinanceMode ? payment.loanRef : undefined,
+        // Exchange fields
         exchangeDetails: payment.exchangeDetails,
         exchangeVehicleMake: payment.exchangeVehicleMake,
         exchangeVehicleRegNo: payment.exchangeVehicleRegNo,
         referenceNo: payment.referenceNo,
         notes: payment.notes,
     };
+
+    // ── Persist finance company + sanctioned amount at vehicle level ──
+    // These are the vehicle-level finance tracking fields (not per-payment).
+    // We update them whenever a Finance payment is recorded so that the
+    // pre-save hook can correctly compute financeStatus.
+    if (isFinanceMode) {
+        if (payment.financeCompany && payment.financeCompany.trim()) {
+            vehicle.financeCompany = payment.financeCompany.trim();
+        }
+        // Only update the sanctioned amount if explicitly provided (> 0).
+        // This lets subsequent partial-disbursement entries skip the field
+        // and keep the previously saved sanctioned amount intact.
+        if (payment.financeAmount && payment.financeAmount > 0) {
+            vehicle.financeAmount = payment.financeAmount;
+        }
+    }
 
     let exchangeVehicle = null;
 
@@ -559,14 +614,21 @@ export const addSalePayment = async (id: string, payment: {
 
 
     vehicle.salePayments.push(paymentEntry);
-    // Build a clear activity log description — for exchange payments, include the vehicle details
+    // Build a clear activity log description
     const paymentLogLabel = payment.type === "exchange"
         ? `Exchange${payment.exchangeVehicleMake ? ` — ${payment.exchangeVehicleMake}${payment.exchangeVehicleRegNo ? ` (${payment.exchangeVehicleRegNo})` : ""}` : ""}`
-        : `${payment.mode}${payment.source ? ` (${payment.source})` : ""}`;
+        : isFinanceMode
+            ? `Finance (${payment.financeCompany || vehicle.financeCompany || "Loan"}${payment.loanRef ? ` / Ref: ${payment.loanRef}` : ""})`
+            : `${payment.mode}${payment.source ? ` (${payment.source})` : ""}`;
+    const logDescription = isFinanceMode && payment.amount > 0
+        ? `Finance disbursement received: ₹${payment.amount.toLocaleString("en-IN")} via ${paymentLogLabel}`
+        : isFinanceMode && payment.amount === 0
+            ? `Finance initialized: ${paymentLogLabel} — awaiting disbursement`
+            : `Sale payment received: ₹${payment.amount.toLocaleString("en-IN")} via ${paymentLogLabel}`;
     vehicle.activityLog.push({
         action: "sale_payment",
-        description: `Sale payment received: ₹${payment.amount.toLocaleString("en-IN")} via ${paymentLogLabel}`,
-        amount: payment.amount,
+        description: logDescription,
+        amount: payment.amount > 0 ? payment.amount : undefined,
         date: new Date(),
     });
     await vehicle.save();
@@ -645,15 +707,26 @@ export const deleteSalePayment = async (id: string, paymentId: string) => {
         }
     }
 
+    // If no Finance payments remain, reset vehicle-level finance tracking fields
+    const remainingFinancePayments = vehicle.salePayments.filter((p) => p.mode === "Finance");
+    if (remainingFinancePayments.length === 0) {
+        vehicle.financeCompany = undefined;
+        vehicle.financeAmount = 0;
+        // financeStatus will be recalculated to "none" by the pre-save hook
+    }
+
     // Log the deletion with a clear description of what was removed
     if (paymentToDelete) {
+        const wasFinance = paymentToDelete.mode === "Finance";
         const deletedLabel = paymentToDelete.type === "exchange"
             ? `Exchange${paymentToDelete.exchangeVehicleMake ? ` — ${paymentToDelete.exchangeVehicleMake}${paymentToDelete.exchangeVehicleRegNo ? ` (${paymentToDelete.exchangeVehicleRegNo})` : ""}` : ""}`
-            : `${paymentToDelete.mode}`;
+            : wasFinance
+                ? `Finance${paymentToDelete.financeCompany ? ` (${paymentToDelete.financeCompany})` : ""}`
+                : `${paymentToDelete.mode}`;
         vehicle.activityLog.push({
             action: "sale_payment_deleted",
             description: `Sale payment removed: ₹${paymentToDelete.amount.toLocaleString("en-IN")} via ${deletedLabel}`,
-            amount: paymentToDelete.amount,
+            amount: paymentToDelete.amount > 0 ? paymentToDelete.amount : undefined,
             date: new Date(),
         });
     }
@@ -783,7 +856,7 @@ export const getProfitLossReport = async (vehicleType?: string, dateFrom?: strin
         match.dateSold = dateFilter;
     }
     return Vehicle.find(match)
-        .select("vehicleId vehicleType make model registrationNo datePurchased dateSold purchasePrice totalInvestment soldPrice profitLoss profitLossPercentage daysToSell status fundingSource")
+        .select("vehicleId vehicleType make model year registrationNo datePurchased dateSold purchasedFrom soldTo purchasePrice totalInvestment soldPrice receivedAmount balanceAmount profitLoss profitLossPercentage daysToSell status saleStatus nocStatus fundingSource isFromExchange isExchange")
         .sort({ dateSold: -1 })
         .lean();
 };
@@ -807,8 +880,19 @@ export const getMonthlyReport = async () => {
     ]);
 };
 
-export const getPendingReport = async (): Promise<unknown> => {
-    return Vehicle.find({ isActive: true, $or: [{ saleStatus: { $in: ["balance_pending", "noc_pending", "noc_cash_pending"] } }, { purchasePaymentStatus: { $in: ["pending", "partial"] } }] })
+export const getPendingReport = async (params?: { vehicleType?: string; dateFrom?: string; dateTo?: string }): Promise<unknown> => {
+    const match: Record<string, unknown> = {
+        isActive: true,
+        saleStatus: { $in: ["balance_pending", "noc_pending", "noc_cash_pending"] },
+    };
+    if (params?.vehicleType) match.vehicleType = params.vehicleType;
+    if (params?.dateFrom || params?.dateTo) {
+        const df: Record<string, Date> = {};
+        if (params.dateFrom) df.$gte = new Date(params.dateFrom);
+        if (params.dateTo)   df.$lte = new Date(params.dateTo);
+        match.dateSold = df;
+    }
+    return Vehicle.find(match)
         .select("vehicleId vehicleType make model registrationNo purchasedFrom soldTo datePurchased dateSold purchasePrice soldPrice totalInvestment receivedAmount balanceAmount purchasePendingAmount status saleStatus nocStatus purchasePaymentStatus")
         .sort({ dateSold: -1 })
         .lean();
@@ -852,11 +936,24 @@ export const getPurchaseRegister = async (query: PurchaseRegisterQuery): Promise
         match.datePurchased = df;
     }
     if (search) {
-        const re = new RegExp(search, "i");
-        match.$or = [
-            { make: re }, { model: re }, { registrationNo: re },
-            { purchasedFrom: re }, { vehicleId: re },
-        ];
+        const trimmed = search.trim();
+        if (trimmed) {
+            const words = trimmed.split(/\s+/);
+            const escWord = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            if (words.length === 1) {
+                const re = new RegExp(escWord(words[0]), "i");
+                match.$or = [
+                    { make: re }, { model: re }, { registrationNo: re },
+                    { purchasedFrom: re }, { vehicleId: re },
+                ];
+            } else {
+                // Each word must appear in make OR model (exact phrase-style)
+                match.$and = words.map((w) => {
+                    const re = new RegExp(escWord(w), "i");
+                    return { $or: [{ make: re }, { model: re }] };
+                });
+            }
+        }
     }
 
     const skip = (page - 1) * limit;

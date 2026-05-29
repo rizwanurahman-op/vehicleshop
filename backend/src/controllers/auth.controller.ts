@@ -91,3 +91,25 @@ export const getMe = async (req: AuthRequest, res: Response, next: NextFunction)
         next(error);
     }
 };
+
+export const updateProfile = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+        const user = await authService.updateProfile(req.user!.userId, req.body);
+        res.status(200).json(
+            apiResponse(200, "Profile updated successfully", {
+                user: { id: user._id, username: user.username, email: user.email, role: user.role },
+            })
+        );
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const changePassword = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+        await authService.changePassword(req.user!.userId, req.body);
+        res.status(200).json(apiResponse(200, "Password changed successfully"));
+    } catch (error) {
+        next(error);
+    }
+};

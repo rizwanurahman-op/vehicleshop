@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, ArrowDownLeft, ArrowUpRight, BarChart3, Car, DollarSign, TrendingUp, Store, UserCheck, PieChart, ArrowLeftRight, ShoppingCart } from "lucide-react";
+import { LayoutDashboard, Users, ArrowDownLeft, ArrowUpRight, BarChart3, Car, DollarSign, TrendingUp, Store, PieChart, ArrowLeftRight, ShoppingCart, Settings, ShieldCheck } from "lucide-react";
 
 export interface MenuItem {
     label: string;
@@ -7,6 +7,8 @@ export interface MenuItem {
     phase?: number;
     group?: string;
     badge?: string;
+    /** If true, only shown to admin users */
+    adminOnly?: boolean;
 }
 
 export const SIDEBAR_MENU: MenuItem[] = [
@@ -27,9 +29,12 @@ export const SIDEBAR_MENU: MenuItem[] = [
 
     // Phase 3 - Park & Finance Sale (Consignment)
     { label: "Inventory", href: "/consignments", icon: Store, phase: 3, group: "Park & Finance" },
-    { label: "Owners", href: "/vehicle-owners", icon: UserCheck, phase: 3, group: "Park & Finance" },
     { label: "Reports", href: "/consignments/reports", icon: PieChart, phase: 3, group: "Park & Finance" },
 
     // Exchanges — cross-module (spans Phase 2 & Phase 3)
     { label: "Exchanges", href: "/exchanges", icon: ArrowLeftRight, group: "Exchanges" },
+
+    // Account
+    { label: "Settings", href: "/settings", icon: Settings, group: "Account" },
+    { label: "Users", href: "/users", icon: ShieldCheck, group: "Account", adminOnly: true },
 ];

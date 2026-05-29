@@ -224,10 +224,17 @@ export const getExchanges = async (query: ExchangeQuery) => {
     return { data: paged, total, page, limit, totalPages: Math.ceil(total / limit) };
 };
 
-export const getExchangeStats = async (): Promise<ExchangeStats> => {
+interface StatsQuery { dateFrom?: string; dateTo?: string; collection?: string; }
+
+export const getExchangeStats = async (query: StatsQuery = {}): Promise<ExchangeStats> => {
+    const { dateFrom, dateTo, collection } = query;
+
+    const fetchV = (!collection || collection === "vehicles");
+    const fetchC = (!collection || collection === "consignmentVehicles");
+
     const [vDeals, cDeals] = await Promise.all([
-        getVehicleExchangeDeals(),
-        getConsignmentExchangeDeals(),
+        fetchV ? getVehicleExchangeDeals(dateFrom, dateTo) : Promise.resolve([]),
+        fetchC ? getConsignmentExchangeDeals(dateFrom, dateTo) : Promise.resolve([]),
     ]);
 
     const all = [...vDeals, ...cDeals];

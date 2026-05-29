@@ -303,6 +303,10 @@ export const undoSale = async (id: string): Promise<IConsignmentVehicle | null> 
     vehicle.buyerPayments = [];
     vehicle.payeePayments = [];
     vehicle.settlementStatus = "open";
+    // Explicitly reset statuses so the pre-save hook's "!== closed" guard
+    // doesn't skip recalculation, leaving stale "closed" / "paid" values.
+    vehicle.buyerPaymentStatus = "pending";
+    vehicle.payeePaymentStatus = "not_started";
     vehicle.activityLog.push({ action: "sale_undone", description: "Sale record reverted", date: new Date() });
     await vehicle.save();
     return vehicle;

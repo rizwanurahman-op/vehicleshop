@@ -3,6 +3,9 @@ import DateDisplay from "./date-display";
 import StatusBadge from "./status-badge";
 import EmptyState from "./empty-state";
 import LoadingSkeleton, { TableSkeleton, CardSkeleton, StatCardsSkeleton } from "./loading-skeleton";
+import { AdminOnly } from "./admin-only";
+import { ViewerBanner } from "./viewer-banner";
+import { ViewerGuard } from "./viewer-guard";
 
 export {
     CurrencyDisplay,
@@ -13,4 +16,7 @@ export {
     TableSkeleton,
     CardSkeleton,
     StatCardsSkeleton,
+    AdminOnly,
+    ViewerBanner,
+    ViewerGuard,
 };

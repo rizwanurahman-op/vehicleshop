@@ -1,5 +1,31 @@
 import { z } from "zod";
 
+export const editConsignmentSchema = z.object({
+    // Vehicle identity
+    vehicleType: z.enum(["two_wheeler", "four_wheeler"]),
+    make: z.string().min(1, "Make is required"),
+    model: z.string().min(1, "Model is required"),
+    year: z.preprocess(
+        (v) => (v === "" || v === null || v === undefined ? null : Number(v)),
+        z.number().int().min(1950).max(new Date().getFullYear() + 1).nullable().optional()
+    ),
+    registrationNo: z.string().min(1, "Registration number is required"),
+    color: z.string().optional(),
+    engineNo: z.string().optional(),
+    chassisNo: z.string().optional(),
+    // Owner / source info
+    previousOwner: z.string().min(1, "Owner name is required"),
+    previousOwnerPhone: z.string().optional(),
+    financeCompany: z.string().optional(),
+    dateReceived: z.string().min(1, "Date received is required"),
+    purchasePrice: z.number().min(0, "Purchase price must be ≥ 0"),
+    // Status
+    status: z.enum(["received", "reconditioning", "ready_for_sale"]).optional(),
+    // Notes
+    remarks: z.string().optional(),
+    notes: z.string().optional(),
+});
+
 export const createConsignmentSchema = z.object({
     saleType: z.enum(["park_sale", "finance_sale"]),
     vehicleType: z.enum(["two_wheeler", "four_wheeler"]),

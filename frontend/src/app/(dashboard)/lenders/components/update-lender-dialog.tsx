@@ -49,6 +49,7 @@ const UpdateLenderDialog = ({ lender, open, onOpenChange }: UpdateLenderDialogPr
         onSuccess: () => {
             toast.success("Updated!", { id: editToast, description: "Lender details updated." });
             queryClient.invalidateQueries({ queryKey: ["lenders"] });
+            queryClient.invalidateQueries({ queryKey: ["lender-stats"] });
             queryClient.invalidateQueries({ queryKey: ["lender", lender._id] });
             onOpenChange(false);
         },

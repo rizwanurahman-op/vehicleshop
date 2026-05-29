@@ -65,11 +65,23 @@ export const getSales = async (query: SalesQuery) => {
             vMatch.saleStatus = saleStatus;
         }
         if (search) {
-            const re = new RegExp(search, "i");
-            vMatch.$or = [
-                { make: re }, { model: re }, { registrationNo: re },
-                { soldTo: re }, { vehicleId: re },
-            ];
+            const trimmed = search.trim();
+            if (trimmed) {
+                const words = trimmed.split(/\s+/);
+                const escWord = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                if (words.length === 1) {
+                    const re = new RegExp(escWord(words[0]), "i");
+                    vMatch.$or = [
+                        { make: re }, { model: re }, { registrationNo: re },
+                        { soldTo: re }, { vehicleId: re },
+                    ];
+                } else {
+                    vMatch.$and = words.map((w) => {
+                        const re = new RegExp(escWord(w), "i");
+                        return { $or: [{ make: re }, { model: re }] };
+                    });
+                }
+            }
         }
         if (dateFrom || dateTo) {
             const df: Record<string, Date> = {};
@@ -127,11 +139,23 @@ export const getSales = async (query: SalesQuery) => {
             cMatch.settlementStatus = statusMap[saleStatus] || saleStatus;
         }
         if (search) {
-            const re = new RegExp(search, "i");
-            cMatch.$or = [
-                { make: re }, { model: re }, { registrationNo: re },
-                { soldTo: re }, { consignmentId: re },
-            ];
+            const trimmed = search.trim();
+            if (trimmed) {
+                const words = trimmed.split(/\s+/);
+                const escWord = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                if (words.length === 1) {
+                    const re = new RegExp(escWord(words[0]), "i");
+                    cMatch.$or = [
+                        { make: re }, { model: re }, { registrationNo: re },
+                        { soldTo: re }, { consignmentId: re },
+                    ];
+                } else {
+                    cMatch.$and = words.map((w) => {
+                        const re = new RegExp(escWord(w), "i");
+                        return { $or: [{ make: re }, { model: re }] };
+                    });
+                }
+            }
         }
         if (dateFrom || dateTo) {
             const df: Record<string, Date> = {};

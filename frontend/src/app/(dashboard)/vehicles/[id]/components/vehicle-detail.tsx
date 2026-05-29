@@ -29,6 +29,7 @@ import {
     DollarSign, Plus, Trash2, Loader2, FileText, Activity, Sparkles, ShoppingCart,
     Package, ExternalLink, Pencil, RotateCcw, Download, FileSpreadsheet, ChevronDown
 } from "lucide-react";
+import { AdminOnly } from "@components/shared";
 import Link from "next/link";
 import VehicleStatusBadge from "../../components/vehicle-status-badge";
 import CostsTab from "./costs-tab";
@@ -304,6 +305,11 @@ const AddSalePaymentDialog = ({ vehicle }: { vehicle: IVehicle }) => {
             form.setValue("financeCompany", "");
             form.setValue("loanRef", "");
             form.setValue("financeAmount", 0);
+        } else {
+            // Auto-prefill company + remaining balance when switching TO Finance
+            if (existingFinanceCompany) form.setValue("financeCompany", existingFinanceCompany);
+            if (financeBalance > 0) form.setValue("amount", financeBalance);
+            else if (!existingFinanceAmount && form.getValues("amount") === undefined) form.setValue("amount", undefined as unknown as number);
         }
     };
 
@@ -315,6 +321,8 @@ const AddSalePaymentDialog = ({ vehicle }: { vehicle: IVehicle }) => {
     const financePayments = vehicle.salePayments.filter(p => p.mode === "Finance");
     const totalFinanceDisbursed = financePayments.reduce((s, p) => s + p.amount, 0);
     const financeBalance = existingFinanceAmount ? Math.max(0, existingFinanceAmount - totalFinanceDisbursed) : 0;
+    const isFirstFinanceEntry = !existingFinanceAmount || existingFinanceAmount === 0;
+    const isFullyDisbursed = existingFinanceAmount && existingFinanceAmount > 0 && financeBalance === 0;
 
     const { mutate, isPending } = useMutation({
         mutationFn: async (values: z.infer<typeof addSalePaymentSchema>) => {
@@ -421,12 +429,35 @@ const AddSalePaymentDialog = ({ vehicle }: { vehicle: IVehicle }) => {
                                         <p className="text-[11px] font-bold text-blue-400 uppercase tracking-widest">Finance / Loan Details</p>
                                     </div>
 
-                                    {/* Info banner: show existing finance tracking if any */}
-                                    {existingFinanceAmount && existingFinanceAmount > 0 && (
-                                        <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 px-3 py-2 text-[11px] text-blue-300 space-y-0.5">
-                                            <div className="flex justify-between"><span>Sanctioned Loan</span><span className="font-semibold">{formatCurrency(existingFinanceAmount)}</span></div>
-                                            <div className="flex justify-between"><span>Already Disbursed</span><span className="font-semibold text-emerald-400">{formatCurrency(totalFinanceDisbursed)}</span></div>
-                                            <div className="flex justify-between"><span>Remaining to Disburse</span><span className={cn("font-semibold", financeBalance > 0 ? "text-amber-400" : "text-emerald-400")}>{formatCurrency(financeBalance)}</span></div>
+                                    {/* ── Context banner ── */}
+                                    {isFirstFinanceEntry ? (
+                                        // First time: guide to set up the finance
+                                        <div className="rounded-lg bg-blue-500/10 border border-blue-400/20 px-3 py-2.5 text-[11px] text-blue-300 space-y-1">
+                                            <p className="font-bold text-blue-300">Setting up Finance for this sale</p>
+                                            <p className="text-blue-300/80">Enter the <strong className="text-blue-300">total sanctioned loan amount</strong> below, and the <strong className="text-blue-300">amount actually disbursed today</strong> in the amount field above. Finance can be received in multiple tranches.</p>
+                                        </div>
+                                    ) : isFullyDisbursed ? (
+                                        // Fully disbursed already
+                                        <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 text-[11px] text-emerald-300 flex items-center gap-2">
+                                            <span>✅</span>
+                                            <span>Sanctioned amount fully disbursed. You can still record an additional tranche if the loan was revised.</span>
+                                        </div>
+                                    ) : (
+                                        // Partial disbursement in progress
+                                        <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 px-3 py-2 text-[11px] text-blue-300 space-y-1">
+                                            <div className="flex justify-between">
+                                                <span>Sanctioned Loan</span>
+                                                <span className="font-semibold">{formatCurrency(existingFinanceAmount!)}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span>Already Disbursed ({financePayments.length} tranche{financePayments.length !== 1 ? "s" : ""})</span>
+                                                <span className="font-semibold text-emerald-400">{formatCurrency(totalFinanceDisbursed)}</span>
+                                            </div>
+                                            <div className="flex justify-between border-t border-blue-500/20 pt-1 mt-1">
+                                                <span className="font-bold">Remaining to Disburse</span>
+                                                <span className={cn("font-bold", financeBalance > 0 ? "text-amber-400" : "text-emerald-400")}>{formatCurrency(financeBalance)}</span>
+                                            </div>
+                                            <p className="text-blue-300/70 pt-0.5">The amount above is pre-filled with the remaining balance. Edit if this tranche is different.</p>
                                         </div>
                                     )}
 
@@ -441,21 +472,45 @@ const AddSalePaymentDialog = ({ vehicle }: { vehicle: IVehicle }) => {
                                         )} />
                                     </div>
 
-                                    <FormField control={form.control} name="financeAmount" render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel className="text-xs font-semibold text-foreground">
-                                                Total Sanctioned Loan Amount ₹
-                                                <span className="ml-1 text-[10px] font-normal text-muted-foreground">(update if changed)</span>
-                                            </FormLabel>
-                                            <FormControl>
-                                                <div className="relative">
-                                                    <IndianRupee className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
-                                                    <Input type="number" min="0" placeholder={existingFinanceAmount?.toString() || "0"} className="h-9 bg-muted/50 border-border pl-7 text-sm" value={field.value ?? ""} onChange={(e) => { const v = parseFloat(e.target.value); field.onChange(isNaN(v) ? undefined : v); }} />
-                                                </div>
-                                            </FormControl>
-                                            <p className="text-[10px] text-muted-foreground">This is the total loan sanctioned. Record the actual disbursement amount in the &quot;Disbursement Amount&quot; field above.</p>
-                                        </FormItem>
-                                    )} />
+                                    {isFirstFinanceEntry ? (
+                                        /* ── First-time: freely editable ── */
+                                        <FormField control={form.control} name="financeAmount" render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="text-xs font-semibold text-foreground">
+                                                    Total Sanctioned Loan Amount ₹
+                                                </FormLabel>
+                                                <FormControl>
+                                                    <div className="relative">
+                                                        <IndianRupee className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+                                                        <Input type="number" min="0"
+                                                            placeholder="e.g. 150000"
+                                                            className="h-9 bg-muted/50 border-border pl-7 text-sm"
+                                                            value={field.value ?? ""}
+                                                            onChange={(e) => { const v = parseFloat(e.target.value); field.onChange(isNaN(v) ? undefined : v); }} />
+                                                    </div>
+                                                </FormControl>
+                                                <p className="text-[10px] text-muted-foreground">
+                                                    Enter the full loan amount approved by the finance company. The actual disbursed amount goes in the field above.
+                                                </p>
+                                            </FormItem>
+                                        )} />
+                                    ) : (
+                                        /* ── Subsequent tranche: locked display ── */
+                                        <div className="space-y-1.5">
+                                            <p className="text-xs font-semibold text-foreground">Total Sanctioned Loan Amount ₹</p>
+                                            <div className="flex items-center gap-2 h-9 rounded-lg border border-border bg-muted/30 px-3 cursor-not-allowed">
+                                                <IndianRupee className="h-3 w-3 text-muted-foreground shrink-0" />
+                                                <span className="text-sm font-semibold text-foreground">{existingFinanceAmount?.toLocaleString("en-IN") ?? "—"}</span>
+                                                <span className="ml-auto flex items-center gap-1 text-[10px] text-muted-foreground">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3 opacity-60"><path fillRule="evenodd" d="M8 1a3.5 3.5 0 0 0-3.5 3.5V7A1.5 1.5 0 0 0 3 8.5v4A1.5 1.5 0 0 0 4.5 14h7a1.5 1.5 0 0 0 1.5-1.5v-4A1.5 1.5 0 0 0 11 7V4.5A3.5 3.5 0 0 0 8 1Zm2 6V4.5a2 2 0 1 0-4 0V7h4Z" clipRule="evenodd" /></svg>
+                                                    Locked
+                                                </span>
+                                            </div>
+                                            <p className="text-[10px] text-muted-foreground">
+                                                Sanctioned amount is fixed. Only the disbursement amount (above) can be changed per tranche.
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
@@ -1044,7 +1099,27 @@ const RevertSaleButton = ({ vehicle, size = "default" }: { vehicle: IVehicle; si
 // ── Main Vehicle Detail Component ─────────────────────────────────
 const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle | null }) => {
     const [activeTab, setActiveTab] = useState("overview");
+    const [animateProgress, setAnimateProgress] = useState(false);
     const queryClient = useQueryClient();
+
+    useEffect(() => {
+        const timer = setTimeout(() => setAnimateProgress(true), 150);
+        return () => clearTimeout(timer);
+    }, []);
+
+    const scrollToTabs = () => {
+        document.getElementById("vehicle-detail-tabs")?.scrollIntoView({ behavior: "smooth" });
+    };
+
+    const handlePurchaseClick = () => {
+        setActiveTab("purchase-payments");
+        setTimeout(scrollToTabs, 50);
+    };
+
+    const handleSaleClick = () => {
+        setActiveTab("sale");
+        setTimeout(scrollToTabs, 50);
+    };
 
     const { data: vehicle } = useQuery<IVehicle | null>({
         queryKey: ["vehicle", id],
@@ -1067,6 +1142,7 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
         },
     });
 
+
     if (!vehicle) return (
         <div className="flex flex-col items-center justify-center py-20 gap-4">
             <Package className="h-16 w-16 text-muted-foreground/30" />
@@ -1080,6 +1156,13 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
     const isProfit = pl >= 0;
     const VehicleIcon = vehicle.vehicleType === "two_wheeler" ? Bike : Car;
 
+    // Payment progress calculations
+    const purchasePaid = vehicle.purchasePrice - vehicle.purchasePendingAmount;
+    const purchasePct = vehicle.purchasePrice > 0 ? Math.min(100, Math.max(0, (purchasePaid / vehicle.purchasePrice) * 100)) : 0;
+    const salePct = isSold && vehicle.soldPrice && vehicle.soldPrice > 0 
+        ? Math.min(100, Math.max(0, (vehicle.receivedAmount / vehicle.soldPrice) * 100)) 
+        : 0;
+
     const hasExchangeActivity = vehicle.isExchange || vehicle.isFromExchange ||
         vehicle.salePayments.some(p => p.type === "exchange");
 
@@ -1091,6 +1174,7 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
         ...(hasExchangeActivity ? [{ id: "exchange", label: "Exchange", icon: ArrowLeftRight }] : []),
         { id: "activity", label: "Activity Log", icon: Activity },
     ];
+
 
     return (
         <div className="flex w-full flex-col gap-5 pb-10">
@@ -1123,6 +1207,19 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                                             <ArrowLeftRight className="mr-1 h-2.5 w-2.5" />From Exchange
                                         </Badge>
                                     )}
+                                    {vehicle.purchasePaymentStatus === "paid" ? (
+                                        <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[9px] sm:text-[10px]">
+                                            💵 Purchase Paid
+                                        </Badge>
+                                    ) : vehicle.purchasePaymentStatus === "partial" ? (
+                                        <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/20 text-[9px] sm:text-[10px]">
+                                            💵 Purchase Partial ({formatCurrency(vehicle.purchasePendingAmount)} due)
+                                        </Badge>
+                                    ) : (
+                                        <Badge className="bg-red-500/10 text-red-400 border-red-500/20 text-[9px] sm:text-[10px]">
+                                            💵 Purchase Unpaid
+                                        </Badge>
+                                    )}
                                 </div>
                                 <h1 className="text-xl sm:text-2xl font-bold text-foreground leading-tight">{vehicle.make} {vehicle.model}</h1>
                                 <p className="text-xs sm:text-sm text-muted-foreground mt-1">
@@ -1133,15 +1230,18 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                         </div>
                         {/* Action buttons */}
                         <div className="flex items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0 flex-wrap">
-                            {/* Export dropdown */}
+                            {/* Export dropdown — available to all roles */}
                             <ExportDetailButton vehicleId={vehicle._id} vehicleName={`${vehicle.make}_${vehicle.model}`} />
-                            {!isSold ? (
-                                <RecordSaleDialog vehicle={vehicle} />
-                            ) : (
-                                <RevertSaleButton vehicle={vehicle} />
-                            )}
-                            {/* Delete */}
-                            <DeleteVehicleDialog vehicle={vehicle} />
+                            {/* Write actions — admin only */}
+                            <AdminOnly>
+                                {!isSold ? (
+                                    <RecordSaleDialog vehicle={vehicle} />
+                                ) : (
+                                    <RevertSaleButton vehicle={vehicle} />
+                                )}
+                                {/* Delete */}
+                                <DeleteVehicleDialog vehicle={vehicle} />
+                            </AdminOnly>
                         </div>
                     </div>
                 </div>
@@ -1202,22 +1302,137 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                     ))}
                 </div>
 
-                {/* Sale Payment Progress */}
-                {isSold && vehicle.soldPrice && (
-                    <div className="border-t border-border px-5 py-3">
-                        <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
-                            <span>Received: <strong className="text-emerald-400">{formatCurrency(vehicle.receivedAmount)}</strong></span>
-                            <span>Balance: <strong className={vehicle.balanceAmount > 0 ? "text-red-400" : "text-emerald-400"}>{formatCurrency(vehicle.balanceAmount)}</strong></span>
+                {/* Unified Payment Progress Bars */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border border-t border-border bg-muted/5">
+                    {/* Purchase Payment to Seller */}
+                    <div 
+                        onClick={handlePurchaseClick}
+                        className={cn(
+                            "p-5 flex flex-col gap-2.5 transition-all duration-300 hover:bg-muted/20 cursor-pointer relative group bg-gradient-to-br from-card to-background/50",
+                            purchasePct === 100 ? "hover:border-l-4 hover:border-l-emerald-500" : "hover:border-l-4 hover:border-l-amber-500"
+                        )}
+                    >
+                        <div className="flex justify-between items-center text-xs">
+                            <span className="font-semibold text-muted-foreground uppercase tracking-wider text-[9px] sm:text-[10px] flex items-center gap-1.5">
+                                <ShoppingCart className="h-3.5 w-3.5 text-primary shrink-0" />
+                                Purchase Payment Progress
+                            </span>
+                            <span className="font-bold text-foreground bg-muted/60 px-2 py-0.5 rounded-md border border-border/40 font-mono text-[10px]">
+                                {purchasePct.toFixed(0)}%
+                            </span>
                         </div>
-                        <div className="h-2 bg-muted/40 rounded-full overflow-hidden">
-                            <div className="h-full bg-gradient-success rounded-full transition-all" style={{ width: `${Math.min(100, (vehicle.receivedAmount / vehicle.soldPrice!) * 100)}%` }} />
+                        
+                        <div className="flex justify-between items-baseline mt-1">
+                            <p className="text-xl sm:text-2xl font-bold text-foreground">
+                                {formatCurrency(purchasePaid)}
+                                <span className="text-xs font-normal text-muted-foreground ml-1">paid of {formatCurrency(vehicle.purchasePrice)}</span>
+                            </p>
+                            <span className="text-[10px] text-primary group-hover:translate-x-1 transition-transform flex items-center gap-0.5">
+                                Manage <ExternalLink className="h-2.5 w-2.5" />
+                            </span>
+                        </div>
+
+                        <div className="h-2 bg-muted/40 rounded-full overflow-hidden relative shadow-inner">
+                            <div 
+                                className={cn(
+                                    "h-full rounded-full transition-all duration-1000 ease-out shadow-sm", 
+                                    purchasePct === 100 
+                                        ? "bg-gradient-to-r from-emerald-500 to-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.4)]" 
+                                        : "bg-gradient-to-r from-amber-500 to-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.4)]"
+                                )} 
+                                style={{ width: `${animateProgress ? purchasePct : 0}%` }} 
+                            />
+                        </div>
+
+                        <div className="flex items-center justify-between mt-0.5">
+                            {vehicle.purchasePendingAmount > 0 ? (
+                                <p className="text-[10px] text-amber-400 font-medium flex items-center gap-1">
+                                    <span className="animate-pulse h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" />
+                                    {formatCurrency(vehicle.purchasePendingAmount)} balance remaining due to seller
+                                </p>
+                            ) : (
+                                <p className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
+                                    Fully paid to seller
+                                </p>
+                            )}
                         </div>
                     </div>
-                )}
+
+                    {/* Sale Payment from Buyer */}
+                    <div 
+                        onClick={handleSaleClick}
+                        className={cn(
+                            "p-5 flex flex-col gap-2.5 transition-all duration-300 hover:bg-muted/20 cursor-pointer relative group bg-gradient-to-br from-card to-background/50",
+                            !isSold ? "hover:border-l-4 hover:border-l-muted" : salePct === 100 ? "hover:border-l-4 hover:border-l-emerald-500" : "hover:border-l-4 hover:border-l-blue-500"
+                        )}
+                    >
+                        <div className="flex justify-between items-center text-xs">
+                            <span className="font-semibold text-muted-foreground uppercase tracking-wider text-[9px] sm:text-[10px] flex items-center gap-1.5">
+                                <DollarSign className="h-3.5 w-3.5 text-success shrink-0" />
+                                Sale Payment Progress
+                            </span>
+                            <span className="font-bold text-foreground bg-muted/60 px-2 py-0.5 rounded-md border border-border/40 font-mono text-[10px]">
+                                {isSold ? `${salePct.toFixed(0)}%` : "N/A"}
+                            </span>
+                        </div>
+                        
+                        <div className="flex justify-between items-baseline mt-1">
+                            <div className="text-xl sm:text-2xl font-bold text-foreground">
+                                {isSold ? (
+                                    <>
+                                        {formatCurrency(vehicle.receivedAmount)}
+                                        <span className="text-xs font-normal text-muted-foreground ml-1">received of {formatCurrency(vehicle.soldPrice!)}</span>
+                                    </>
+                                ) : (
+                                    <span className="text-muted-foreground text-lg sm:text-xl font-semibold">Not Sold Yet</span>
+                                )}
+                            </div>
+                            <span className="text-[10px] text-success group-hover:translate-x-1 transition-transform flex items-center gap-0.5">
+                                {isSold ? "Manage" : "Record Sale"} <ExternalLink className="h-2.5 w-2.5" />
+                            </span>
+                        </div>
+
+                        <div className="h-2 bg-muted/40 rounded-full overflow-hidden relative shadow-inner">
+                            <div 
+                                className={cn(
+                                    "h-full rounded-full transition-all duration-1000 ease-out shadow-sm", 
+                                    !isSold 
+                                        ? "bg-muted/30" 
+                                        : salePct === 100 
+                                            ? "bg-gradient-to-r from-emerald-500 to-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.4)]" 
+                                            : "bg-gradient-to-r from-blue-500 to-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.4)]"
+                                )} 
+                                style={{ width: `${animateProgress ? (isSold ? salePct : 0) : 0}%` }} 
+                            />
+                        </div>
+
+                        <div className="flex items-center justify-between mt-0.5">
+                            {isSold ? (
+                                vehicle.balanceAmount > 0 ? (
+                                    <p className="text-[10px] text-red-400 font-medium flex items-center gap-1">
+                                        <span className="animate-pulse h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" />
+                                        {formatCurrency(vehicle.balanceAmount)} outstanding balance from buyer
+                                    </p>
+                                ) : (
+                                    <p className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
+                                        Fully collected from buyer
+                                    </p>
+                                )
+                            ) : (
+                                <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-muted/40 shrink-0" />
+                                    Awaiting vehicle sale to record buyer payments
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                </div>
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-0 border-b border-border overflow-x-auto">
+            <div id="vehicle-detail-tabs" className="flex gap-0 border-b border-border overflow-x-auto scroll-mt-6">
                 {tabs.map((tab) => {
                     const Icon = tab.icon;
                     return (
@@ -1236,7 +1451,7 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                     <div className="rounded-xl border border-border bg-card p-5 space-y-3">
                         <div className="flex items-center justify-between">
                             <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Vehicle Details</p>
-                            <EditBasicInfoDialog vehicle={vehicle} />
+                            <AdminOnly><EditBasicInfoDialog vehicle={vehicle} /></AdminOnly>
                         </div>
                         {[
                             { label: "Make & Model", value: `${vehicle.make} ${vehicle.model}` },
@@ -1317,14 +1532,23 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="font-bold text-foreground">Purchase Payments</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
+                            <div className="text-xs text-muted-foreground mt-0.5 flex items-center">
                                 Status: <Badge variant={vehicle.purchasePaymentStatus === "paid" ? "default" : "secondary"} className="ml-1 text-[10px]">
                                     {vehicle.purchasePaymentStatus.toUpperCase()}
                                 </Badge>
                                 {vehicle.purchasePendingAmount > 0 && <span className="ml-2 text-orange-400">Pending: {formatCurrency(vehicle.purchasePendingAmount)}</span>}
-                            </p>
+                            </div>
                         </div>
-                        <AddPurchasePaymentDialog vehicle={vehicle} />
+                        <AdminOnly>
+                            {vehicle.purchasePendingAmount > 0 ? (
+                                <AddPurchasePaymentDialog vehicle={vehicle} />
+                            ) : (
+                                <div className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full font-semibold shadow-inner select-none">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5 shrink-0"><path fillRule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clipRule="evenodd" /></svg>
+                                    Fully Paid
+                                </div>
+                            )}
+                        </AdminOnly>
                     </div>
                     {vehicle.purchasePayments.length === 0 ? (
                         <div className="rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground text-sm">No purchase payments recorded yet</div>
@@ -1339,7 +1563,7 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                                             <p className="text-xs text-muted-foreground">{formatDate(p.date)}{p.bankAccount && ` — ${p.bankAccount}`}{p.notes && ` — ${p.notes}`}</p>
                                         </div>
                                     </div>
-                                    <DeletePaymentDialog type="purchase" payment={p} onDelete={() => deletePayment({ type: "purchase", paymentId: p._id })} />
+                                    <AdminOnly><DeletePaymentDialog type="purchase" payment={p} onDelete={() => deletePayment({ type: "purchase", paymentId: p._id })} /></AdminOnly>
                                 </div>
                             ))}
                         </div>
@@ -1354,18 +1578,20 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                         <div className="rounded-xl border border-dashed border-border p-10 text-center">
                             <DollarSign className="mx-auto h-10 w-10 text-muted-foreground/30 mb-3" />
                             <p className="text-muted-foreground mb-4">This vehicle has not been sold yet.</p>
-                            <RecordSaleDialog vehicle={vehicle} />
+                            <AdminOnly><RecordSaleDialog vehicle={vehicle} /></AdminOnly>
                         </div>
                     ) : (
                         <>
-                            {/* Revert Sale action bar */}
-                            <div className="flex items-center justify-between rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3">
-                                <div>
-                                    <p className="text-xs font-bold text-red-400">Sale Recorded</p>
-                                    <p className="text-[11px] text-muted-foreground mt-0.5">Made a mistake? You can revert this sale and restore the vehicle to stock.</p>
+                            {/* Revert Sale action bar — admin only */}
+                            <AdminOnly>
+                                <div className="flex items-center justify-between rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3">
+                                    <div>
+                                        <p className="text-xs font-bold text-red-400">Sale Recorded</p>
+                                        <p className="text-[11px] text-muted-foreground mt-0.5">Made a mistake? You can revert this sale and restore the vehicle to stock.</p>
+                                    </div>
+                                    <RevertSaleButton vehicle={vehicle} size="sm" />
                                 </div>
-                                <RevertSaleButton vehicle={vehicle} size="sm" />
-                            </div>
+                            </AdminOnly>
                             {/* Sale Summary */}
                             <div className="rounded-xl border border-border bg-card p-5">
                                 <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Sale Summary</p>
@@ -1391,7 +1617,6 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                                 const finAmt = vAny.financeAmount as number | undefined;
                                 const finStatus = vAny.financeStatus as string | undefined;
                                 const finPayments = vehicle.salePayments.filter(p => p.mode === "Finance");
-                                // Only count actual disbursements (amount > 0) — ₹0 entries are just initializers
                                 const actualDisbursements = finPayments.filter(p => p.amount > 0);
                                 const disbursed = actualDisbursements.reduce((s, p) => s + p.amount, 0);
                                 const finBalance = finAmt ? Math.max(0, finAmt - disbursed) : 0;
@@ -1409,21 +1634,40 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                                                 finStatus === "partial" ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
                                                 "bg-blue-500/10 text-blue-400 border-blue-500/20"
                                             )}>
-                                                {finStatus === "disbursed" ? "Fully Disbursed" : finStatus === "partial" ? "Partially Disbursed" : "Awaiting Disbursement"}
+                                                {finStatus === "disbursed" ? "Fully Disbursed ✓" : finStatus === "partial" ? `Partial (${actualDisbursements.length} tranche${actualDisbursements.length !== 1 ? "s" : ""})` : "Awaiting Disbursement"}
                                             </span>
                                         </div>
+                                        {actualDisbursements.length > 0 && (
+                                            <div className="space-y-1.5 pb-2 border-b border-blue-500/10">
+                                                {actualDisbursements.map((p, i) => {
+                                                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                                    const pAny2 = p as any;
+                                                    return (
+                                                        <div key={p._id} className="flex justify-between items-center text-xs">
+                                                            <span className="text-muted-foreground">
+                                                                Tranche {i + 1} · {formatDate(p.date)}
+                                                                {pAny2.loanRef && <span className="ml-1.5 text-blue-400/60 font-mono text-[10px]">({pAny2.loanRef})</span>}
+                                                            </span>
+                                                            <span className="font-semibold text-emerald-400">+{formatCurrency(p.amount)}</span>
+                                                        </div>
+                                                    );
+                                                })}
+                                                {actualDisbursements.length > 1 && (
+                                                    <div className="flex items-center justify-between text-xs pt-1 font-bold border-t border-blue-500/10">
+                                                        <span className="text-blue-300">Total</span>
+                                                        <span className="text-emerald-400">{formatCurrency(disbursed)}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                         <div className="grid grid-cols-2 gap-3 text-sm">
                                             {finCo && <div><p className="text-[10px] text-muted-foreground">Finance Company</p><p className="font-semibold text-foreground">{finCo}</p></div>}
                                             {finAmt && finAmt > 0 && <div><p className="text-[10px] text-muted-foreground">Sanctioned Loan</p><p className="font-semibold text-foreground">{formatCurrency(finAmt)}</p></div>}
                                             <div>
-                                                <p className="text-[10px] text-muted-foreground">
-                                                    {actualDisbursements.length > 0
-                                                        ? `Disbursed (${actualDisbursements.length} tranche${actualDisbursements.length !== 1 ? "s" : ""})`
-                                                        : "Disbursed"}
-                                                </p>
+                                                <p className="text-[10px] text-muted-foreground">Total Disbursed</p>
                                                 <p className="font-semibold text-emerald-400">{actualDisbursements.length > 0 ? formatCurrency(disbursed) : "None yet"}</p>
                                             </div>
-                                            {finAmt && finAmt > 0 && <div><p className="text-[10px] text-muted-foreground">Pending Disbursement</p><p className={cn("font-semibold", finBalance > 0 ? "text-amber-400" : "text-emerald-400")}>{formatCurrency(finBalance)}</p></div>}
+                                            {finAmt && finAmt > 0 && <div><p className="text-[10px] text-muted-foreground">Pending</p><p className={cn("font-semibold", finBalance > 0 ? "text-amber-400" : "text-emerald-400")}>{formatCurrency(finBalance)}</p></div>}
                                         </div>
                                         {finAmt && finAmt > 0 && (
                                             <div>
@@ -1442,7 +1686,16 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                             {/* Payment Timeline */}
                             <div className="flex items-center justify-between">
                                 <p className="font-bold text-foreground">Payment Timeline</p>
-                                <AddSalePaymentDialog vehicle={vehicle} />
+                                <AdminOnly>
+                                    {vehicle.balanceAmount > 0 ? (
+                                        <AddSalePaymentDialog vehicle={vehicle} />
+                                    ) : (
+                                        <div className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full font-semibold shadow-inner select-none">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5 shrink-0"><path fillRule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clipRule="evenodd" /></svg>
+                                            Fully Collected
+                                        </div>
+                                    )}
+                                </AdminOnly>
                             </div>
                             {vehicle.salePayments.length === 0 ? (
                                 <div className="rounded-xl border border-dashed border-border p-6 text-center text-muted-foreground text-sm">No payments recorded yet</div>
@@ -1506,7 +1759,7 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                                                     )}
                                                 </div>
                                             </div>
-                                            <DeletePaymentDialog type="sale" payment={p} onDelete={() => deletePayment({ type: "sale", paymentId: p._id })} />
+                                            <AdminOnly><DeletePaymentDialog type="sale" payment={p} onDelete={() => deletePayment({ type: "sale", paymentId: p._id })} /></AdminOnly>
                                         </div>
                                         );
                                     })}

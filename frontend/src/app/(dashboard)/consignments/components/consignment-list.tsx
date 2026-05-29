@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import axios from "@config/axios";
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@lib/currency";
@@ -14,12 +14,32 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
     Plus, Search, Store, CreditCard, Bike, Car, Loader2,
     TrendingUp, TrendingDown, Package, AlertCircle,
-    CheckCircle2, Clock, Filter, ArrowLeftRight
+    CheckCircle2, Clock, Filter, ArrowLeftRight,
+    Download, FileText, FileSpreadsheet, ChevronDown, Calendar, X,
+    ChevronLeft, ChevronRight
 } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import Link from "next/link";
-import { useDebounce } from "@hooks/use-debounce";
+import { getClientSession } from "@/lib/auth";
+import { toast } from "sonner";
+import { AdminOnly } from "@components/shared";
 
-const fetchConsignments = async (params: Record<string, string>): Promise<ConsignmentPaginatedData | null> => {
+type DatePreset = "all" | "today" | "yesterday" | "this_week" | "this_month" | "this_year" | "last_year" | "custom";
+
+const getPresetRange = (preset: DatePreset): { dateFrom?: string; dateTo?: string } => {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    if (preset === "today") { const t = fmt(now); return { dateFrom: t, dateTo: t }; }
+    if (preset === "yesterday") { const y = new Date(now); y.setDate(y.getDate() - 1); const t = fmt(y); return { dateFrom: t, dateTo: t }; }
+    if (preset === "this_week") { const s = new Date(now); s.setDate(now.getDate() - now.getDay()); return { dateFrom: fmt(s), dateTo: fmt(now) }; }
+    if (preset === "this_month") return { dateFrom: fmt(new Date(now.getFullYear(), now.getMonth(), 1)), dateTo: fmt(now) };
+    if (preset === "this_year") return { dateFrom: fmt(new Date(now.getFullYear(), 0, 1)), dateTo: fmt(now) };
+    if (preset === "last_year") return { dateFrom: `${now.getFullYear() - 1}-01-01`, dateTo: `${now.getFullYear() - 1}-12-31` };
+    return {};
+};
+
+const fetchConsignments = async (params: Record<string, string | number>): Promise<ConsignmentPaginatedData | null> => {
     const res = await axios.get<ApiResponse<ConsignmentPaginatedData>>("/consignments", { params });
     return res.data.data ?? null;
 };
@@ -67,23 +87,78 @@ const QuickStat = ({ label, value, sub, color }: { label: string; value: string;
 
 export const ConsignmentList = ({ initialData }: { initialData: ConsignmentPaginatedData | null }) => {
     const router = useRouter();
+    const [page, setPage] = useState(1);
     const [search, setSearch] = useState("");
+    const [debouncedSearch, setDebouncedSearch] = useState("");
     const [saleType, setSaleType] = useState<string>("all");
     const [status, setStatus] = useState<string>("all");
-    const debouncedSearch = useDebounce(search, 400);
+    const [datePreset, setDatePreset] = useState<DatePreset>("all");
+    const [customFrom, setCustomFrom] = useState("");
+    const [customTo, setCustomTo] = useState("");
+    const [isExporting, setIsExporting] = useState<"csv" | "pdf" | null>(null);
 
-    const params: Record<string, string> = { page: "1", limit: "20" };
+    useEffect(() => {
+        const t = setTimeout(() => { setDebouncedSearch(search); setPage(1); }, 300);
+        return () => clearTimeout(t);
+    }, [search]);
+
+    const dateRange = useMemo(() => {
+        if (datePreset === "custom") return { dateFrom: customFrom || undefined, dateTo: customTo || undefined };
+        return getPresetRange(datePreset);
+    }, [datePreset, customFrom, customTo]);
+
+    const isAnyFilterActive = debouncedSearch !== "" || saleType !== "all" || status !== "all" || datePreset !== "all";
+
+    const clearFilters = () => {
+        setSearch(""); setDebouncedSearch(""); setSaleType("all"); setStatus("all");
+        setDatePreset("all"); setCustomFrom(""); setCustomTo(""); setPage(1);
+    };
+
+    const params: Record<string, string | number> = { page, limit: 20 };
     if (saleType !== "all") params.saleType = saleType;
     if (status !== "all") params.status = status;
     if (debouncedSearch) params.search = debouncedSearch;
+    if (dateRange.dateFrom) params.dateFrom = dateRange.dateFrom;
+    if (dateRange.dateTo) params.dateTo = dateRange.dateTo;
 
     const { data, isLoading } = useQuery<ConsignmentPaginatedData | null>({
         queryKey: ["consignments", params],
         queryFn: () => fetchConsignments(params),
-        initialData: saleType === "all" && status === "all" && !debouncedSearch ? initialData : undefined,
+        initialData: saleType === "all" && status === "all" && !debouncedSearch && datePreset === "all" && page === 1 ? initialData : undefined,
     });
 
+    const handleExport = async (format: "csv" | "pdf") => {
+        setIsExporting(format);
+        const tid = toast.loading(`Preparing ${format.toUpperCase()} export…`, { description: "Building your consignment inventory report" });
+        try {
+            const p = new URLSearchParams({ format });
+            if (debouncedSearch) p.set("search", debouncedSearch);
+            if (saleType !== "all") p.set("saleType", saleType);
+            if (status !== "all") p.set("status", status);
+            if (dateRange.dateFrom) p.set("dateFrom", dateRange.dateFrom);
+            if (dateRange.dateTo) p.set("dateTo", dateRange.dateTo);
+            const baseURL = (axios.defaults.baseURL ?? "").replace(/\/$/, "");
+            const url = `${baseURL}/consignments/export?${p.toString()}`;
+            const token = getClientSession();
+            const res = await fetch(url, { credentials: "include", headers: token ? { Authorization: `Bearer ${token}` } : {} });
+            if (!res.ok) throw new Error("Export failed");
+            const blob = await res.blob();
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            const fileName = `consignments_${new Date().toISOString().slice(0, 10)}.${format}`;
+            link.download = fileName;
+            document.body.appendChild(link); link.click(); link.remove();
+            URL.revokeObjectURL(link.href);
+            toast.success(`${format.toUpperCase()} downloaded!`, { id: tid, description: `${fileName} saved to your downloads folder` });
+        } catch {
+            toast.error("Export failed", { id: tid, description: "Could not generate the report. Please try again." });
+        } finally {
+            setIsExporting(null);
+        }
+    };
+
     const vehicles = data?.data ?? [];
+    const meta = data ? { total: data.total, page: data.page, totalPages: data.totalPages } : null;
     const inShop = vehicles.filter(v => !["sold", "sold_pending", "returned"].includes(v.status)).length;
     const sold = vehicles.filter(v => ["sold", "sold_pending"].includes(v.status)).length;
     const totalInvested = vehicles.reduce((s, v) => s + v.totalInvestment, 0);
@@ -91,17 +166,51 @@ export const ConsignmentList = ({ initialData }: { initialData: ConsignmentPagin
     return (
         <div className="flex flex-col gap-5 pb-10">
             {/* Header */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-bold text-foreground">Consignment Inventory</h1>
-                    <p className="text-sm text-muted-foreground mt-0.5">Park Sale & Finance Sale vehicles</p>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-brand shadow-lg">
+                        <Store className="h-5 w-5 text-white" />
+                    </div>
+                    <div>
+                        <h1 className="text-2xl font-bold text-foreground">Consignment Inventory</h1>
+                        <p className="text-sm text-muted-foreground">Park Sale &amp; Finance Sale vehicles</p>
+                    </div>
                 </div>
-                <Link href="/consignments/new">
-                    <Button className="bg-gradient-brand text-white hover:opacity-90 shadow-md cursor-pointer">
-                        <Plus className="mr-2 h-4 w-4" /> New Consignment
-                    </Button>
-                </Link>
+                <div className="flex items-center gap-2">
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="border-border text-muted-foreground hover:text-foreground" disabled={!!isExporting}>
+                                {isExporting ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Download className="mr-1.5 h-4 w-4" />}
+                                Export
+                                <ChevronDown className="ml-1 h-3 w-3 opacity-60" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44">
+                            <DropdownMenuLabel className="text-xs text-muted-foreground">Download as</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => handleExport("csv")} disabled={isExporting === "csv"} className="gap-2 cursor-pointer">
+                                <FileSpreadsheet className="h-4 w-4 text-emerald-500" />
+                                <div><p className="text-sm font-medium">Export CSV</p><p className="text-[10px] text-muted-foreground">Excel compatible</p></div>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleExport("pdf")} disabled={isExporting === "pdf"} className="gap-2 cursor-pointer">
+                                <FileText className="h-4 w-4 text-red-500" />
+                                <div><p className="text-sm font-medium">Export PDF</p><p className="text-[10px] text-muted-foreground">Formatted report</p></div>
+                            </DropdownMenuItem>
+                            {isAnyFilterActive && (
+                                <><DropdownMenuSeparator /><p className="px-2 py-1 text-[10px] text-primary">✦ Exports respect active filters</p></>
+                            )}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                    <AdminOnly>
+                        <Link href="/consignments/new">
+                            <Button className="bg-gradient-brand text-white hover:opacity-90 shadow-md cursor-pointer">
+                                <Plus className="mr-2 h-4 w-4" /> New Consignment
+                            </Button>
+                        </Link>
+                    </AdminOnly>
+                </div>
             </div>
+
 
             {/* Quick Stats */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -112,41 +221,87 @@ export const ConsignmentList = ({ initialData }: { initialData: ConsignmentPagin
             </div>
 
             {/* Filters */}
-            <div className="flex flex-wrap gap-3 items-center">
-                {/* Sale Type Tabs */}
-                <div className="flex flex-wrap gap-1 bg-muted rounded-lg p-1 w-full sm:w-auto">
-                    {[
-                        { value: "all", label: "All" },
-                        { value: "park_sale", label: "🏪 Park Sale", icon: Store },
-                        { value: "finance_sale", label: "💳 Finance Sale", icon: CreditCard },
-                    ].map(t => (
-                        <button key={t.value} onClick={() => setSaleType(t.value)}
-                            className={cn("px-3 py-1.5 text-xs font-semibold rounded-md transition-all",
-                                saleType === t.value ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>
-                            {t.label}
-                        </button>
-                    ))}
+            <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                    {/* Sale Type Tabs */}
+                    <div className="flex flex-wrap gap-1 bg-muted rounded-lg p-1">
+                        {[
+                            { value: "all", label: "All" },
+                            { value: "park_sale", label: "🏪 Park Sale" },
+                            { value: "finance_sale", label: "💳 Finance Sale" },
+                        ].map(t => (
+                            <button key={t.value} onClick={() => { setSaleType(t.value); setPage(1); }}
+                                className={cn("px-3 py-1.5 text-xs font-semibold rounded-md transition-all",
+                                    saleType === t.value ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>
+                                {t.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="relative flex-1 min-w-[180px]">
+                        <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                        <Input placeholder="Search consignments..." className="pl-8 h-10 bg-muted/50 border-border text-sm" value={search} onChange={e => setSearch(e.target.value)} />
+                    </div>
+
+                    <Select value={status} onValueChange={(v) => { setStatus(v); setPage(1); }}>
+                        <SelectTrigger className="h-10 w-44 bg-muted/50 border-border text-sm">
+                            <Filter className="h-3 w-3 mr-1" /><SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Statuses</SelectItem>
+                            <SelectItem value="received">Received</SelectItem>
+                            <SelectItem value="reconditioning">Workshop</SelectItem>
+                            <SelectItem value="ready_for_sale">Ready for Sale</SelectItem>
+                            <SelectItem value="sold">Sold</SelectItem>
+                            <SelectItem value="sold_pending">Sold (Pending)</SelectItem>
+                            <SelectItem value="returned">Returned</SelectItem>
+                        </SelectContent>
+                    </Select>
                 </div>
 
-                <div className="relative flex-1 min-w-[180px] max-w-xs">
-                    <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                    <Input placeholder="Search vehicles..." className="pl-8 h-9 bg-muted/50 border-border text-sm" value={search} onChange={e => setSearch(e.target.value)} />
+                {/* Date Range Row */}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
+                        <Calendar className="h-3.5 w-3.5" />
+                        <span className="font-medium">Received Date:</span>
+                    </div>
+                    <Select value={datePreset} onValueChange={(v) => { setDatePreset(v as DatePreset); setPage(1); }}>
+                        <SelectTrigger className="h-10 w-full sm:w-48 bg-muted/50 border-border">
+                            <SelectValue placeholder="All Time" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Time</SelectItem>
+                            <SelectItem value="today">Today</SelectItem>
+                            <SelectItem value="yesterday">Yesterday</SelectItem>
+                            <SelectItem value="this_week">This Week</SelectItem>
+                            <SelectItem value="this_month">This Month</SelectItem>
+                            <SelectItem value="this_year">This Year</SelectItem>
+                            <SelectItem value="last_year">Last Year</SelectItem>
+                            <SelectItem value="custom">Custom Range…</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    {datePreset === "custom" && (
+                        <div className="flex items-center gap-2">
+                            <Input type="date" value={customFrom} onChange={(e) => { setCustomFrom(e.target.value); setPage(1); }} className="h-10 w-40 bg-muted/50 border-border text-sm" />
+                            <span className="text-xs text-muted-foreground">to</span>
+                            <Input type="date" value={customTo} onChange={(e) => { setCustomTo(e.target.value); setPage(1); }} className="h-10 w-40 bg-muted/50 border-border text-sm" />
+                        </div>
+                    )}
                 </div>
 
-                <Select value={status} onValueChange={setStatus}>
-                    <SelectTrigger className="h-9 w-36 bg-muted/50 border-border text-sm">
-                        <Filter className="h-3 w-3 mr-1" /><SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">All Statuses</SelectItem>
-                        <SelectItem value="received">Received</SelectItem>
-                        <SelectItem value="reconditioning">Workshop</SelectItem>
-                        <SelectItem value="ready_for_sale">Ready for Sale</SelectItem>
-                        <SelectItem value="sold">Sold</SelectItem>
-                        <SelectItem value="sold_pending">Sold (Pending)</SelectItem>
-                        <SelectItem value="returned">Returned</SelectItem>
-                    </SelectContent>
-                </Select>
+                {/* Active Filters Indicator */}
+                {isAnyFilterActive && (
+                    <div className="flex items-center justify-between rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
+                        <div className="flex items-center gap-2 text-xs text-primary">
+                            <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse inline-block" />
+                            <span className="font-medium">Filters active</span>
+                            <span className="text-muted-foreground">— showing filtered results</span>
+                        </div>
+                        <Button variant="ghost" size="sm" onClick={clearFilters} className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50">
+                            <X className="h-3 w-3" /> Clear Filters
+                        </Button>
+                    </div>
+                )}
             </div>
 
             {/* Table */}
@@ -157,7 +312,9 @@ export const ConsignmentList = ({ initialData }: { initialData: ConsignmentPagin
                     <div className="flex flex-col items-center justify-center py-16 gap-3">
                         <Package className="h-12 w-12 text-muted-foreground/30" />
                         <p className="text-muted-foreground">No consignment vehicles found</p>
-                        <Link href="/consignments/new"><Button variant="outline" size="sm">Register First Vehicle</Button></Link>
+                        <AdminOnly>
+                            <Link href="/consignments/new"><Button variant="outline" size="sm">Register First Vehicle</Button></Link>
+                        </AdminOnly>
                     </div>
                 ) : (
                     <>
@@ -315,10 +472,14 @@ export const ConsignmentList = ({ initialData }: { initialData: ConsignmentPagin
                             })}
                         </div>
 
-                        {/* Footer pagination info */}
-                        {(data?.total ?? 0) > 20 && (
-                            <div className="border-t border-border px-5 py-3 text-xs text-muted-foreground">
-                                Showing {vehicles.length} of {data?.total} consignments
+                        {/* Pagination */}
+                        {meta && meta.totalPages > 1 && (
+                            <div className="flex items-center justify-between border-t border-border px-5 py-3">
+                                <p className="text-xs text-muted-foreground">Page {meta.page} of {meta.totalPages} ({meta.total} consignments)</p>
+                                <div className="flex gap-2">
+                                    <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(p => p - 1)} className="h-8 border-border"><ChevronLeft className="h-4 w-4" /></Button>
+                                    <Button size="sm" variant="outline" disabled={page >= meta.totalPages} onClick={() => setPage(p => p + 1)} className="h-8 border-border"><ChevronRight className="h-4 w-4" /></Button>
+                                </div>
                             </div>
                         )}
                     </>

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { z } from "zod";
 import axios from "@config/axios";
 import { toast } from "sonner";
@@ -13,7 +13,7 @@ import { formatApiErrors } from "@lib/formatApiErrors";
 import { formatCurrency } from "@lib/currency";
 import { cn } from "@/lib/utils";
 import { createConsignmentSchema } from "@schemas/consignment";
-import { COST_CATEGORIES } from "@data/vehicle-constants";
+import { COST_CATEGORIES, VEHICLE_MAKES_2W, VEHICLE_MAKES_4W } from "@data/vehicle-constants";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,10 +22,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import {
     Store, CreditCard, Bike, Car, ArrowLeft, ArrowRight, Check,
-    IndianRupee, User, FileText, ChevronDown, ChevronUp, Plus, Trash2, Wrench
+    IndianRupee, User, FileText, Plus, Trash2, Wrench, ChevronDown, ChevronUp, ChevronsUpDown
 } from "lucide-react";
 import Link from "next/link";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 
 type FormData = z.input<typeof createConsignmentSchema>;
 
@@ -102,54 +104,7 @@ const Stepper = ({ step, saleType }: { step: number; saleType: SaleType }) => (
 );
 
 
-const OwnerSearch = ({ value, onChange }: { value: string; onChange: (id: string, name: string) => void }) => {
-    const [open, setOpen] = useState(false);
-    const [searchTerm, setSearchTerm] = useState("");
 
-    const { data } = useQuery<VehicleOwnerPaginatedData | null>({
-        queryKey: ["vehicle-owners", searchTerm],
-        queryFn: async () => {
-            const res = await axios.get<ApiResponse<VehicleOwnerPaginatedData>>("/vehicle-owners", {
-                params: { search: searchTerm, limit: 10 },
-            });
-            return res.data.data ?? null;
-        },
-        enabled: open,
-    });
-
-    const owners = data?.data ?? [];
-
-    return (
-        <div className="relative">
-            {/* MUST be type="button" — default is type="submit" which submits the form on click */}
-            <button type="button" onClick={() => setOpen(!open)}
-                className="w-full h-9 border border-border bg-muted/50 rounded-md px-3 text-sm text-left flex items-center justify-between">
-                <span className={value ? "text-foreground" : "text-muted-foreground"}>{value || "Select from owner registry..."}</span>
-                {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-            </button>
-            {open && (
-                <div className="absolute top-10 left-0 right-0 z-20 bg-card border border-border rounded-lg shadow-xl overflow-hidden">
-                    <div className="p-2 border-b border-border">
-                        <Input placeholder="Search owners..." className="h-8 text-sm" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} autoFocus />
-                    </div>
-                    <div className="max-h-40 overflow-y-auto">
-                        {owners.length === 0 ? (
-                            <p className="py-4 text-center text-xs text-muted-foreground">No owners found</p>
-                        ) : owners.map(o => (
-                            // type="button" is critical — default is type="submit" which submits the form
-                            <button key={o._id} type="button"
-                                className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors flex items-center justify-between"
-                                onClick={() => { onChange(o._id, o.name); setOpen(false); }}>
-                                <span>{o.name}</span>
-                                {o.phone && <span className="text-xs text-muted-foreground">{o.phone}</span>}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-};
 
 type BreakdownItem = { id: string; name: string; amount: number; date: string; notes: string };
 type BreakdownMap = Record<string, BreakdownItem[]>;
@@ -160,7 +115,6 @@ export const ConsignmentForm = () => {
     const [saleType, setSaleType] = useState<SaleType | null>(null);
     const [step, setStep] = useState(0);
     const [tid, setTid] = useState<string | number | undefined>();
-    const [selectedOwnerName, setSelectedOwnerName] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [breakdownMap, setBreakdownMap] = useState<BreakdownMap>({});
     const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>({});
@@ -168,6 +122,8 @@ export const ConsignmentForm = () => {
         open: false, catKey: "", catLabel: "", catIcon: "",
     });
     const [newItem, setNewItem] = useState({ name: "", amount: "", date: new Date().toISOString().split("T")[0], notes: "" });
+    const [openMake, setOpenMake] = useState(false);
+    const [makeSearchValue, setMakeSearchValue] = useState("");
 
     const form = useForm<FormData>({
         resolver: zodResolver(createConsignmentSchema),
@@ -175,8 +131,16 @@ export const ConsignmentForm = () => {
             saleType: "park_sale",
             vehicleType: "two_wheeler",
             make: "", model: "", registrationNo: "",
-            previousOwner: "", dateReceived: new Date().toISOString().split("T")[0],
+            year: null,
+            color: "",
+            previousOwner: "", previousOwnerPhone: "",
+            financeCompany: "",
+            dateReceived: new Date().toISOString().split("T")[0],
             sourceType: "owner",
+            sourceNotes: "",
+            expectedPrice: undefined,
+            agreedDuration: undefined,
+            agreementNotes: "",
             purchasePrice: 0,
             travelCost: 0, workshopRepairCost: 0, sparePartsAccessories: 0,
             alignmentWork: 0, paintingPolishingCost: 0, washingDetailingCost: 0,
@@ -294,13 +258,103 @@ export const ConsignmentForm = () => {
                                     )} />
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <FormField control={form.control} name="make" render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel className="text-xs font-semibold">Make *</FormLabel>
-                                            <FormControl><Input placeholder="Honda, Yamaha..." className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )} />
+                                    <FormField control={form.control} name="make" render={({ field }) => {
+                                        const makes = watchedValues.vehicleType === "two_wheeler" ? VEHICLE_MAKES_2W : VEHICLE_MAKES_4W;
+                                        return (
+                                            <FormItem className="flex flex-col">
+                                                <FormLabel className="text-xs font-semibold">Vehicle Brand / Make *</FormLabel>
+                                                <Popover open={openMake} onOpenChange={setOpenMake}>
+                                                    <PopoverTrigger asChild>
+                                                        <FormControl>
+                                                            <Button
+                                                                variant="outline"
+                                                                role="combobox"
+                                                                aria-expanded={openMake}
+                                                                className={cn(
+                                                                    "h-9 w-full justify-between bg-muted/50 border-border text-left text-sm font-normal hover:bg-muted/70 hover:text-foreground mt-1.5",
+                                                                    !field.value && "text-muted-foreground"
+                                                                )}
+                                                            >
+                                                                {field.value
+                                                                    ? makes.includes(field.value)
+                                                                        ? field.value
+                                                                        : `${field.value} (Custom)`
+                                                                    : "Select or type brand..."}
+                                                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                            </Button>
+                                                        </FormControl>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-80 p-0 bg-card border-border shadow-2xl" align="start">
+                                                        <Command className="bg-card">
+                                                            <CommandInput 
+                                                                placeholder="Search brand (e.g. Honda, Suzuki)..." 
+                                                                className="h-10 text-foreground"
+                                                                onValueChange={(val) => setMakeSearchValue(val)}
+                                                            />
+                                                            <CommandList className="max-h-[220px] overflow-y-auto">
+                                                                <CommandEmpty className="py-3 px-4 text-xs text-muted-foreground">
+                                                                    No matching brand found.
+                                                                </CommandEmpty>
+                                                                <CommandGroup className="text-foreground">
+                                                                    {makeSearchValue.trim() && !makes.some(m => m.toLowerCase() === makeSearchValue.trim().toLowerCase()) && (
+                                                                        <CommandItem
+                                                                            value={makeSearchValue.trim()}
+                                                                            onSelect={() => {
+                                                                                field.onChange(makeSearchValue.trim());
+                                                                                setOpenMake(false);
+                                                                                setMakeSearchValue("");
+                                                                            }}
+                                                                            className="cursor-pointer text-sm font-semibold text-primary py-2 hover:bg-muted/50 flex items-center gap-1.5"
+                                                                        >
+                                                                            <Plus className="h-4 w-4" />
+                                                                            <span>Add custom brand: &quot;{makeSearchValue.trim()}&quot;</span>
+                                                                        </CommandItem>
+                                                                    )}
+                                                                    {makes.map((m) => (
+                                                                        <CommandItem
+                                                                            key={m}
+                                                                            value={m}
+                                                                            onSelect={() => {
+                                                                                field.onChange(m);
+                                                                                setOpenMake(false);
+                                                                                setMakeSearchValue("");
+                                                                            }}
+                                                                            className="cursor-pointer text-sm py-2 hover:bg-muted/50 flex items-center justify-between"
+                                                                        >
+                                                                            <span className="flex items-center">
+                                                                                <Check
+                                                                                    className={cn(
+                                                                                        "mr-2 h-4 w-4 text-primary",
+                                                                                        m === field.value ? "opacity-100" : "opacity-0"
+                                                                                    )}
+                                                                                />
+                                                                                {m}
+                                                                            </span>
+                                                                        </CommandItem>
+                                                                    ))}
+                                                                    {field.value && !makes.includes(field.value) && (
+                                                                        <CommandItem
+                                                                            value={field.value}
+                                                                            onSelect={() => {
+                                                                                setOpenMake(false);
+                                                                                setMakeSearchValue("");
+                                                                            }}
+                                                                            className="cursor-pointer font-semibold text-primary py-2 hover:bg-muted/50"
+                                                                        >
+                                                                            <Check className="mr-2 h-4 w-4 opacity-100" />
+                                                                            {field.value} (Custom)
+                                                                        </CommandItem>
+                                                                    )}
+                                                                </CommandGroup>
+                                                            </CommandList>
+                                                        </Command>
+                                                    </PopoverContent>
+                                                </Popover>
+                                                <FormMessage />
+                                            </FormItem>
+                                        );
+                                    }}
+                                    />
                                     <FormField control={form.control} name="model" render={({ field }) => (
                                         <FormItem>
                                             <FormLabel className="text-xs font-semibold">Model *</FormLabel>
@@ -320,7 +374,7 @@ export const ConsignmentForm = () => {
                                     <FormField control={form.control} name="color" render={({ field }) => (
                                         <FormItem>
                                             <FormLabel className="text-xs font-semibold">Color</FormLabel>
-                                            <FormControl><Input placeholder="Black, Red..." className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl>
+                                            <FormControl><Input placeholder="Black, Red..." className="h-9 bg-muted/50 border-border text-sm" {...field} value={field.value ?? ""} /></FormControl>
                                         </FormItem>
                                     )} />
                                     <FormField control={form.control} name="dateReceived" render={({ field }) => (
@@ -343,17 +397,7 @@ export const ConsignmentForm = () => {
                                 </div>
                             </div>
                             <div className="p-5 space-y-4">
-                                {saleType === "park_sale" && (
-                                    <div className="flex flex-col gap-1.5">
-                                        <label className="text-xs font-semibold text-foreground">Select from Owner Registry</label>
-                                        <OwnerSearch value={selectedOwnerName} onChange={(id, name) => {
-                                            form.setValue("ownerId", id);
-                                            form.setValue("previousOwner", name);
-                                            setSelectedOwnerName(name);
-                                        }} />
-                                        <p className="text-[11px] text-muted-foreground">Or type a name below manually</p>
-                                    </div>
-                                )}
+
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <FormField control={form.control} name="previousOwner" render={({ field }) => (
                                         <FormItem>
@@ -365,7 +409,7 @@ export const ConsignmentForm = () => {
                                     <FormField control={form.control} name="previousOwnerPhone" render={({ field }) => (
                                         <FormItem>
                                             <FormLabel className="text-xs font-semibold">Phone</FormLabel>
-                                            <FormControl><Input placeholder="+91 9876543210" className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl>
+                                            <FormControl><Input placeholder="+91 9876543210" className="h-9 bg-muted/50 border-border text-sm" {...field} value={field.value ?? ""} /></FormControl>
                                         </FormItem>
                                     )} />
                                 </div>
@@ -373,7 +417,7 @@ export const ConsignmentForm = () => {
                                     <FormField control={form.control} name="financeCompany" render={({ field }) => (
                                         <FormItem>
                                             <FormLabel className="text-xs font-semibold">Finance Company (optional)</FormLabel>
-                                            <FormControl><Input placeholder="e.g. Bajaj Finance, HDFC..." className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl>
+                                            <FormControl><Input placeholder="e.g. Bajaj Finance, HDFC..." className="h-9 bg-muted/50 border-border text-sm" {...field} value={field.value ?? ""} /></FormControl>
                                         </FormItem>
                                     )} />
                                 )}
@@ -418,7 +462,7 @@ export const ConsignmentForm = () => {
                                         <FormField control={form.control} name="agreementNotes" render={({ field }) => (
                                             <FormItem>
                                                 <FormLabel className="text-xs font-semibold">Agreement Notes</FormLabel>
-                                                <FormControl><Textarea placeholder="e.g. Owner wants min ₹65K, commission ₹2K..." rows={2} className="resize-none text-sm bg-muted/50 border-border" {...field} /></FormControl>
+                                                <FormControl><Textarea placeholder="e.g. Owner wants min ₹65K, commission ₹2K..." rows={2} className="resize-none text-sm bg-muted/50 border-border" {...field} value={field.value ?? ""} /></FormControl>
                                             </FormItem>
                                         )} />
                                     </div>
@@ -426,7 +470,7 @@ export const ConsignmentForm = () => {
                                 <FormField control={form.control} name="sourceNotes" render={({ field }) => (
                                     <FormItem>
                                         <FormLabel className="text-xs font-semibold">Source Notes</FormLabel>
-                                        <FormControl><Textarea placeholder="Any additional context..." rows={2} className="resize-none text-sm bg-muted/50 border-border" {...field} /></FormControl>
+                                        <FormControl><Textarea placeholder="Any additional context..." rows={2} className="resize-none text-sm bg-muted/50 border-border" {...field} value={field.value ?? ""} /></FormControl>
                                     </FormItem>
                                 )} />
                             </div>

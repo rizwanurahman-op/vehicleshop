@@ -163,13 +163,52 @@ export const getProfitLossReport = async (req: Request, res: Response): Promise<
     res.json({ success: true, statusCode: 200, message: "P&L report fetched", data: report });
 };
 
+export const exportProfitLoss = async (req: Request, res: Response): Promise<void> => {
+    const { vehicleType, dateFrom, dateTo, format = "csv" } = req.query as Record<string, string>;
+    const vehicles = await vs.getProfitLossReport(vehicleType, dateFrom, dateTo);
+    const timestamp = new Date().toISOString().slice(0, 10);
+
+    if (format === "csv") {
+        const esc = (x: unknown) => { const s = String(x ?? ""); return s.includes(",") || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s; };
+        const dFmt = (d: unknown) => d ? new Date(d as string).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+        const dINR = (n: unknown) => n == null ? "—" : `Rs. ${Math.abs(n as number).toLocaleString("en-IN")}`;
+        const headers = ["Vehicle ID", "Type", "Make", "Model", "Reg No", "Date Purchased", "Date Sold", "Total Invested", "Sold Price", "Profit/Loss", "P/L %", "Days to Sell", "Sale Status", "NOC Status"];
+        const rows = (vehicles as any[]).map(v => [
+            v.vehicleId, v.vehicleType === "two_wheeler" ? "Two Wheeler" : "Four Wheeler",
+            v.make, v.model, v.registrationNo,
+            dFmt(v.datePurchased), dFmt(v.dateSold),
+            dINR(v.totalInvestment), dINR(v.soldPrice),
+            dINR(v.profitLoss), `${(v.profitLossPercentage ?? 0).toFixed(1)}%`,
+            v.daysToSell != null ? v.daysToSell : "—",
+            (v.saleStatus ?? "").replace(/_/g, " "), (v.nocStatus ?? "").replace(/_/g, " "),
+        ].map(esc).join(","));
+        const csv = [headers.map(esc).join(","), ...rows].join("\r\n");
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader("Content-Disposition", `attachment; filename="pl_report_${timestamp}.csv"`);
+        res.send("\uFEFF" + csv);
+        return;
+    }
+
+    if (format === "pdf") {
+        const { exportPLReportPDF } = await import("../services/pl_report_export");
+        const buf = await exportPLReportPDF(vehicles as any[], { vehicleType, dateFrom, dateTo });
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `attachment; filename="pl_report_${timestamp}.pdf"`);
+        res.send(buf);
+        return;
+    }
+
+    res.status(400).json({ success: false, message: "format must be 'csv' or 'pdf'" });
+};
+
 export const getMonthlyReport = async (_req: Request, res: Response): Promise<void> => {
     const report = await vs.getMonthlyReport();
     res.json({ success: true, statusCode: 200, message: "Monthly report fetched", data: report });
 };
 
-export const getPendingReport = async (_req: Request, res: Response): Promise<void> => {
-    const report = await vs.getPendingReport();
+export const getPendingReport = async (req: Request, res: Response): Promise<void> => {
+    const { vehicleType, dateFrom, dateTo } = req.query as Record<string, string>;
+    const report = await vs.getPendingReport({ vehicleType, dateFrom, dateTo });
     res.json({ success: true, statusCode: 200, message: "Pending report fetched", data: report });
 };
 
@@ -182,6 +221,32 @@ export const getPurchaseRegister = async (req: Request, res: Response): Promise<
     const { vehicleType, paymentStatus, search, dateFrom, dateTo, page = "1", limit = "20" } = req.query as Record<string, string>;
     const result = await vs.getPurchaseRegister({ vehicleType, paymentStatus, search, dateFrom, dateTo, page: +page, limit: +limit });
     res.json({ success: true, statusCode: 200, message: "Purchase register fetched", data: result });
+};
+
+export const exportPurchases = async (req: Request, res: Response): Promise<void> => {
+    const { vehicleType, paymentStatus, search, dateFrom, dateTo, format } = req.query as Record<string, string>;
+
+    if (format !== "csv" && format !== "pdf") {
+        res.status(400).json({ success: false, message: "format must be 'csv' or 'pdf'" });
+        return;
+    }
+
+    const { exportPurchasesCSV, exportPurchasesPDF } = await import("../services/purchase_export");
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const filename = `purchase_register_${timestamp}`;
+
+    if (format === "csv") {
+        const csv = await exportPurchasesCSV({ vehicleType, paymentStatus, search, dateFrom, dateTo });
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader("Content-Disposition", `attachment; filename="${filename}.csv"`);
+        res.send("\uFEFF" + csv);
+        return;
+    }
+
+    const pdfBuffer = await exportPurchasesPDF({ vehicleType, paymentStatus, search, dateFrom, dateTo });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}.pdf"`);
+    res.send(pdfBuffer);
 };
 
 // ── Exchange Vehicle Lookup ─────────────────────────────────────────

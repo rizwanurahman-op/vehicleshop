@@ -4,22 +4,43 @@ import { useQuery } from "@tanstack/react-query";
 import axios from "@config/axios";
 import { formatCurrency } from "@lib/currency";
 import { cn } from "@/lib/utils";
-import { TrendingUp, TrendingDown, Package, DollarSign, BarChart3, AlertTriangle, ShoppingCart, ExternalLink } from "lucide-react";
+import { TrendingUp, TrendingDown, Package, DollarSign, BarChart3, AlertTriangle, ShoppingCart, ExternalLink, Calendar, X, Download, FileText, FileSpreadsheet, Loader2, ChevronDown, Filter } from "lucide-react";
 import Link from "next/link";
 import { formatDate } from "@lib/date";
+import { useState, useMemo } from "react";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { getClientSession } from "@/lib/auth";
+import { toast } from "sonner";
 
-const fetchStats = async (): Promise<IVehicleDashboardStats | null> => {
-    const res = await axios.get<ApiResponse<IVehicleDashboardStats>>("/vehicles/stats");
+type DatePreset = "all" | "today" | "this_week" | "this_month" | "this_year" | "last_year" | "custom";
+
+const getPresetRange = (preset: DatePreset): { dateFrom?: string; dateTo?: string } => {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    if (preset === "today") { const t = fmt(now); return { dateFrom: t, dateTo: t }; }
+    if (preset === "this_week") { const s = new Date(now); s.setDate(now.getDate() - now.getDay()); return { dateFrom: fmt(s), dateTo: fmt(now) }; }
+    if (preset === "this_month") return { dateFrom: fmt(new Date(now.getFullYear(), now.getMonth(), 1)), dateTo: fmt(now) };
+    if (preset === "this_year")  return { dateFrom: fmt(new Date(now.getFullYear(), 0, 1)), dateTo: fmt(now) };
+    if (preset === "last_year")  return { dateFrom: `${now.getFullYear() - 1}-01-01`, dateTo: `${now.getFullYear() - 1}-12-31` };
+    return {};
+};
+
+const fetchStats = async (params: Record<string, string>): Promise<IVehicleDashboardStats | null> => {
+    const res = await axios.get<ApiResponse<IVehicleDashboardStats>>("/vehicles/stats", { params });
     return res.data.data ?? null;
 };
 
-const fetchPLReport = async (): Promise<IVehicle[]> => {
-    const res = await axios.get<ApiResponse<IVehicle[]>>("/vehicles/reports/profit-loss");
+const fetchPLReport = async (params: Record<string, string>): Promise<IVehicle[]> => {
+    const res = await axios.get<ApiResponse<IVehicle[]>>("/vehicles/reports/profit-loss", { params });
     return res.data.data ?? [];
 };
 
-const fetchPending = async (): Promise<IVehicle[]> => {
-    const res = await axios.get<ApiResponse<IVehicle[]>>("/vehicles/reports/pending");
+const fetchPending = async (params: Record<string, string>): Promise<IVehicle[]> => {
+    const res = await axios.get<ApiResponse<IVehicle[]>>("/vehicles/reports/pending", { params });
     return res.data.data ?? [];
 };
 
@@ -41,38 +62,75 @@ interface PurchaseRegisterData {
     stats: { totalPurchasePrice: number; totalPaid: number; totalPending: number; pendingCount: number };
 }
 
-const fetchPurchaseDue = async (): Promise<PurchaseRegisterData | null> => {
-    const res = await axios.get<ApiResponse<PurchaseRegisterData>>("/vehicles/reports/purchases", {
-        params: { paymentStatus: "partial", limit: 50 },
-    });
-    // also fetch "pending"
-    const res2 = await axios.get<ApiResponse<PurchaseRegisterData>>("/vehicles/reports/purchases", {
-        params: { paymentStatus: "pending", limit: 50 },
-    });
+const fetchPurchaseDue = async (params: Record<string, string>): Promise<PurchaseRegisterData | null> => {
+    const baseParams = { limit: "50", ...params };
+    const [res, res2] = await Promise.all([
+        axios.get<ApiResponse<PurchaseRegisterData>>("/vehicles/reports/purchases", { params: { ...baseParams, paymentStatus: "partial" } }),
+        axios.get<ApiResponse<PurchaseRegisterData>>("/vehicles/reports/purchases", { params: { ...baseParams, paymentStatus: "pending" } }),
+    ]);
     const data1 = res.data.data?.data ?? [];
     const data2 = res2.data.data?.data ?? [];
-    const stats = res.data.data?.stats ?? { totalPurchasePrice: 0, totalPaid: 0, totalPending: 0, pendingCount: 0 };
-    const stats2 = res2.data.data?.stats ?? { totalPurchasePrice: 0, totalPaid: 0, totalPending: 0, pendingCount: 0 };
-    return {
-        data: [...data1, ...data2],
-        stats: {
-            totalPurchasePrice: stats.totalPurchasePrice + stats2.totalPurchasePrice,
-            totalPaid: stats.totalPaid + stats2.totalPaid,
-            totalPending: stats.totalPending + stats2.totalPending,
-            pendingCount: stats.pendingCount + stats2.pendingCount,
-        }
-    };
+    const s1 = res.data.data?.stats  ?? { totalPurchasePrice: 0, totalPaid: 0, totalPending: 0, pendingCount: 0 };
+    const s2 = res2.data.data?.stats ?? { totalPurchasePrice: 0, totalPaid: 0, totalPending: 0, pendingCount: 0 };
+    return { data: [...data1, ...data2], stats: { totalPurchasePrice: s1.totalPurchasePrice + s2.totalPurchasePrice, totalPaid: s1.totalPaid + s2.totalPaid, totalPending: s1.totalPending + s2.totalPending, pendingCount: s1.pendingCount + s2.pendingCount } };
 };
 
 const VehicleReports = () => {
-    const { data: stats, isLoading: statsLoading } = useQuery<IVehicleDashboardStats | null>({ queryKey: ["vehicle-stats"], queryFn: fetchStats, retry: 0 });
-    const { data: plReport = [], isLoading: plLoading } = useQuery<IVehicle[]>({ queryKey: ["vehicle-pl-report"], queryFn: fetchPLReport, retry: 0 });
-    const { data: pending = [], isLoading: pendingLoading } = useQuery<IVehicle[]>({ queryKey: ["vehicle-pending-report"], queryFn: fetchPending, retry: 0 });
-    const { data: purchaseDueData, isLoading: purchaseDueLoading } = useQuery<PurchaseRegisterData | null>({ queryKey: ["purchase-due-report"], queryFn: fetchPurchaseDue, retry: 0 });
+    // ── Page-level filters (affect ALL sections) ─────────────────────
+    const [vehicleType, setVehicleType] = useState("all");
+    const [datePreset, setDatePreset] = useState<DatePreset>("all");
+    const [customFrom, setCustomFrom] = useState("");
+    const [customTo, setCustomTo]     = useState("");
+    const [isExporting, setIsExporting] = useState<"csv" | "pdf" | null>(null);
+
+    const dateRange = useMemo(() => {
+        if (datePreset === "custom") return { dateFrom: customFrom || undefined, dateTo: customTo || undefined };
+        return getPresetRange(datePreset);
+    }, [datePreset, customFrom, customTo]);
+
+    const pageParams: Record<string, string> = {};
+    if (vehicleType !== "all") pageParams.vehicleType = vehicleType;
+    if (dateRange.dateFrom)   pageParams.dateFrom = dateRange.dateFrom;
+    if (dateRange.dateTo)     pageParams.dateTo   = dateRange.dateTo;
+
+    const isFilterActive = vehicleType !== "all" || datePreset !== "all";
+    const clearFilters = () => { setVehicleType("all"); setDatePreset("all"); setCustomFrom(""); setCustomTo(""); };
+
+    const handleExport = async (format: "csv" | "pdf") => {
+        setIsExporting(format);
+        const tid = toast.loading(`Preparing ${format.toUpperCase()} export…`, { description: "Building P&L report" });
+        try {
+            const p = new URLSearchParams({ format, ...pageParams });
+            const baseURL = (axios.defaults.baseURL ?? "").replace(/\/$/, "");
+            const url = `${baseURL}/vehicles/reports/profit-loss/export?${p.toString()}`;
+            const token = getClientSession();
+            const res = await fetch(url, { credentials: "include", headers: token ? { Authorization: `Bearer ${token}` } : {} });
+            if (!res.ok) throw new Error("Export failed");
+            const blob = await res.blob();
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            const fileName = `pl_report_${new Date().toISOString().slice(0, 10)}.${format}`;
+            link.download = fileName;
+            document.body.appendChild(link); link.click(); link.remove();
+            URL.revokeObjectURL(link.href);
+            toast.success(`${format.toUpperCase()} downloaded!`, { id: tid, description: `${fileName} saved to downloads` });
+        } catch {
+            toast.error("Export failed", { id: tid, description: "Could not generate the report. Please try again." });
+        } finally { setIsExporting(null); }
+    };
+
+    // All queries share pageParams ────────────────────────────────────
+    const { data: stats, isLoading: statsLoading } = useQuery<IVehicleDashboardStats | null>({ queryKey: ["vehicle-stats", pageParams], queryFn: () => fetchStats(pageParams), retry: 0 });
+    const { data: plReport = [], isLoading: plLoading } = useQuery<IVehicle[]>({ queryKey: ["vehicle-pl-report", pageParams], queryFn: () => fetchPLReport(pageParams), retry: 0 });
+    const { data: pending = [], isLoading: pendingLoading } = useQuery<IVehicle[]>({ queryKey: ["vehicle-pending-report", pageParams], queryFn: () => fetchPending(pageParams), retry: 0 });
+    const { data: purchaseDueData, isLoading: purchaseDueLoading } = useQuery<PurchaseRegisterData | null>({ queryKey: ["purchase-due-report", pageParams], queryFn: () => fetchPurchaseDue(pageParams), retry: 0 });
 
     const combined = stats?.combined;
     const purchaseDue = purchaseDueData?.data ?? [];
     const purchaseDueStats = purchaseDueData?.stats;
+    const salePending = useMemo(() => {
+        return pending.filter((v) => v.saleStatus && ["balance_pending", "noc_pending", "noc_cash_pending"].includes(v.saleStatus));
+    }, [pending]);
 
     const StatCard = ({ label, value, sub, color, icon: Icon }: { label: string; value: string; sub?: string; color?: string; icon?: React.ComponentType<{ className?: string }> }) => (
         <div className="rounded-xl border border-border bg-card p-4">
@@ -88,13 +146,91 @@ const VehicleReports = () => {
     return (
         <div className="flex w-full flex-col gap-6 pb-10">
             {/* Header */}
-            <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-brand shadow-lg">
-                    <BarChart3 className="h-5 w-5 text-white" />
+            <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-brand shadow-lg">
+                            <BarChart3 className="h-5 w-5 text-white" />
+                        </div>
+                        <div>
+                            <h1 className="text-2xl font-bold text-foreground">Vehicle Reports & Analytics</h1>
+                            <p className="text-sm text-muted-foreground">Comprehensive view of your vehicle business</p>
+                        </div>
+                    </div>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="border-border text-muted-foreground hover:text-foreground self-start sm:self-auto" disabled={!!isExporting}>
+                                {isExporting ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Download className="mr-1.5 h-4 w-4" />}
+                                Export P&L
+                                <ChevronDown className="ml-1 h-3 w-3 opacity-60" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuLabel className="text-xs text-muted-foreground">P&L Report — Download as</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => handleExport("csv")} disabled={isExporting === "csv"} className="gap-2 cursor-pointer">
+                                <FileSpreadsheet className="h-4 w-4 text-emerald-500" />
+                                <div><p className="text-sm font-medium">Export CSV</p><p className="text-[10px] text-muted-foreground">Excel compatible</p></div>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleExport("pdf")} disabled={isExporting === "pdf"} className="gap-2 cursor-pointer">
+                                <FileText className="h-4 w-4 text-red-500" />
+                                <div><p className="text-sm font-medium">Export PDF</p><p className="text-[10px] text-muted-foreground">Formatted report</p></div>
+                            </DropdownMenuItem>
+                            {isFilterActive && (<><DropdownMenuSeparator /><p className="px-2 py-1 text-[10px] text-primary">✦ Exports respect active filters</p></>)}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
-                <div>
-                    <h1 className="text-2xl font-bold text-foreground">Vehicle Reports & Analytics</h1>
-                    <p className="text-sm text-muted-foreground">Comprehensive view of your vehicle business</p>
+                <div className="flex flex-col gap-3">
+                    <div className="flex flex-wrap gap-3 items-center">
+                        <Select value={vehicleType} onValueChange={setVehicleType}>
+                            <SelectTrigger className="h-9 w-44 bg-muted/50 border-border">
+                                <Filter className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+                                <SelectValue placeholder="All Types" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Types</SelectItem>
+                                <SelectItem value="two_wheeler">🏍️ Two Wheelers</SelectItem>
+                                <SelectItem value="four_wheeler">🚗 Four Wheelers</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
+                            <Calendar className="h-3.5 w-3.5" />
+                            <span className="font-medium">Date:</span>
+                        </div>
+                        <Select value={datePreset} onValueChange={(v) => setDatePreset(v as DatePreset)}>
+                            <SelectTrigger className="h-9 w-44 bg-muted/50 border-border">
+                                <SelectValue placeholder="All Time" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Time</SelectItem>
+                                <SelectItem value="today">Today</SelectItem>
+                                <SelectItem value="this_week">This Week</SelectItem>
+                                <SelectItem value="this_month">This Month</SelectItem>
+                                <SelectItem value="this_year">This Year</SelectItem>
+                                <SelectItem value="last_year">Last Year</SelectItem>
+                                <SelectItem value="custom">Custom Range…</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        {datePreset === "custom" && (
+                            <div className="flex items-center gap-2">
+                                <Input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="h-9 w-40 bg-muted/50 border-border text-sm" />
+                                <span className="text-xs text-muted-foreground">to</span>
+                                <Input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="h-9 w-40 bg-muted/50 border-border text-sm" />
+                            </div>
+                        )}
+                    </div>
+                    {isFilterActive && (
+                        <div className="flex items-center justify-between rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
+                            <div className="flex items-center gap-2 text-xs text-primary">
+                                <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse inline-block" />
+                                <span className="font-medium">Filters active</span>
+                                <span className="text-muted-foreground">— all sections filtered</span>
+                            </div>
+                            <Button variant="ghost" size="sm" onClick={clearFilters} className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground">
+                                <X className="h-3 w-3" />Clear Filters
+                            </Button>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -210,7 +346,7 @@ const VehicleReports = () => {
                 </div>
                 {pendingLoading ? (
                     <div className="h-40 rounded-xl bg-muted/40 animate-pulse" />
-                ) : pending.length === 0 ? (
+                ) : salePending.length === 0 ? (
                     <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground text-sm">No pending items 🎉</div>
                 ) : (
                     <div className="rounded-xl border border-border bg-card overflow-hidden">
@@ -224,7 +360,7 @@ const VehicleReports = () => {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border">
-                                    {pending.map((v) => (
+                                    {salePending.map((v) => (
                                         <tr key={v._id} className="hover:bg-muted/10 transition-colors">
                                             <td className="px-4 py-3">
                                                 <p className="font-semibold text-foreground whitespace-nowrap">{v.make} {v.model}</p>
@@ -253,7 +389,7 @@ const VehicleReports = () => {
 
             {/* P&L Table */}
             <div>
-                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Vehicle-wise P&L (Sold Only)</p>
+                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Vehicle-wise P&amp;L (Sold Only)</p>
                 {plLoading ? (
                     <div className="h-40 rounded-xl bg-muted/40 animate-pulse" />
                 ) : plReport.length === 0 ? (

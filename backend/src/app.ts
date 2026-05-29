@@ -26,6 +26,7 @@ import consignmentRoutes from "./routes/consignment.routes";
 import vehicleOwnerRoutes from "./routes/vehicle-owner.routes";
 import exchangeRoutes from "./routes/exchange.routes";
 import salesRoutes from "./routes/sales.routes";
+import userRoutes from "./routes/user.routes";
 
 const app = express();
 
@@ -52,6 +53,7 @@ app.get("/health", (_req, res) => {
 
 // ─── API Routes ───────────────────────────────────────────────
 app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1/users", userRoutes);
 app.use("/api/v1/lenders", lenderRoutes);
 app.use("/api/v1/investments", investmentRoutes);
 app.use("/api/v1/repayments", repaymentRoutes);

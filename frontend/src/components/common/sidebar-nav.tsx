@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { SIDEBAR_MENU } from "@data/menu";
 import { cn } from "@/lib/utils";
+import { useSessionStore } from "@stores/session";
 
 interface SidebarNavProps {
     collapsed?: boolean;
@@ -14,9 +15,13 @@ interface SidebarNavProps {
 export function SidebarNav({ collapsed = false, onItemClick }: SidebarNavProps) {
     const pathname = usePathname();
     const searchParams = useSearchParams();
+    const role = useSessionStore(s => s.user?.role);
+
+    // Filter out adminOnly items for non-admin users
+    const visibleMenu = SIDEBAR_MENU.filter(item => !item.adminOnly || role === "admin");
 
     // Group menu items
-    const groups = SIDEBAR_MENU.reduce<Record<string, typeof SIDEBAR_MENU>>((acc, item) => {
+    const groups = visibleMenu.reduce<Record<string, typeof visibleMenu>>((acc, item) => {
         const group = item.group || "Other";
         if (!acc[group]) acc[group] = [];
         acc[group].push(item);
@@ -44,7 +49,7 @@ export function SidebarNav({ collapsed = false, onItemClick }: SidebarNavProps) 
                             } else {
                                 const isPathMatch = pathname === hrefPath || pathname.startsWith(`${hrefPath}/`);
                                 if (isPathMatch) {
-                                    const isBetterMatchExists = SIDEBAR_MENU.some(otherItem => {
+                                    const isBetterMatchExists = visibleMenu.some(otherItem => {
                                         const otherHrefPath = otherItem.href.split("?")[0];
                                         return (
                                             otherItem.href !== item.href &&

@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useSessionStore } from "@stores/session";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -17,11 +17,13 @@ const getPageTitle = (pathname: string): string => {
     if (pathname.startsWith("/summary")) return "Summary";
     if (pathname.startsWith("/vehicles")) return "Vehicles";
     if (pathname.startsWith("/sales")) return "Sales";
+    if (pathname.startsWith("/settings")) return "Settings";
     return "VehicleBook";
 };
 
 const Navbar = () => {
     const pathname = usePathname();
+    const router = useRouter();
     const user = useSessionStore(s => s.user);
     const [logoutOpen, setLogoutOpen] = useState(false);
     const title = getPageTitle(pathname);
@@ -67,10 +69,10 @@ const Navbar = () => {
                                 <p className="text-xs text-muted-foreground">{user?.email}</p>
                             </DropdownMenuLabel>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => router.push("/settings")}>
                                 <User className="mr-2 h-4 w-4" /> Profile
                             </DropdownMenuItem>
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => router.push("/settings")}>
                                 <Settings className="mr-2 h-4 w-4" /> Settings
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />

@@ -8,6 +8,7 @@
         "build": "tsc",
         "start": "node dist/app.js",
         "seed": "tsx src/scripts/seed.ts",
+        "db:clear": "tsx src/scripts/clear-db.ts",
         "lint": "echo lint"
     },
     "keywords": [],

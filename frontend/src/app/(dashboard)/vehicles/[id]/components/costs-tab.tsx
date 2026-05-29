@@ -21,6 +21,8 @@ import {
     Plus, Trash2, Pencil, Check, X, IndianRupee,
     Loader2, Wrench, ChevronDown, ChevronRight, CalendarDays, FileText
 } from "lucide-react";
+import { AdminOnly } from "@components/shared";
+import { useIsAdmin } from "@hooks/use-role";
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -387,22 +389,32 @@ const CategoryRow = ({
                         )}
                     </button>
 
-                    {/* Amount + edit */}
-                    <InlineAmountEditor
-                        vehicleId={vehicleId}
-                        categoryKey={cat.key}
-                        currentAmount={amount}
-                        onSaved={() => { }}
-                    />
-
-                    {/* Add item button */}
-                    <button
-                        onClick={() => { setAddDialogOpen(true); setExpanded(true); }}
-                        className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 flex h-7 w-7 items-center justify-center rounded bg-muted hover:bg-primary/10 hover:text-primary text-muted-foreground transition-all"
-                        title={`Add ${cat.label} item`}
+                    {/* Amount + edit (admin) / read-only (viewer) */}
+                    <AdminOnly
+                        fallback={
+                            <span className={cn("font-bold text-sm", amount > 0 ? "text-primary" : "text-muted-foreground")}>
+                                {formatCurrency(amount)}
+                            </span>
+                        }
                     >
-                        <Plus className="h-4 w-4" />
-                    </button>
+                        <InlineAmountEditor
+                            vehicleId={vehicleId}
+                            categoryKey={cat.key}
+                            currentAmount={amount}
+                            onSaved={() => { }}
+                        />
+                    </AdminOnly>
+
+                    {/* Add item button — admin only */}
+                    <AdminOnly>
+                        <button
+                            onClick={() => { setAddDialogOpen(true); setExpanded(true); }}
+                            className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 flex h-7 w-7 items-center justify-center rounded bg-muted hover:bg-primary/10 hover:text-primary text-muted-foreground transition-all"
+                            title={`Add ${cat.label} item`}
+                        >
+                            <Plus className="h-4 w-4" />
+                        </button>
+                    </AdminOnly>
                 </div>
 
                 {/* Breakdown items */}
@@ -436,23 +448,25 @@ const CategoryRow = ({
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0 ml-2">
                                     <span className="text-xs font-bold text-primary">{formatCurrency(item.amount)}</span>
-                                    <DeleteCostItemDialog item={item} onDelete={() => deleteItem(item._id)} />
+                                    <AdminOnly><DeleteCostItemDialog item={item} onDelete={() => deleteItem(item._id)} /></AdminOnly>
                                 </div>
                             </div>
                         ))}
                     </div>
                 )}
 
-                {/* Empty state with add prompt */}
+                {/* Empty state with add prompt — admin only */}
                 {expanded && items.length === 0 && (
-                    <div className="mt-2 ml-7">
-                        <button
-                            onClick={() => setAddDialogOpen(true)}
-                            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
-                        >
-                            <Plus className="h-3 w-3" /> Add detailed breakdown item
-                        </button>
-                    </div>
+                    <AdminOnly>
+                        <div className="mt-2 ml-7">
+                            <button
+                                onClick={() => setAddDialogOpen(true)}
+                                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
+                            >
+                                <Plus className="h-3 w-3" /> Add detailed breakdown item
+                            </button>
+                        </div>
+                    </AdminOnly>
                 )}
             </div>
 
@@ -472,6 +486,7 @@ const CategoryRow = ({
 const CostsTab = ({ vehicle }: { vehicle: IVehicle }) => {
     const totalReconditioning = vehicle.totalInvestment - vehicle.purchasePrice;
     const queryClient = useQueryClient();
+    const isAdmin = useIsAdmin();
 
     const { mutate: syncCosts, isPending: isSyncing } = useMutation({
         mutationFn: () => axios.post(`/vehicles/${vehicle._id}/costs/recalc`),
@@ -519,17 +534,20 @@ const CostsTab = ({ vehicle }: { vehicle: IVehicle }) => {
                             Tap the pencil or plus icons to edit amounts or add breakdown items
                         </p>
                     </div>
+                {/* Fix Sync button — admin only */}
                     {isMismatched && (
-                        <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={() => syncCosts()} 
-                            disabled={isSyncing}
-                            className="h-8 text-xs border-orange-400 text-orange-400 hover:bg-orange-400/10 w-full sm:w-auto"
-                        >
-                            {isSyncing ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
-                            Fix Sync Issue
-                        </Button>
+                        <AdminOnly>
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => syncCosts()} 
+                                disabled={isSyncing}
+                                className="h-8 text-xs border-orange-400 text-orange-400 hover:bg-orange-400/10 w-full sm:w-auto"
+                            >
+                                {isSyncing ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
+                                Fix Sync Issue
+                            </Button>
+                        </AdminOnly>
                     )}
                 </div>
 
@@ -557,7 +575,9 @@ const CostsTab = ({ vehicle }: { vehicle: IVehicle }) => {
 
             {/* Help text */}
             <p className="text-[11px] text-muted-foreground text-center">
-                💡 Hover any row to edit the amount · Click <strong>+</strong> to add detailed breakdown items · Total Investment auto-recalculates
+                {isAdmin
+                    ? <>💡 Hover any row to edit the amount · Click <strong>+</strong> to add detailed breakdown items · Total Investment auto-recalculates</>
+                    : <>👁 View-only mode · Contact admin to edit costs</>}
             </p>
         </div>
     );

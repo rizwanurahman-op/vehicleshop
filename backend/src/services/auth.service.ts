@@ -109,5 +109,49 @@ const getMe = async (userId: string): Promise<IUser> => {
     return user;
 };
 
-const authService = { register, login, refreshAccessToken, logout, logoutByRefreshToken, getMe };
+interface UpdateProfileInput {
+    username?: string;
+    email?: string;
+}
+
+const updateProfile = async (userId: string, data: UpdateProfileInput): Promise<IUser> => {
+    // Check for conflicts on username/email (exclude current user)
+    if (data.username || data.email) {
+        const orConditions: Array<Record<string, string>> = [];
+        if (data.username) orConditions.push({ username: data.username.toLowerCase() });
+        if (data.email) orConditions.push({ email: data.email.toLowerCase() });
+
+        const conflict = await User.findOne({
+            _id: { $ne: userId },
+            $or: orConditions,
+        });
+        if (conflict) throw new ConflictError("Username or email is already in use");
+    }
+
+    const updateData: Record<string, string> = {};
+    if (data.username) updateData.username = data.username.toLowerCase();
+    if (data.email) updateData.email = data.email.toLowerCase();
+
+    const user = await User.findByIdAndUpdate(userId, updateData, { new: true }).select("-passwordHash -refreshToken");
+    if (!user) throw new NotFoundError("User");
+    return user;
+};
+
+interface ChangePasswordInput {
+    currentPassword: string;
+    newPassword: string;
+}
+
+const changePassword = async (userId: string, data: ChangePasswordInput): Promise<void> => {
+    const user = await User.findById(userId);
+    if (!user) throw new NotFoundError("User");
+
+    const isValid = await user.comparePassword(data.currentPassword);
+    if (!isValid) throw new UnauthorizedError("Current password is incorrect");
+
+    user.passwordHash = await bcrypt.hash(data.newPassword, 12);
+    await user.save();
+};
+
+const authService = { register, login, refreshAccessToken, logout, logoutByRefreshToken, getMe, updateProfile, changePassword };
 export default authService;
