@@ -167,10 +167,12 @@ export const exportPurchasesPDF = async (query: PurchaseExportQuery): Promise<Bu
 
         // ── SUMMARY BAND ────────────────────────────────────────────────
         const summaryY = 56;
-        const mW = CW / 5;
+        const totalInvestment = vehicles.reduce((s, v) => s + ((v as any).totalInvestment ?? v.purchasePrice ?? 0), 0);
+        const mW = CW / 6;
         const summaryMetrics = [
             { label: "TOTAL VEHICLES", value: vehicles.length.toString(), accent: C.indigo },
             { label: "TOTAL PURCHASE VALUE", value: dINR(totalPurchasePrice), accent: C.amber },
+            { label: "TOTAL INVESTED", value: dINR(totalInvestment), accent: C.indigo },
             { label: "AMOUNT PAID", value: dINR(totalPaid), accent: C.green },
             { label: "AMOUNT PENDING", value: dINR(totalPending), accent: C.red },
             { label: "FULLY SETTLED", value: `${fullyPaidCount} / ${vehicles.length}`, accent: C.green },

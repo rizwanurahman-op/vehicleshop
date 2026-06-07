@@ -44,6 +44,7 @@ const getPresetRange = (preset: DatePreset): { dateFrom?: string; dateTo?: strin
 // ── Types ──────────────────────────────────────────────────────────
 interface PurchaseStats {
     totalPurchasePrice: number;
+    totalInvestment: number;  // purchasePrice + all reconditioning costs
     totalPaid: number;
     totalPending: number;
     pendingCount: number;
@@ -302,9 +303,9 @@ const PurchasesList = () => {
                         icon={AlertTriangle}
                     />
                     <StatCard
-                        label="Total Investment"
-                        value={formatCurrency(stats.totalPurchasePrice)}
-                        sub={`${stats.fullyPaidCount + stats.pendingCount} tracked`}
+                        label="Total Invested"
+                        value={formatCurrency(stats.totalInvestment ?? stats.totalPurchasePrice)}
+                        sub="Purchase price + reconditioning costs"
                         color="text-blue-400"
                         bg="bg-blue-500/5 border-blue-500/20"
                         icon={Wallet}

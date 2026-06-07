@@ -328,6 +328,10 @@ export const undoSale = async (id: string) => {
     // Clear exchange flags — removes "Sold via Exchange" badge/banner/tab
     vehicle.isExchange = false;
     vehicle.exchangeVehicleRef = undefined;
+    // Clear finance fields from the reverted sale so stale company/amount
+    // don't bleed into the next sale. The pre-save hook will set financeStatus="none".
+    vehicle.financeCompany = undefined;
+    vehicle.financeAmount = 0;
     vehicle.activityLog.push({ action: "sale_undone", description: "Sale record reverted", date: new Date() });
     await vehicle.save();
     return vehicle;
@@ -971,6 +975,7 @@ export const getPurchaseRegister = async (query: PurchaseRegisterQuery): Promise
                 $group: {
                     _id: null,
                     totalPurchasePrice: { $sum: "$purchasePrice" },
+                    totalInvestment: { $sum: "$totalInvestment" },
                     totalPaid: { $sum: { $subtract: ["$purchasePrice", "$purchasePendingAmount"] } },
                     totalPending: { $sum: "$purchasePendingAmount" },
                     pendingCount: {
@@ -987,7 +992,7 @@ export const getPurchaseRegister = async (query: PurchaseRegisterQuery): Promise
     ]);
 
     const stats = agg[0] ?? {
-        totalPurchasePrice: 0, totalPaid: 0, totalPending: 0, pendingCount: 0, fullyPaidCount: 0,
+        totalPurchasePrice: 0, totalInvestment: 0, totalPaid: 0, totalPending: 0, pendingCount: 0, fullyPaidCount: 0,
     };
 
     return {

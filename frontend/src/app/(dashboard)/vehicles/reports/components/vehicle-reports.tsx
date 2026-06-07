@@ -59,7 +59,7 @@ interface PurchaseDueVehicle {
 
 interface PurchaseRegisterData {
     data: PurchaseDueVehicle[];
-    stats: { totalPurchasePrice: number; totalPaid: number; totalPending: number; pendingCount: number };
+    stats: { totalPurchasePrice: number; totalInvestment: number; totalPaid: number; totalPending: number; pendingCount: number };
 }
 
 const fetchPurchaseDue = async (params: Record<string, string>): Promise<PurchaseRegisterData | null> => {
@@ -70,9 +70,9 @@ const fetchPurchaseDue = async (params: Record<string, string>): Promise<Purchas
     ]);
     const data1 = res.data.data?.data ?? [];
     const data2 = res2.data.data?.data ?? [];
-    const s1 = res.data.data?.stats  ?? { totalPurchasePrice: 0, totalPaid: 0, totalPending: 0, pendingCount: 0 };
-    const s2 = res2.data.data?.stats ?? { totalPurchasePrice: 0, totalPaid: 0, totalPending: 0, pendingCount: 0 };
-    return { data: [...data1, ...data2], stats: { totalPurchasePrice: s1.totalPurchasePrice + s2.totalPurchasePrice, totalPaid: s1.totalPaid + s2.totalPaid, totalPending: s1.totalPending + s2.totalPending, pendingCount: s1.pendingCount + s2.pendingCount } };
+    const s1 = res.data.data?.stats  ?? { totalPurchasePrice: 0, totalInvestment: 0, totalPaid: 0, totalPending: 0, pendingCount: 0 };
+    const s2 = res2.data.data?.stats ?? { totalPurchasePrice: 0, totalInvestment: 0, totalPaid: 0, totalPending: 0, pendingCount: 0 };
+    return { data: [...data1, ...data2], stats: { totalPurchasePrice: s1.totalPurchasePrice + s2.totalPurchasePrice, totalInvestment: s1.totalInvestment + s2.totalInvestment, totalPaid: s1.totalPaid + s2.totalPaid, totalPending: s1.totalPending + s2.totalPending, pendingCount: s1.pendingCount + s2.pendingCount } };
 };
 
 const VehicleReports = () => {
