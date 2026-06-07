@@ -159,9 +159,22 @@ export const ConsignmentList = ({ initialData }: { initialData: ConsignmentPagin
 
     const vehicles = data?.data ?? [];
     const meta = data ? { total: data.total, page: data.page, totalPages: data.totalPages } : null;
-    const inShop = vehicles.filter(v => !["sold", "sold_pending", "returned"].includes(v.status)).length;
-    const sold = vehicles.filter(v => ["sold", "sold_pending"].includes(v.status)).length;
-    const totalInvested = vehicles.reduce((s, v) => s + v.totalInvestment, 0);
+
+    // Fetch backend stats for accurate totals (not page-limited)
+    const { data: stats } = useQuery<IConsignmentDashboardStats | null>({
+        queryKey: ["consignment-stats", saleType !== "all" ? saleType : undefined],
+        queryFn: async () => {
+            const p: Record<string, string> = {};
+            if (saleType !== "all") p.saleType = saleType;
+            const res = await axios.get<ApiResponse<IConsignmentDashboardStats>>("/consignments/stats", { params: p });
+            return res.data.data ?? null;
+        },
+    });
+
+    const totalInvested = stats?.totalInvested ?? 0;
+    const inShop = stats?.currentlyInShop ?? 0;
+    const sold = (stats?.sold ?? 0);
+    const totalCount = stats?.totalVehicles ?? (data?.total ?? 0);
 
     return (
         <div className="flex flex-col gap-5 pb-10">
@@ -214,7 +227,7 @@ export const ConsignmentList = ({ initialData }: { initialData: ConsignmentPagin
 
             {/* Quick Stats */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                <QuickStat label="Total" value={String(data?.total ?? 0)} />
+                <QuickStat label="Total" value={String(totalCount)} />
                 <QuickStat label="In Shop" value={String(inShop)} color="text-yellow-400" />
                 <QuickStat label="Sold" value={String(sold)} color="text-emerald-400" />
                 <QuickStat label="Invested" value={formatCurrency(totalInvested)} sub="Reconditioning + Purchase" />

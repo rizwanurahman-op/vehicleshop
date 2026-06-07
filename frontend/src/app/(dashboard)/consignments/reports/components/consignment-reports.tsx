@@ -254,22 +254,29 @@ export const ConsignmentReports = () => {
                             const po    = items.reduce((s, v) => s + (v.paidToPayee || 0), 0);
                             return (
                                 <div key={label} className="rounded-xl border border-border bg-card p-5">
-                                    <p className="font-bold text-foreground mb-4">{label}</p>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        {[
-                                            { l: "Total Sold", v: String(items.length) },
-                                            { l: "Invested", v: formatCurrency(inv) },
-                                            { l: "Revenue", v: formatCurrency(rev) },
-                                            { l: "Paid to Payee", v: formatCurrency(po) },
-                                            { l: "Net Profit", v: formatCurrency(np) },
-                                            { l: "Avg Days", v: items.length ? `${Math.round(items.reduce((s, v) => s + (v.daysInShop || 0), 0) / items.length)}d` : "—" },
-                                        ].map(row => (
-                                            <div key={row.l}>
-                                                <p className="text-xs text-muted-foreground">{row.l}</p>
-                                                <p className={cn("font-bold text-sm mt-0.5", row.l === "Net Profit" ? color : "text-foreground")}>{row.v}</p>
-                                            </div>
-                                        ))}
+                                    <div className="flex items-center justify-between mb-4">
+                                        <p className="font-bold text-foreground">{label}</p>
+                                        <span className="text-[10px] font-semibold text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-full">Sold Vehicles Only</span>
                                     </div>
+                                    {items.length === 0 ? (
+                                        <p className="text-sm text-muted-foreground text-center py-4">No sold vehicles yet</p>
+                                    ) : (
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {[
+                                                { l: "Total Sold", v: String(items.length) },
+                                                { l: "Total Invested", v: formatCurrency(inv) },
+                                                { l: "Revenue", v: formatCurrency(rev) },
+                                                { l: "Paid to Payee", v: formatCurrency(po) },
+                                                { l: "Net Profit", v: formatCurrency(np) },
+                                                { l: "Avg Days", v: items.length ? `${Math.round(items.reduce((s, v) => s + (v.daysInShop || 0), 0) / items.length)}d` : "—" },
+                                            ].map(row => (
+                                                <div key={row.l}>
+                                                    <p className="text-xs text-muted-foreground">{row.l}</p>
+                                                    <p className={cn("font-bold text-sm mt-0.5", row.l === "Net Profit" ? color : "text-foreground")}>{row.v}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             );
                         })}

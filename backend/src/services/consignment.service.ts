@@ -554,10 +554,26 @@ export const getConsignmentReports = async (saleType?: string, dateFrom?: string
             .select("consignmentId saleType make model registrationNo dateSold soldPrice receivedAmount buyerBalance paidToPayee payeeBalance buyerPaymentStatus payeePaymentStatus settlementStatus previousOwner")
             .sort({ dateSold: -1 })
             .lean(),
-        ConsignmentVehicle.find({ ...match, dateSold: null, status: { $nin: ["returned"] } })
-            .select("consignmentId saleType vehicleType make model registrationNo dateReceived daysInShop totalInvestment status previousOwner")
-            .sort({ daysInShop: -1 })
-            .lean(),
+        // Aging report: compute daysInShop live so values never go stale
+        ConsignmentVehicle.aggregate([
+            { $match: { ...match, dateSold: null, status: { $nin: ["returned"] } } },
+            {
+                $addFields: {
+                    daysInShop: {
+                        $dateDiff: { startDate: "$dateReceived", endDate: "$$NOW", unit: "day" },
+                    },
+                },
+            },
+            {
+                $project: {
+                    consignmentId: 1, saleType: 1, vehicleType: 1,
+                    make: 1, model: 1, registrationNo: 1,
+                    dateReceived: 1, daysInShop: 1,
+                    totalInvestment: 1, status: 1, previousOwner: 1,
+                },
+            },
+            { $sort: { daysInShop: -1 } },
+        ]),
         ConsignmentVehicle.aggregate([
             { $match: match },
             {
