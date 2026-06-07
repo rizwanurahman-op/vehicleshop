@@ -1159,8 +1159,8 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
     // Payment progress calculations
     const purchasePaid = vehicle.purchasePrice - vehicle.purchasePendingAmount;
     const purchasePct = vehicle.purchasePrice > 0 ? Math.min(100, Math.max(0, (purchasePaid / vehicle.purchasePrice) * 100)) : 0;
-    const salePct = isSold && vehicle.soldPrice && vehicle.soldPrice > 0 
-        ? Math.min(100, Math.max(0, (vehicle.receivedAmount / vehicle.soldPrice) * 100)) 
+    const salePct = isSold && vehicle.soldPrice && vehicle.soldPrice > 0
+        ? Math.min(100, Math.max(0, (vehicle.receivedAmount / vehicle.soldPrice) * 100))
         : 0;
 
     const hasExchangeActivity = vehicle.isExchange || vehicle.isFromExchange ||
@@ -1305,7 +1305,7 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                 {/* Unified Payment Progress Bars */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border border-t border-border bg-muted/5">
                     {/* Purchase Payment to Seller */}
-                    <div 
+                    <div
                         onClick={handlePurchaseClick}
                         className={cn(
                             "p-5 flex flex-col gap-2.5 transition-all duration-300 hover:bg-muted/20 cursor-pointer relative group bg-gradient-to-br from-card to-background/50",
@@ -1321,7 +1321,7 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                                 {purchasePct.toFixed(0)}%
                             </span>
                         </div>
-                        
+
                         <div className="flex justify-between items-baseline mt-1">
                             <p className="text-xl sm:text-2xl font-bold text-foreground">
                                 {formatCurrency(purchasePaid)}
@@ -1333,14 +1333,14 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                         </div>
 
                         <div className="h-2 bg-muted/40 rounded-full overflow-hidden relative shadow-inner">
-                            <div 
+                            <div
                                 className={cn(
-                                    "h-full rounded-full transition-all duration-1000 ease-out shadow-sm", 
-                                    purchasePct === 100 
-                                        ? "bg-gradient-to-r from-emerald-500 to-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.4)]" 
+                                    "h-full rounded-full transition-all duration-1000 ease-out shadow-sm",
+                                    purchasePct === 100
+                                        ? "bg-gradient-to-r from-emerald-500 to-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.4)]"
                                         : "bg-gradient-to-r from-amber-500 to-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.4)]"
-                                )} 
-                                style={{ width: `${animateProgress ? purchasePct : 0}%` }} 
+                                )}
+                                style={{ width: `${animateProgress ? purchasePct : 0}%` }}
                             />
                         </div>
 
@@ -1360,7 +1360,7 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                     </div>
 
                     {/* Sale Payment from Buyer */}
-                    <div 
+                    <div
                         onClick={handleSaleClick}
                         className={cn(
                             "p-5 flex flex-col gap-2.5 transition-all duration-300 hover:bg-muted/20 cursor-pointer relative group bg-gradient-to-br from-card to-background/50",
@@ -1376,7 +1376,7 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                                 {isSold ? `${salePct.toFixed(0)}%` : "N/A"}
                             </span>
                         </div>
-                        
+
                         <div className="flex justify-between items-baseline mt-1">
                             <div className="text-xl sm:text-2xl font-bold text-foreground">
                                 {isSold ? (
@@ -1394,16 +1394,16 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                         </div>
 
                         <div className="h-2 bg-muted/40 rounded-full overflow-hidden relative shadow-inner">
-                            <div 
+                            <div
                                 className={cn(
-                                    "h-full rounded-full transition-all duration-1000 ease-out shadow-sm", 
-                                    !isSold 
-                                        ? "bg-muted/30" 
-                                        : salePct === 100 
-                                            ? "bg-gradient-to-r from-emerald-500 to-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.4)]" 
+                                    "h-full rounded-full transition-all duration-1000 ease-out shadow-sm",
+                                    !isSold
+                                        ? "bg-muted/30"
+                                        : salePct === 100
+                                            ? "bg-gradient-to-r from-emerald-500 to-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.4)]"
                                             : "bg-gradient-to-r from-blue-500 to-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.4)]"
-                                )} 
-                                style={{ width: `${animateProgress ? (isSold ? salePct : 0) : 0}%` }} 
+                                )}
+                                style={{ width: `${animateProgress ? (isSold ? salePct : 0) : 0}%` }}
                             />
                         </div>
 
@@ -1631,8 +1631,8 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                                             </div>
                                             <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full border",
                                                 finStatus === "disbursed" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
-                                                finStatus === "partial" ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
-                                                "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                                                    finStatus === "partial" ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
+                                                        "bg-blue-500/10 text-blue-400 border-blue-500/20"
                                             )}>
                                                 {finStatus === "disbursed" ? "Fully Disbursed ✓" : finStatus === "partial" ? `Partial (${actualDisbursements.length} tranche${actualDisbursements.length !== 1 ? "s" : ""})` : "Awaiting Disbursement"}
                                             </span>
@@ -1706,61 +1706,61 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                                         const pAny = p as any;
                                         const isFinanceInit = p.mode === "Finance" && p.amount === 0;
                                         return (
-                                        <div key={p._id} className={cn("flex items-center justify-between px-5 py-3", i > 0 ? "border-t border-border" : "")}>
-                                            <div className="flex items-center gap-4">
-                                                {isFinanceInit ? (
-                                                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-500/10 text-blue-400 text-xs">
-                                                        <span>⏳</span>
-                                                    </div>
-                                                ) : (
-                                                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-success/10 text-emerald-400 text-xs font-bold">
-                                                        {vehicle.salePayments.filter(x => x.amount > 0).indexOf(p) + 1 || "—"}
-                                                    </div>
-                                                )}
-                                                <div>
+                                            <div key={p._id} className={cn("flex items-center justify-between px-5 py-3", i > 0 ? "border-t border-border" : "")}>
+                                                <div className="flex items-center gap-4">
                                                     {isFinanceInit ? (
-                                                        <div className="flex items-center gap-2 flex-wrap">
-                                                            <p className="text-sm font-semibold text-blue-400">Finance Initialized</p>
-                                                            <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[10px]">💳 Awaiting Disbursement</Badge>
+                                                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-500/10 text-blue-400 text-xs">
+                                                            <span>⏳</span>
                                                         </div>
                                                     ) : (
-                                                        <div className="flex items-center gap-2 flex-wrap">
-                                                            <p className="text-sm font-semibold text-emerald-400">+{formatCurrency(p.amount)} <span className="text-xs font-normal text-muted-foreground">via {p.type === "exchange" ? "Exchange" : p.mode}</span></p>
-                                                            {p.type === "exchange" && (
-                                                                <Badge className="bg-orange-500/10 text-orange-400 border-orange-500/20 text-[10px]">
-                                                                    <ArrowLeftRight className="mr-1 h-2.5 w-2.5" />Exchange
-                                                                </Badge>
-                                                            )}
-                                                            {p.mode === "Finance" && (
-                                                                <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[10px]">💳 Finance</Badge>
-                                                            )}
-                                                            {p.exchangeCreatedRef && p.exchangeCreatedIn && (
-                                                                <Link href={`/${p.exchangeCreatedIn === "vehicles" ? "vehicles" : "consignments"}/${p.exchangeCreatedRef}`}
-                                                                    className="inline-flex items-center gap-1 text-[10px] text-orange-400 hover:underline"
-                                                                    onClick={e => e.stopPropagation()}>
-                                                                    <ExternalLink className="h-2.5 w-2.5" />
-                                                                    {p.exchangeCreatedIn === "vehicles" ? "View Vehicle" : "View Consignment"}
-                                                                </Link>
-                                                            )}
+                                                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-success/10 text-emerald-400 text-xs font-bold">
+                                                            {vehicle.salePayments.filter(x => x.amount > 0).indexOf(p) + 1 || "—"}
                                                         </div>
                                                     )}
-                                                    <p className="text-xs text-muted-foreground">
-                                                        {formatDate(p.date)}
-                                                        {pAny.financeCompany && ` — ${pAny.financeCompany}`}
-                                                        {pAny.loanRef && ` (Loan: ${pAny.loanRef})`}
-                                                        {p.referenceNo && ` — Ref: ${p.referenceNo}`}
-                                                        {p.notes && ` — ${p.notes}`}
-                                                    </p>
-                                                    {p.exchangeVehicleMake && (
-                                                        <p className="text-[11px] text-orange-400/80 mt-0.5">
-                                                            {p.exchangeVehicleMake} {p.exchangeVehicleRegNo ? `(${p.exchangeVehicleRegNo})` : ""}
-                                                            {p.exchangeDetails ? ` — ${p.exchangeDetails}` : ""}
+                                                    <div>
+                                                        {isFinanceInit ? (
+                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                <p className="text-sm font-semibold text-blue-400">Finance Initialized</p>
+                                                                <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[10px]">💳 Awaiting Disbursement</Badge>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                <p className="text-sm font-semibold text-emerald-400">+{formatCurrency(p.amount)} <span className="text-xs font-normal text-muted-foreground">via {p.type === "exchange" ? "Exchange" : p.mode}</span></p>
+                                                                {p.type === "exchange" && (
+                                                                    <Badge className="bg-orange-500/10 text-orange-400 border-orange-500/20 text-[10px]">
+                                                                        <ArrowLeftRight className="mr-1 h-2.5 w-2.5" />Exchange
+                                                                    </Badge>
+                                                                )}
+                                                                {p.mode === "Finance" && (
+                                                                    <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[10px]">💳 Finance</Badge>
+                                                                )}
+                                                                {p.exchangeCreatedRef && p.exchangeCreatedIn && (
+                                                                    <Link href={`/${p.exchangeCreatedIn === "vehicles" ? "vehicles" : "consignments"}/${p.exchangeCreatedRef}`}
+                                                                        className="inline-flex items-center gap-1 text-[10px] text-orange-400 hover:underline"
+                                                                        onClick={e => e.stopPropagation()}>
+                                                                        <ExternalLink className="h-2.5 w-2.5" />
+                                                                        {p.exchangeCreatedIn === "vehicles" ? "View Vehicle" : "View Consignment"}
+                                                                    </Link>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                        <p className="text-xs text-muted-foreground">
+                                                            {formatDate(p.date)}
+                                                            {pAny.financeCompany && ` — ${pAny.financeCompany}`}
+                                                            {pAny.loanRef && ` (Loan: ${pAny.loanRef})`}
+                                                            {p.referenceNo && ` — Ref: ${p.referenceNo}`}
+                                                            {p.notes && ` — ${p.notes}`}
                                                         </p>
-                                                    )}
+                                                        {p.exchangeVehicleMake && (
+                                                            <p className="text-[11px] text-orange-400/80 mt-0.5">
+                                                                {p.exchangeVehicleMake} {p.exchangeVehicleRegNo ? `(${p.exchangeVehicleRegNo})` : ""}
+                                                                {p.exchangeDetails ? ` — ${p.exchangeDetails}` : ""}
+                                                            </p>
+                                                        )}
+                                                    </div>
                                                 </div>
+                                                <AdminOnly><DeletePaymentDialog type="sale" payment={p} onDelete={() => deletePayment({ type: "sale", paymentId: p._id })} /></AdminOnly>
                                             </div>
-                                            <AdminOnly><DeletePaymentDialog type="sale" payment={p} onDelete={() => deletePayment({ type: "sale", paymentId: p._id })} /></AdminOnly>
-                                        </div>
                                         );
                                     })}
                                 </div>
@@ -1898,12 +1898,13 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
             {/* Activity Log Tab */}
             {activeTab === "activity" && (
                 <div className="rounded-xl border border-border bg-card overflow-hidden">
-                    {vehicle.activityLog.length === 0 ? (
+                    {vehicle.activityLog.length === 0 && !vehicle.isFromExchange ? (
                         <div className="p-8 text-center text-muted-foreground text-sm">No activity recorded</div>
                     ) : (
                         <div className="divide-y divide-border">
                             {[...vehicle.activityLog].reverse().map((log, i) => {
                                 // Determine icon bg + text color based on action type
+                                const isExchangeOrigin = log.action === "received_via_exchange";
                                 const isExchangePayment = log.action === "sale_payment" && log.description.toLowerCase().includes("exchange");
                                 const isDeletion = log.action === "sale_payment_deleted" || log.action === "purchase_payment_deleted";
                                 const isRevert = log.action === "sale_undone" || log.action === "reverted";
@@ -1911,39 +1912,72 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                                 const isPayment = log.action === "sale_payment" || log.action === "purchase_payment";
 
                                 const iconBg =
-                                    isExchangePayment ? "bg-orange-500/10 text-orange-400" :
-                                    isDeletion        ? "bg-red-500/10 text-red-400" :
-                                    isRevert          ? "bg-yellow-500/10 text-yellow-400" :
-                                    isSale            ? "bg-emerald-500/10 text-emerald-400" :
-                                    isPayment         ? "bg-primary/10 text-primary" :
-                                                        "bg-muted/40 text-muted-foreground";
+                                    isExchangeOrigin ? "bg-amber-500/10 text-amber-400" :
+                                        isExchangePayment ? "bg-orange-500/10 text-orange-400" :
+                                            isDeletion ? "bg-red-500/10 text-red-400" :
+                                                isRevert ? "bg-yellow-500/10 text-yellow-400" :
+                                                    isSale ? "bg-emerald-500/10 text-emerald-400" :
+                                                        isPayment ? "bg-primary/10 text-primary" :
+                                                            "bg-muted/40 text-muted-foreground";
 
                                 const amountColor =
                                     isDeletion ? "text-red-400 line-through" :
-                                    isExchangePayment ? "text-orange-400" :
-                                    "text-primary";
+                                        isExchangeOrigin ? "text-amber-400" :
+                                            isExchangePayment ? "text-orange-400" :
+                                                "text-primary";
 
                                 // Prefix deletions with a clear ✕ marker
                                 const prefix = isDeletion ? "✕ " : "";
 
+                                const LogIcon = isExchangeOrigin || isExchangePayment ? ArrowLeftRight : Activity;
+
                                 return (
-                                <div key={i} className="flex items-start gap-4 px-5 py-3">
-                                    <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs ${iconBg}`}>
-                                        <Activity className="h-3.5 w-3.5" />
+                                    <div key={i} className={`flex items-start gap-4 px-5 py-3 ${isExchangeOrigin ? "bg-amber-500/5" : ""}`}>
+                                        <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs ${iconBg}`}>
+                                            <LogIcon className="h-3.5 w-3.5" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            {isExchangeOrigin && (
+                                                <p className="text-[10px] font-bold uppercase tracking-widest text-amber-400 mb-0.5">Exchange Origin</p>
+                                            )}
+                                            <p className="text-sm text-foreground">{prefix}{log.description}</p>
+                                            <p className="text-xs text-muted-foreground mt-0.5">{formatDate(log.date)}</p>
+                                        </div>
+                                        {log.amount && (
+                                            <span className={`text-xs font-semibold shrink-0 ${amountColor}`}>
+                                                {isDeletion ? "-" : "+"}{formatCurrency(log.amount)}
+                                            </span>
+                                        )}
                                     </div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm text-foreground">{prefix}{log.description}</p>
-                                        <p className="text-xs text-muted-foreground mt-0.5">{formatDate(log.date)}</p>
-                                    </div>
-                                    {log.amount && (
-                                        <span className={`text-xs font-semibold shrink-0 ${amountColor}`}>
-                                            {isDeletion ? "-" : "+"}{formatCurrency(log.amount)}
-                                        </span>
-                                    )}
-                                </div>
                                 );
                             })}
 
+                            {/* Fallback banner for legacy exchange vehicles without a received_via_exchange log entry */}
+                            {vehicle.isFromExchange && !vehicle.activityLog.some(l => l.action === "received_via_exchange") && (
+                                <div className="flex items-start gap-4 px-5 py-3 bg-amber-500/5 border-t border-amber-500/10">
+                                    <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs bg-amber-500/10 text-amber-400">
+                                        <ArrowLeftRight className="h-3.5 w-3.5" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-[10px] font-bold uppercase tracking-widest text-amber-400 mb-0.5">Exchange Origin</p>
+                                        <p className="text-sm text-foreground">
+                                            {vehicle.exchangeDetails || "This vehicle entered inventory as a trade-in via exchange."}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground mt-0.5">
+                                            {vehicle.datePurchased ? formatDate(vehicle.datePurchased) : "See Exchange tab for details"}
+                                        </p>
+                                    </div>
+                                    {vehicle.purchasePrice > 0 && (
+                                        <span className="text-xs font-semibold shrink-0 text-amber-400">
+                                            +{formatCurrency(vehicle.purchasePrice)}
+                                        </span>
+                                    )}
+                                </div>
+                            )}
+
+                            {vehicle.activityLog.length === 0 && !vehicle.isFromExchange && (
+                                <div className="p-8 text-center text-muted-foreground text-sm">No activity recorded</div>
+                            )}
                         </div>
                     )}
                 </div>

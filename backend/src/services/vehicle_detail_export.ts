@@ -439,41 +439,78 @@ export const exportVehicleDetailPDF = async (id: string): Promise<Buffer | null>
         }
 
         // ACTIVITY LOG
-        if (v.activityLog.length > 0) {
-            const logs = [...v.activityLog].reverse().slice(0, 10);
-            need(22 + logs.length * 20 + 12);
-            y = sectionBar("ACTIVITY LOG", `Latest ${logs.length} of ${v.activityLog.length} entries`, y);
-            logs.forEach((log, i) => {
-                doc.rect(MG, y, CW, 20).fill(i % 2 === 0 ? "#f1f5f9" : C.white);
-                doc.moveTo(MG, y + 20).lineTo(MG + CW, y + 20).strokeColor(C.border).lineWidth(0.2).stroke();
-                doc.circle(MG + 12, y + 9, 2.5).fill(C.indigo);
+        {
+            // Build the log list: real entries (newest first, max 10) + optional legacy exchange origin fallback
+            const hasExchangeOriginLog = v.activityLog.some((l: any) => l.action === "received_via_exchange");
+            const legacyExchangeEntry = (v as any).isFromExchange && !hasExchangeOriginLog
+                ? [{
+                    action: "received_via_exchange",
+                    description: (v as any).exchangeDetails || "Received via exchange — entered inventory as a trade-in.",
+                    amount: v.purchasePrice,
+                    date: v.datePurchased,
+                    _isLegacyFallback: true,
+                }]
+                : [];
 
-                // Fix "via Cash/mode" → "via Exchange (Make Reg)" for exchange payments
-                let desc = log.description.replace(/\u20B9/g, "Rs.");
-                if (log.action === "sale_payment" && log.amount) {
-                    const match = v.salePayments.find(
-                        (p: any) => p.amount === log.amount && p.type === "exchange"
-                    );
-                    if (match) {
-                        const make = (match as any).exchangeVehicleMake ?? "";
-                        const reg  = (match as any).exchangeVehicleRegNo  ?? "";
-                        const exLabel = make
-                            ? `Exchange (${make}${reg ? " " + reg : ""})`
-                            : "Exchange";
-                        desc = desc.replace(/via .+$/, `via ${exLabel}`);
+            const allLogs = [...legacyExchangeEntry, ...v.activityLog];
+
+            if (allLogs.length > 0) {
+                const logs = [...allLogs].reverse().slice(0, 10);
+                // Exchange origin rows are taller (need 2 lines: label + description)
+                const estimatedH = 22 + logs.reduce((h: number, l: any) => h + (l.action === "received_via_exchange" ? 26 : 20), 0) + 12;
+                need(estimatedH);
+                y = sectionBar("ACTIVITY LOG", `Latest ${logs.length} of ${allLogs.length} entries`, y);
+                logs.forEach((log: any, i: number) => {
+                    const isExchangeOrigin = log.action === "received_via_exchange";
+                    const rowH = isExchangeOrigin ? 26 : 20;
+                    const rowBg = isExchangeOrigin ? "#fffbeb" : (i % 2 === 0 ? "#f1f5f9" : C.white);
+                    const dotColor = isExchangeOrigin ? C.amber : C.indigo;
+
+                    doc.rect(MG, y, CW, rowH).fill(rowBg);
+                    doc.moveTo(MG, y + rowH).lineTo(MG + CW, y + rowH).strokeColor(C.border).lineWidth(0.2).stroke();
+                    // Left accent bar for exchange origin
+                    if (isExchangeOrigin) {
+                        doc.rect(MG, y, 3, rowH).fill(C.amber);
                     }
-                }
+                    doc.circle(MG + 12, y + (rowH / 2), 2.5).fill(dotColor);
 
-                doc.fontSize(7).font("Helvetica").fillColor(C.text)
-                   .text(desc, MG + 22, y + 5, { width: CW - 120, lineBreak: false });
-                doc.fillColor(C.muted).text(dFmt(log.date), MG + 22, y + 13, { lineBreak: false });
-                if (log.amount) {
-                    doc.font("Helvetica-Bold").fillColor(C.indigo)
-                       .text(dINR(log.amount), MG + 8, y + 6, { width: CW - 16, align: "right", lineBreak: false });
-                }
-                y += 20;
-            });
-            y += 10;
+                    // Fix "via Cash/mode" → "via Exchange (Make Reg)" for exchange payments
+                    let desc = log.description.replace(/\u20B9/g, "Rs.");
+                    if (log.action === "sale_payment" && log.amount) {
+                        const match = v.salePayments.find(
+                            (p: any) => p.amount === log.amount && p.type === "exchange"
+                        );
+                        if (match) {
+                            const make = (match as any).exchangeVehicleMake ?? "";
+                            const reg  = (match as any).exchangeVehicleRegNo  ?? "";
+                            const exLabel = make
+                                ? `Exchange (${make}${reg ? " " + reg : ""})`
+                                : "Exchange";
+                            desc = desc.replace(/via .+$/, `via ${exLabel}`);
+                        }
+                    }
+
+                    if (isExchangeOrigin) {
+                        // Two-line layout: "EXCHANGE ORIGIN" label + description
+                        doc.fontSize(6).font("Helvetica-Bold").fillColor(C.amber)
+                           .text("EXCHANGE ORIGIN", MG + 22, y + 4, { lineBreak: false });
+                        doc.fontSize(7).font("Helvetica").fillColor(C.text)
+                           .text(desc, MG + 22, y + 13, { width: CW - 120, lineBreak: false });
+                        doc.fillColor(C.muted).text(dFmt(log.date), MG + 22, y + 13, { width: CW - 30, align: "right", lineBreak: false });
+                    } else {
+                        doc.fontSize(7).font("Helvetica").fillColor(C.text)
+                           .text(desc, MG + 22, y + 5, { width: CW - 120, lineBreak: false });
+                        doc.fillColor(C.muted).text(dFmt(log.date), MG + 22, y + 13, { lineBreak: false });
+                    }
+
+                    if (log.amount) {
+                        doc.font("Helvetica-Bold").fillColor(isExchangeOrigin ? C.amber : C.indigo)
+                           .text(dINR(log.amount), MG + 8, y + (rowH / 2) - 4, { width: CW - 16, align: "right", lineBreak: false });
+                    }
+                    y += rowH;
+                });
+                y += 10;
+            }
         }
 
 

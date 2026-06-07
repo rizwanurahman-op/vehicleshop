@@ -409,6 +409,17 @@ export const addBuyerPayment = async (id: string, payment: {
                 }],
             });
             await exVehicle.save();
+            // Log the exchange origin on the newly created vehicle
+            const exchangeOriginDesc = sourceConsignment
+                ? `Received via exchange: trade-in from ${vehicle.soldTo || "buyer"} (migrated from Consignment ${sourceConsignment.consignmentId}) — part of ${vehicle.make} ${vehicle.model} (${vehicle.registrationNo}) sale for ₹${(vehicle.soldPrice || 0).toLocaleString("en-IN")}`
+                : `Received via exchange: trade-in from ${vehicle.soldTo || "buyer"} — part of ${vehicle.make} ${vehicle.model} (${vehicle.registrationNo}) sale for ₹${(vehicle.soldPrice || 0).toLocaleString("en-IN")}`;
+            exVehicle.activityLog.push({
+                action: "received_via_exchange",
+                description: exchangeOriginDesc,
+                amount: payment.amount,
+                date: new Date(payment.date),
+            });
+            await exVehicle.save();
             paymentEntry.exchangeCreatedRef = exVehicle._id as mongoose.Types.ObjectId;
             paymentEntry.exchangeCreatedIn = "vehicles";
             exchangeVehicle = {

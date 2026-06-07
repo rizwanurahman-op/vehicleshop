@@ -117,7 +117,7 @@ export const getVehicleStats = async (filter?: VehicleStatsFilter): Promise<unkn
     if (filter?.dateFrom || filter?.dateTo) {
         const df: Record<string, Date> = {};
         if (filter.dateFrom) df.$gte = new Date(filter.dateFrom);
-        if (filter.dateTo)   df.$lte = new Date(filter.dateTo);
+        if (filter.dateTo) df.$lte = new Date(filter.dateTo);
         // Date filter applies to dateSold (primary activity date)
         baseMatch.dateSold = df;
     }
@@ -533,6 +533,17 @@ export const addSalePayment = async (id: string, payment: {
                     }],
                 });
                 await exVehicle.save();
+                // Log the exchange origin on the newly created vehicle
+                const exchangeOriginDesc = sourceConsignment
+                    ? `Received via exchange: trade-in from ${vehicle.soldTo || "buyer"} (migrated from Consignment ${sourceConsignment.consignmentId}) — part of ${vehicle.make} ${vehicle.model} (${vehicle.registrationNo}) sale for ₹${(vehicle.soldPrice || 0).toLocaleString("en-IN")}`
+                    : `Received via exchange: trade-in from ${vehicle.soldTo || "buyer"} — part of ${vehicle.make} ${vehicle.model} (${vehicle.registrationNo}) sale for ₹${(vehicle.soldPrice || 0).toLocaleString("en-IN")}`;
+                exVehicle.activityLog.push({
+                    action: "received_via_exchange",
+                    description: exchangeOriginDesc,
+                    amount: payment.amount,
+                    date: new Date(payment.date),
+                });
+                await exVehicle.save();
             }
 
             paymentEntry.exchangeCreatedRef = exVehicle._id as mongoose.Types.ObjectId;
@@ -597,6 +608,14 @@ export const addSalePayment = async (id: string, payment: {
                     exchangeSourceCollection: "vehicles",
                     exchangeDetails: `Exchange from sale: ${vehicle.make} ${vehicle.model} (${vehicle.registrationNo}) — sold to ${vehicle.soldTo || "buyer"} for ₹${(vehicle.soldPrice || 0).toLocaleString("en-IN")}`,
                     status: "received",
+                });
+                await exConsignment.save();
+                // Log the exchange origin on the newly created consignment
+                exConsignment.activityLog.push({
+                    action: "received_via_exchange",
+                    description: `Received via exchange: trade-in from ${vehicle.soldTo || "buyer"} — part of ${vehicle.make} ${vehicle.model} (${vehicle.registrationNo}) sale for ₹${(vehicle.soldPrice || 0).toLocaleString("en-IN")}`,
+                    amount: payment.amount,
+                    date: new Date(payment.date),
                 });
                 await exConsignment.save();
             }
@@ -893,7 +912,7 @@ export const getPendingReport = async (params?: { vehicleType?: string; dateFrom
     if (params?.dateFrom || params?.dateTo) {
         const df: Record<string, Date> = {};
         if (params.dateFrom) df.$gte = new Date(params.dateFrom);
-        if (params.dateTo)   df.$lte = new Date(params.dateTo);
+        if (params.dateTo) df.$lte = new Date(params.dateTo);
         match.dateSold = df;
     }
     return Vehicle.find(match)
