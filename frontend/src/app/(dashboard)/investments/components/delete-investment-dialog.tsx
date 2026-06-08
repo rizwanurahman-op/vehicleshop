@@ -25,6 +25,7 @@ const DeleteInvestmentDialog = ({ investment, open, onOpenChange }: Props) => {
         onSuccess: () => {
             toast.success("Deleted!", { id: toastId });
             queryClient.invalidateQueries({ queryKey: ["investments"] });
+            queryClient.invalidateQueries({ queryKey: ["investment-stats"] });
             queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
             onOpenChange(false);
         },

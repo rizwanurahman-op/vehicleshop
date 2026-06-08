@@ -25,6 +25,7 @@ const DeleteRepaymentDialog = ({ repayment, open, onOpenChange }: Props) => {
         onSuccess: () => {
             toast.success("Deleted!", { id: toastId });
             queryClient.invalidateQueries({ queryKey: ["repayments"] });
+            queryClient.invalidateQueries({ queryKey: ["repayment-stats"] });
             queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
             onOpenChange(false);
         },

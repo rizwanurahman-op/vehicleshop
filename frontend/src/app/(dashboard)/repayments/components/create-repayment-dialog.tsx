@@ -50,6 +50,7 @@ const CreateRepaymentDialog = () => {
         onSuccess: () => {
             toast.success("Recorded!", { id: toastId });
             queryClient.invalidateQueries({ queryKey: ["repayments"] });
+            queryClient.invalidateQueries({ queryKey: ["repayment-stats"] });
             queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
             queryClient.invalidateQueries({ queryKey: ["lender-summary"] });
             form.reset({ date: new Date().toISOString().split("T")[0], lender: "", amountPaid: 0, mode: "Cash" });

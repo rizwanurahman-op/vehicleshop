@@ -123,7 +123,6 @@ const RepaymentList = ({ initialData }: RepaymentListProps) => {
     const statsQuery = useQuery<ApiResponse<RepaymentStats>>({
         queryKey: ["repayment-stats", apiParams],
         queryFn: () => axios.get<ApiResponse<RepaymentStats>>("/repayments/stats", { params: apiParams }).then(r => r.data),
-        staleTime: 60_000,
     });
     const stats = statsQuery.data?.data;
     const topMode = stats ? Object.entries(stats.byMode).sort((a, b) => b[1] - a[1])[0] : null;

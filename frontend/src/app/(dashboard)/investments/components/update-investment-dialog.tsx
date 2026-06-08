@@ -57,6 +57,7 @@ const UpdateInvestmentDialog = ({ investment, open, onOpenChange }: Props) => {
         onSuccess: () => {
             toast.success("Updated!", { id: toastId });
             queryClient.invalidateQueries({ queryKey: ["investments"] });
+            queryClient.invalidateQueries({ queryKey: ["investment-stats"] });
             queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
             onOpenChange(false);
         },

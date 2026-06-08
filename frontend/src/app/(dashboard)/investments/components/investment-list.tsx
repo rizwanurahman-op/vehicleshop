@@ -114,7 +114,6 @@ const InvestmentList = ({ initialData }: InvestmentListProps) => {
     const statsQuery = useQuery<ApiResponse<InvestmentStats>>({
         queryKey: ["investment-stats", apiParams],
         queryFn: () => axios.get<ApiResponse<InvestmentStats>>("/investments/stats", { params: apiParams }).then(r => r.data),
-        staleTime: 60_000,
     });
     const stats = statsQuery.data?.data;
 
