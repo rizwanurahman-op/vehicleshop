@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -100,7 +101,16 @@ const LoginForm = () => {
                             name="password"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel className="font-semibold text-foreground">Password</FormLabel>
+                                    <div className="flex items-center justify-between">
+                                        <FormLabel className="font-semibold text-foreground">Password</FormLabel>
+                                        <Link
+                                            href="/auth/forgot-password"
+                                            className="text-xs text-muted-foreground hover:text-primary transition-colors"
+                                            tabIndex={-1}
+                                        >
+                                            Forgot password?
+                                        </Link>
+                                    </div>
                                     <FormControl>
                                         <div className="relative">
                                             <div className="absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground">

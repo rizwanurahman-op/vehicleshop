@@ -1,8 +1,10 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 import { User, IUser } from "../models/user.model";
 import { env } from "../config/env";
 import { ApiError, ConflictError, NotFoundError, UnauthorizedError } from "../utils/api-error";
+import { sendPasswordResetEmail } from "./email.service";
 
 interface RegisterInput {
     username: string;
@@ -153,5 +155,69 @@ const changePassword = async (userId: string, data: ChangePasswordInput): Promis
     await user.save();
 };
 
-const authService = { register, login, refreshAccessToken, logout, logoutByRefreshToken, getMe, updateProfile, changePassword };
+/**
+ * Generate a password reset token, store its hash in DB, and send email.
+ * Throws NotFoundError if no account is registered with the given email.
+ */
+const forgotPassword = async (email: string): Promise<void> => {
+    const user = await User.findOne({ email: email.toLowerCase() });
+
+    if (!user) {
+        throw new NotFoundError("No account found with that email address");
+    }
+
+    // Generate a cryptographically secure random token
+    const plainToken = crypto.randomBytes(32).toString("hex");
+    const hashedToken = crypto.createHash("sha256").update(plainToken).digest("hex");
+
+    user.passwordResetToken = hashedToken;
+    user.passwordResetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    await user.save();
+
+    // Build the reset URL (frontend page that reads the token from query)
+    const resetUrl = `${env.CLIENT_URL}/auth/reset-password?token=${plainToken}`;
+    await sendPasswordResetEmail(user.email, resetUrl);
+};
+
+interface ResetPasswordInput {
+    token: string;
+    newPassword: string;
+}
+
+/**
+ * Validate the reset token and set a new password.
+ */
+const resetPassword = async (data: ResetPasswordInput): Promise<void> => {
+    // Hash the plain token to compare against the stored hashed token
+    const hashedToken = crypto.createHash("sha256").update(data.token).digest("hex");
+
+    const user = await User.findOne({
+        passwordResetToken: hashedToken,
+        passwordResetExpires: { $gt: new Date() }, // token not expired
+    });
+
+    if (!user) {
+        throw new ApiError(400, "Password reset token is invalid or has expired");
+    }
+
+    user.passwordHash = await bcrypt.hash(data.newPassword, 12);
+    user.passwordResetToken = null;
+    user.passwordResetExpires = null;
+    // Invalidate any existing sessions
+    user.refreshToken = null;
+    await user.save();
+};
+
+const authService = {
+    register,
+    login,
+    refreshAccessToken,
+    logout,
+    logoutByRefreshToken,
+    getMe,
+    updateProfile,
+    changePassword,
+    forgotPassword,
+    resetPassword,
+};
 export default authService;

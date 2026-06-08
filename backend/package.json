@@ -15,6 +15,7 @@
     "author": "",
     "license": "ISC",
     "dependencies": {
+        "@types/nodemailer": "^8.0.0",
         "@types/pdfkit": "^0.17.6",
         "bcryptjs": "^2.4.3",
         "cookie-parser": "^1.4.7",
@@ -28,6 +29,7 @@
         "jsonwebtoken": "^9.0.3",
         "mongoose": "^8.13.2",
         "morgan": "^1.10.1",
+        "nodemailer": "^8.0.10",
         "pdfkit": "^0.18.0",
         "zod": "^3.24.2"
     },

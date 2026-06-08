@@ -7,6 +7,8 @@ export interface IUser extends Document {
     passwordHash: string;
     role: "admin" | "viewer";
     refreshToken: string | null;
+    passwordResetToken: string | null;
+    passwordResetExpires: Date | null;
     createdAt: Date;
     updatedAt: Date;
     comparePassword(password: string): Promise<boolean>;
@@ -41,6 +43,14 @@ const userSchema = new Schema<IUser>(
         },
         refreshToken: {
             type: String,
+            default: null,
+        },
+        passwordResetToken: {
+            type: String,
+            default: null,
+        },
+        passwordResetExpires: {
+            type: Date,
             default: null,
         },
     },

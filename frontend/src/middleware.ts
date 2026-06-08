@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const PUBLIC_PATHS = ["/auth/login", "/auth/register"];
+const PUBLIC_PATHS = ["/auth/login", "/auth/register", "/auth/forgot-password", "/auth/reset-password"];
 
 /** Routes that require admin role — viewers get redirected to /dashboard */
 const ADMIN_ONLY_PATHS = [
