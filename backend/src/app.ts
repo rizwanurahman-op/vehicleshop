@@ -30,6 +30,12 @@ import userRoutes from "./routes/user.routes";
 
 const app = express();
 
+// ─── Proxy Trust ───────────────────────────────────────────────
+// Required on hosted platforms (Render, Heroku, etc.) that sit behind a
+// reverse proxy. Allows express-rate-limit to read the real client IP
+// from the X-Forwarded-For header without throwing ERR_ERL_UNEXPECTED_X_FORWARDED_FOR.
+app.set("trust proxy", 1);
+
 // ─── Security Middleware ───────────────────────────────────────
 app.use(helmet());
 app.use(cors(corsOptions));
