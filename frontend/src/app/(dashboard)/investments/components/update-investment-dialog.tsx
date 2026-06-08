@@ -59,6 +59,9 @@ const UpdateInvestmentDialog = ({ investment, open, onOpenChange }: Props) => {
             queryClient.invalidateQueries({ queryKey: ["investments"] });
             queryClient.invalidateQueries({ queryKey: ["investment-stats"] });
             queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
+            queryClient.invalidateQueries({ queryKey: ["lenders"] });
+            queryClient.invalidateQueries({ queryKey: ["lender-stats"] });
+            queryClient.invalidateQueries({ queryKey: ["lender-summary"] });
             onOpenChange(false);
         },
         onError: (error: unknown) => {

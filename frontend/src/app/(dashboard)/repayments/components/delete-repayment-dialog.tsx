@@ -27,6 +27,9 @@ const DeleteRepaymentDialog = ({ repayment, open, onOpenChange }: Props) => {
             queryClient.invalidateQueries({ queryKey: ["repayments"] });
             queryClient.invalidateQueries({ queryKey: ["repayment-stats"] });
             queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
+            queryClient.invalidateQueries({ queryKey: ["lenders"] });
+            queryClient.invalidateQueries({ queryKey: ["lender-stats"] });
+            queryClient.invalidateQueries({ queryKey: ["lender-summary"] });
             onOpenChange(false);
         },
         onError: (error: unknown) => {

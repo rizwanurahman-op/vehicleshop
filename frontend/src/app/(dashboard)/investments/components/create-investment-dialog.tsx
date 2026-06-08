@@ -55,6 +55,8 @@ const CreateInvestmentDialog = () => {
             queryClient.invalidateQueries({ queryKey: ["investment-stats"] });
             queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
             queryClient.invalidateQueries({ queryKey: ["lender-summary"] });
+            queryClient.invalidateQueries({ queryKey: ["lenders"] });
+            queryClient.invalidateQueries({ queryKey: ["lender-stats"] });
             form.reset({ date: new Date().toISOString().split("T")[0], lender: "", amountReceived: 0, mode: "Cash" });
             setOpen(false);
         },
