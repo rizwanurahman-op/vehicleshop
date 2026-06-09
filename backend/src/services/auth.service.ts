@@ -176,8 +176,19 @@ const forgotPassword = async (email: string): Promise<void> => {
 
     // Build the reset URL (frontend page that reads the token from query)
     const resetUrl = `${env.CLIENT_URL}/auth/reset-password?token=${plainToken}`;
-    await sendPasswordResetEmail(user.email, resetUrl);
+
+    try {
+        await sendPasswordResetEmail(user.email, resetUrl);
+    } catch (emailError) {
+        // Roll back the token so the user can try again cleanly
+        user.passwordResetToken = null;
+        user.passwordResetExpires = null;
+        await user.save();
+        console.error("Failed to send password reset email:", emailError);
+        throw new ApiError(500, "Failed to send reset email. Please try again later.");
+    }
 };
+
 
 interface ResetPasswordInput {
     token: string;

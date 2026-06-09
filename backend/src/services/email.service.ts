@@ -1,16 +1,25 @@
 import nodemailer from "nodemailer";
+import SMTPTransport from "nodemailer/lib/smtp-transport";
 import { env } from "../config/env";
 
-// Create reusable transporter
-const transporter = nodemailer.createTransport({
+// Create reusable transporter.
+// family: 4 forces IPv4 — required on Render free tier which blocks outbound IPv6.
+// Timeouts prevent SMTP failures from leaving HTTP responses open (which caused 404s).
+const transportOptions: SMTPTransport.Options & { family?: number } = {
     host: env.EMAIL_HOST,
     port: env.EMAIL_PORT,
-    secure: env.EMAIL_PORT === 465, // true for 465, false for 587 (STARTTLS)
+    secure: env.EMAIL_PORT === 465, // true for port 465, false for 587 (STARTTLS)
+    family: 4,                      // force IPv4 — critical on Render free tier
+    connectionTimeout: 10_000,      // 10 s to establish TCP connection
+    greetingTimeout: 10_000,        // 10 s for SMTP EHLO/HELO greeting
+    socketTimeout: 30_000,          // 30 s idle socket timeout
     auth:
         env.EMAIL_USER && env.EMAIL_PASS
             ? { user: env.EMAIL_USER, pass: env.EMAIL_PASS }
             : undefined,
-});
+};
+
+const transporter = nodemailer.createTransport(transportOptions);
 
 /**
  * Send a password reset email with a branded HTML template.
