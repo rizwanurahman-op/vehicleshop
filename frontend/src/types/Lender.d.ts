@@ -12,11 +12,13 @@ interface ILender {
 
 interface ILenderWithSummary extends ILender {
     totalBorrowed: number;
-    totalRepaid: number;
+    totalRepaid: number;       // Principal repayments only — reduces balance
+    totalProfit: number;       // Profit/interest paid — does not reduce balance
     balancePayable: number;
     repaymentPercentage?: number;
     investmentCount?: number;
     repaymentCount?: number;
+    profitCount?: number;
 }
 
 interface LenderPaginatedData {

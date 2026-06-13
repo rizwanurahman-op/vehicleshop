@@ -4,7 +4,10 @@ import { useQuery } from "@tanstack/react-query";
 import axios from "@config/axios";
 import { formatINRCompact } from "@/lib/currency";
 import { Card, CardContent } from "@/components/ui/card";
-import { TrendingUp, TrendingDown, Users, Wallet, ArrowDownLeft, ArrowUpRight } from "lucide-react";
+import {
+    TrendingUp, Users, Wallet,
+    ArrowDownLeft, ArrowUpRight,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StatCardsSkeleton } from "@components/shared";
 
@@ -15,46 +18,39 @@ const fetchDashboardStats = async (): Promise<IDashboardStats | null> => {
 
 type StatCardProps = {
     title: string;
-    value: number;
+    value: string | number;
     subtitle: string;
     icon: React.ComponentType<{ className?: string }>;
-    variant: "primary" | "success" | "warning" | "destructive";
-    trend?: number;
+    color: string;
+    bg: string;
+    badge?: { label: string; cls: string };
 };
 
-const StatCard = ({ title, value, subtitle, icon: Icon, variant, trend }: StatCardProps) => {
-    const variantConfig = {
-        primary: { bg: "bg-primary/10", text: "text-primary", gradient: "from-primary/5" },
-        success: { bg: "bg-success/10", text: "text-success", gradient: "from-success/5" },
-        warning: { bg: "bg-warning/10", text: "text-warning", gradient: "from-warning/5" },
-        destructive: { bg: "bg-destructive/10", text: "text-destructive", gradient: "from-destructive/5" },
-    };
-    const v = variantConfig[variant];
-
-    return (
-        <Card className="bg-card border-border group relative overflow-hidden transition-all hover:border-primary/30 card-hover-glow">
-            <div className={cn("absolute inset-0 bg-gradient-to-br to-transparent opacity-0 transition-opacity group-hover:opacity-100", v.gradient)} />
-            <CardContent className="relative p-5">
-                <div className="flex items-start justify-between">
-                    <div className="min-w-0 flex-1">
+const StatCard = ({ title, value, subtitle, icon: Icon, color, bg, badge }: StatCardProps) => (
+    <Card className="bg-card border-border group relative overflow-hidden transition-all hover:border-primary/30">
+        <CardContent className="relative p-5">
+            <div className="flex items-start justify-between">
+                <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap mb-2">
                         <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{title}</p>
-                        <p className={cn("mt-2 font-mono text-2xl font-bold tabular-nums text-foreground")}>{formatINRCompact(value)}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>
+                        {badge && (
+                            <span className={cn("inline-flex items-center text-[9px] font-bold px-1.5 py-0.5 rounded-full border", badge.cls)}>
+                                {badge.label}
+                            </span>
+                        )}
                     </div>
-                    <div className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-xl", v.bg)}>
-                        <Icon className={cn("h-6 w-6", v.text)} />
-                    </div>
+                    <p className="font-mono text-2xl font-bold tabular-nums text-foreground">
+                        {typeof value === "number" ? formatINRCompact(value) : value}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>
                 </div>
-                {trend !== undefined && (
-                    <div className={cn("mt-3 flex items-center gap-1 text-xs font-medium", trend >= 0 ? "text-success" : "text-destructive")}>
-                        {trend >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                        <span>{Math.abs(trend).toFixed(1)}% vs last month</span>
-                    </div>
-                )}
-            </CardContent>
-        </Card>
-    );
-};
+                <div className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-xl", bg)}>
+                    <Icon className={cn("h-6 w-6", color)} />
+                </div>
+            </div>
+        </CardContent>
+    </Card>
+);
 
 type DashboardStatsProps = { initialData: IDashboardStats | null };
 
@@ -68,42 +64,54 @@ const DashboardStats = ({ initialData }: DashboardStatsProps) => {
 
     if (isLoading && !data) return <StatCardsSkeleton />;
 
-    const stats = [
+    const financeCards: StatCardProps[] = [
         {
             title: "Total Borrowed",
             value: data?.totalBorrowed ?? 0,
             subtitle: `From ${data?.totalLenders ?? 0} lenders`,
             icon: ArrowDownLeft,
-            variant: "primary" as const,
+            color: "text-violet-500",
+            bg: "bg-violet-500/10",
         },
         {
-            title: "Total Repaid",
+            title: "Principal Repaid",
             value: data?.totalRepaid ?? 0,
-            subtitle: "Principal returned",
+            subtitle: "Reduces outstanding balance",
             icon: ArrowUpRight,
-            variant: "success" as const,
+            color: "text-emerald-500",
+            bg: "bg-emerald-500/10",
+            badge: { label: "💰 Principal", cls: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400" },
+        },
+        {
+            title: "Profit Paid",
+            value: data?.totalProfit ?? 0,
+            subtitle: "Interest paid — balance unchanged",
+            icon: TrendingUp,
+            color: "text-amber-500",
+            bg: "bg-amber-500/10",
+            badge: { label: "📈 Profit", cls: "bg-amber-500/10 text-amber-600 border-amber-500/20 dark:text-amber-400" },
         },
         {
             title: "Outstanding",
             value: data?.totalOutstanding ?? 0,
-            subtitle: "Balance payable",
+            subtitle: "Principal balance payable",
             icon: Wallet,
-            variant: "warning" as const,
+            color: "text-warning",
+            bg: "bg-warning/10",
         },
         {
             title: "Active Lenders",
-            value: data?.activeLenders ?? 0,
+            value: String(data?.activeLenders ?? 0),
             subtitle: `${data?.totalLenders ?? 0} total registered`,
             icon: Users,
-            variant: "primary" as const,
+            color: "text-primary",
+            bg: "bg-primary/10",
         },
     ];
 
     return (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 xl:grid-cols-4">
-            {stats.map(s => (
-                <StatCard key={s.title} {...s} />
-            ))}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 xl:grid-cols-5">
+            {financeCards.map(s => <StatCard key={s.title} {...s} />)}
         </div>
     );
 };

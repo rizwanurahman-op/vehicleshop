@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import {
     ArrowUpRight, Search, Edit, Trash2,
     Download, FileText, FileSpreadsheet, ChevronDown, Loader2, Calendar, X,
-    IndianRupee, BarChart3, CreditCard,
+    BarChart3, CreditCard, TrendingDown, TrendingUp,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,8 @@ import { PAYMENT_MODES } from "@data";
 interface RepaymentStats {
     totalRepayments: number;
     totalPaid: number;
+    totalPrincipal: number;
+    totalProfit: number;
     avgAmount: number;
     byMode: Record<string, number>;
     uniqueLenders: number;
@@ -75,14 +77,15 @@ const fetchRepayments = async (params: Record<string, string>): Promise<IRepayme
 type RepaymentListProps = { initialData: IRepayment[] | null };
 
 const RepaymentList = ({ initialData }: RepaymentListProps) => {
-    const [search, setSearch]           = useState("");
-    const [mode, setMode]               = useState("all");
-    const [datePreset, setDatePreset]   = useState<DatePreset>("all");
-    const [customFrom, setCustomFrom]   = useState("");
-    const [customTo, setCustomTo]       = useState("");
-    const [editItem, setEditItem]       = useState<IRepayment | null>(null);
-    const [deleteItem, setDeleteItem]   = useState<IRepayment | null>(null);
-    const [isExporting, setIsExporting] = useState<"csv" | "pdf" | null>(null);
+    const [search, setSearch]               = useState("");
+    const [mode, setMode]                   = useState("all");
+    const [repaymentType, setRepaymentType] = useState("all");
+    const [datePreset, setDatePreset]       = useState<DatePreset>("all");
+    const [customFrom, setCustomFrom]       = useState("");
+    const [customTo, setCustomTo]           = useState("");
+    const [editItem, setEditItem]           = useState<IRepayment | null>(null);
+    const [deleteItem, setDeleteItem]       = useState<IRepayment | null>(null);
+    const [isExporting, setIsExporting]     = useState<"csv" | "pdf" | null>(null);
 
     const debouncedSearch = useDebounce(search, 400);
 
@@ -93,15 +96,16 @@ const RepaymentList = ({ initialData }: RepaymentListProps) => {
 
     const apiParams = useMemo(() => {
         const p: Record<string, string> = {};
-        if (mode !== "all")     p.mode     = mode;
-        if (dateRange.dateFrom) p.dateFrom = dateRange.dateFrom;
-        if (dateRange.dateTo)   p.dateTo   = dateRange.dateTo;
+        if (mode !== "all")          p.mode          = mode;
+        if (repaymentType !== "all") p.repaymentType = repaymentType;
+        if (dateRange.dateFrom)     p.dateFrom      = dateRange.dateFrom;
+        if (dateRange.dateTo)       p.dateTo        = dateRange.dateTo;
         return p;
-    }, [mode, dateRange]);
+    }, [mode, repaymentType, dateRange]);
 
-    const isFilterActive = mode !== "all" || datePreset !== "all" || !!debouncedSearch;
+    const isFilterActive = mode !== "all" || repaymentType !== "all" || datePreset !== "all" || !!debouncedSearch;
 
-    const clearFilters = () => { setSearch(""); setMode("all"); setDatePreset("all"); setCustomFrom(""); setCustomTo(""); };
+    const clearFilters = () => { setSearch(""); setMode("all"); setRepaymentType("all"); setDatePreset("all"); setCustomFrom(""); setCustomTo(""); };
 
     const { data, isLoading } = useQuery<IRepayment[]>({
         queryKey: ["repayments", apiParams, debouncedSearch],
@@ -175,14 +179,14 @@ const RepaymentList = ({ initialData }: RepaymentListProps) => {
                         sub={`To ${stats.uniqueLenders} lenders`} icon={BarChart3}
                         gradient="bg-gradient-to-br from-emerald-500/10 to-teal-600/10 border border-emerald-500/20"
                         textColor="text-emerald-500" />
-                    <StatCard label="Total Paid" value={formatCurrency(stats.totalPaid)}
-                        sub="Cumulative repaid" icon={IndianRupee}
+                    <StatCard label="Principal Repaid" value={formatCurrency(stats.totalPrincipal ?? stats.totalPaid)}
+                        sub="Reduces balance" icon={TrendingDown}
                         gradient="bg-gradient-to-br from-primary/10 to-indigo-600/10 border border-primary/20"
                         textColor="text-primary" />
-                    <StatCard label="Average Amount" value={formatCurrency(stats.avgAmount)}
-                        sub="Per repayment" icon={BarChart3}
-                        gradient="bg-gradient-to-br from-cyan-500/10 to-sky-600/10 border border-cyan-500/20"
-                        textColor="text-cyan-500" />
+                    <StatCard label="Profit Paid" value={formatCurrency(stats.totalProfit ?? 0)}
+                        sub="Interest payments" icon={TrendingUp}
+                        gradient="bg-gradient-to-br from-amber-500/10 to-orange-600/10 border border-amber-500/20"
+                        textColor="text-amber-500" />
                     <StatCard label="Top Mode" value={topMode?.[0] ?? "—"}
                         sub={topMode ? `${formatCurrency(topMode[1])} via this mode` : "No data"} icon={CreditCard}
                         gradient="bg-gradient-to-br from-violet-500/10 to-purple-600/10 border border-violet-500/20"
@@ -199,7 +203,7 @@ const RepaymentList = ({ initialData }: RepaymentListProps) => {
                         <Input placeholder="Search repayments…" value={search} onChange={e => setSearch(e.target.value)} className="pl-9 bg-muted/50 h-10" />
                     </div>
 
-                    {/* Mode */}
+                    {/* Mode filter */}
                     <Select value={mode} onValueChange={setMode}>
                         <SelectTrigger className="w-36 bg-muted/50 h-10">
                             <SelectValue placeholder="Mode" />
@@ -207,6 +211,18 @@ const RepaymentList = ({ initialData }: RepaymentListProps) => {
                         <SelectContent>
                             <SelectItem value="all">All Modes</SelectItem>
                             {PAYMENT_MODES.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+
+                    {/* Type filter */}
+                    <Select value={repaymentType} onValueChange={setRepaymentType}>
+                        <SelectTrigger className="w-36 bg-muted/50 h-10">
+                            <SelectValue placeholder="Type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Types</SelectItem>
+                            <SelectItem value="Principal">Principal</SelectItem>
+                            <SelectItem value="Profit">Profit</SelectItem>
                         </SelectContent>
                     </Select>
 
@@ -306,9 +322,16 @@ const RepaymentList = ({ initialData }: RepaymentListProps) => {
                                         </div>
                                         <div className="relative mt-auto pt-4 border-t border-border/60 border-dashed">
                                             <div className="flex items-end justify-between mb-3">
-                                                <div>
-                                                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Mode</p>
-                                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-muted/50">{rep.mode}</Badge>
+                                                <div className="space-y-1.5">
+                                                    <Badge variant="outline" className={cn(
+                                                        "text-[10px] px-1.5 py-0 font-semibold border",
+                                                        rep.repaymentType === "Profit"
+                                                            ? "text-amber-600 border-amber-500/40 bg-amber-500/10 dark:text-amber-400"
+                                                            : "text-emerald-600 border-emerald-500/40 bg-emerald-500/10 dark:text-emerald-400"
+                                                    )}>
+                                                        {rep.repaymentType === "Profit" ? "📈 Profit" : "💰 Principal"}
+                                                    </Badge>
+                                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-muted/50 block">{rep.mode}</Badge>
                                                 </div>
                                                 <div className="text-right">
                                                     <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-500 mb-1">Amount Paid</p>
@@ -336,6 +359,7 @@ const RepaymentList = ({ initialData }: RepaymentListProps) => {
                                         <TableHead className="text-xs uppercase tracking-wider text-muted-foreground w-12 text-center">#</TableHead>
                                         <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Date</TableHead>
                                         <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Lender</TableHead>
+                                        <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Type</TableHead>
                                         <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Amount Paid</TableHead>
                                         <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Mode</TableHead>
                                         <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Remarks</TableHead>
@@ -350,6 +374,16 @@ const RepaymentList = ({ initialData }: RepaymentListProps) => {
                                                 <TableCell className="text-center text-muted-foreground font-mono text-xs">{index + 1}</TableCell>
                                                 <TableCell><DateDisplay date={rep.date} className="text-muted-foreground" /></TableCell>
                                                 <TableCell><div className="font-medium">{lender?.name || "—"}</div></TableCell>
+                                                <TableCell>
+                                                    <Badge variant="outline" className={cn(
+                                                        "text-[10px] px-1.5 py-0 font-semibold border",
+                                                        rep.repaymentType === "Profit"
+                                                            ? "text-amber-600 border-amber-500/40 bg-amber-500/10 dark:text-amber-400"
+                                                            : "text-emerald-600 border-emerald-500/40 bg-emerald-500/10 dark:text-emerald-400"
+                                                    )}>
+                                                        {rep.repaymentType === "Profit" ? "📈 Profit" : "💰 Principal"}
+                                                    </Badge>
+                                                </TableCell>
                                                 <TableCell className="text-right"><CurrencyDisplay amount={rep.amountPaid} variant="success" /></TableCell>
                                                 <TableCell><Badge variant="outline" className="text-[11px]">{rep.mode}</Badge></TableCell>
                                                 <TableCell><span className="text-xs text-muted-foreground">{rep.remarks || "—"}</span></TableCell>

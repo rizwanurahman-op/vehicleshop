@@ -49,8 +49,9 @@ const TrendChart = ({ initialData }: TrendChartProps) => {
 
     const chartData = (data?.monthlyTrend ?? []).map(m => ({
         name: formatMonthYear(m.year, m.month),
-        Invested: m.totalInvested,
-        Repaid: m.totalRepaid,
+        Invested:  m.totalInvested,
+        Principal: m.totalRepaid,
+        Profit:    m.totalProfit ?? 0,
     }));
 
     return (
@@ -76,9 +77,13 @@ const TrendChart = ({ initialData }: TrendChartProps) => {
                                             <stop offset="5%" stopColor="hsl(217, 91%, 60%)" stopOpacity={0.3} />
                                             <stop offset="95%" stopColor="hsl(217, 91%, 60%)" stopOpacity={0} />
                                         </linearGradient>
-                                        <linearGradient id="colorRepaid" x1="0" y1="0" x2="0" y2="1">
+                                        <linearGradient id="colorPrincipal" x1="0" y1="0" x2="0" y2="1">
                                             <stop offset="5%" stopColor="hsl(142, 71%, 45%)" stopOpacity={0.3} />
                                             <stop offset="95%" stopColor="hsl(142, 71%, 45%)" stopOpacity={0} />
+                                        </linearGradient>
+                                        <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="hsl(38, 92%, 50%)" stopOpacity={0.3} />
+                                            <stop offset="95%" stopColor="hsl(38, 92%, 50%)" stopOpacity={0} />
                                         </linearGradient>
                                     </defs>
                                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -86,8 +91,9 @@ const TrendChart = ({ initialData }: TrendChartProps) => {
                                     <YAxis tickFormatter={v => formatINRCompact(v)} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
                                     <Tooltip content={<CustomTooltip />} />
                                     <Legend wrapperStyle={{ fontSize: 12 }} />
-                                    <Area type="monotone" dataKey="Invested" stroke="hsl(217, 91%, 60%)" strokeWidth={2} fill="url(#colorInvested)" dot={false} />
-                                    <Area type="monotone" dataKey="Repaid" stroke="hsl(142, 71%, 45%)" strokeWidth={2} fill="url(#colorRepaid)" dot={false} />
+                                    <Area type="monotone" dataKey="Invested"  stroke="hsl(217, 91%, 60%)" strokeWidth={2} fill="url(#colorInvested)"  dot={false} />
+                                    <Area type="monotone" dataKey="Principal" stroke="hsl(142, 71%, 45%)" strokeWidth={2} fill="url(#colorPrincipal)" dot={false} />
+                                    <Area type="monotone" dataKey="Profit"    stroke="hsl(38, 92%, 50%)"  strokeWidth={2} fill="url(#colorProfit)"    dot={false} />
                                 </AreaChart>
                             </ResponsiveContainer>
                         ) : (

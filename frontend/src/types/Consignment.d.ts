@@ -155,14 +155,44 @@ interface IConsignmentDashboardStats {
     sold: number;
     returned: number;
     totalInvested: number;
+    totalReconCost: number;
     totalRevenue: number;
     totalNetProfit: number;
     avgMargin: number;
+    // Buyer payment totals (all consignments)
+    totalReceivedFromBuyers: number;
+    totalBuyerBalance: number;
     pendingBuyerPayments: { count: number; amount: number };
+    // Payee payment totals (all consignments)
+    totalPaidToPayee: number;
+    totalPayeeBalance: number;
     pendingPayeePayments: { count: number; amount: number };
-    parkSale: { total: number; inShop: number; sold: number };
-    financeSale: { total: number; inShop: number; sold: number };
+    // Park Sale
+    parkSale: {
+        total: number; inShop: number; sold: number; returned: number;
+        totalReconCost: number;
+        totalRevenue: number;
+        totalNetProfit: number;
+        totalPaidToOwner: number;
+        totalOwnerBalance: number;
+        totalReceivedFromBuyers: number;
+        totalBuyerBalance: number;
+        fullyClosed: number;
+    };
+    // Finance Sale
+    financeSale: {
+        total: number; inShop: number; sold: number; returned: number;
+        totalReconCost: number;
+        totalRevenue: number;
+        totalNetProfit: number;
+        totalPaidToFinance: number;
+        totalFinanceBalance: number;
+        totalReceivedFromBuyers: number;
+        totalBuyerBalance: number;
+        fullyClosed: number;
+    };
 }
+
 
 type ConsignmentPaginatedData = {
     data: IConsignmentVehicle[];

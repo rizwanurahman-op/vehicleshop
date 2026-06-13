@@ -187,6 +187,7 @@ const AddPurchasePaymentDialog = ({ vehicle }: { vehicle: IVehicle }) => {
         onSuccess: () => {
             toast.success("Payment recorded!", { id: tid });
             queryClient.invalidateQueries({ queryKey: ["vehicle", vehicle._id] });
+            queryClient.invalidateQueries({ queryKey: ["vehicles"] });
             form.reset();
             setOpen(false);
         },

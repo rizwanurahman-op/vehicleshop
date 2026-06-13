@@ -53,6 +53,7 @@ export function AddInvestmentDialog({ lenderId, open, onOpenChange }: AddInvestm
             qc.invalidateQueries({ queryKey: ["lender-investments", lenderId] });
             qc.invalidateQueries({ queryKey: ["lender", lenderId] });
             qc.invalidateQueries({ queryKey: ["lender-stats"] });
+            qc.invalidateQueries({ queryKey: ["lenders"] });       // ← refresh lenders list page
             qc.invalidateQueries({ queryKey: ["investments"] });
             qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
             form.reset({

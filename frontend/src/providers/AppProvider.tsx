@@ -11,9 +11,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             new QueryClient({
                 defaultOptions: {
                     queries: {
-                        staleTime: 30 * 1000,
+                        // staleTime: 0 is the RQ default — restoring it fixes stale-data-on-navigation.
+                        // Old code had staleTime: 30_000 + refetchOnWindowFocus: false which broke freshness.
+                        staleTime: 0,
                         retry: 1,
-                        refetchOnWindowFocus: false,
                     },
                 },
             })

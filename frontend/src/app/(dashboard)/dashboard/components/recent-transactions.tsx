@@ -57,9 +57,16 @@ const RecentTransactions = ({ initialData }: RecentTransactionsProps) => {
                                                 <p className="text-[10px] text-muted-foreground mt-1">{formatDate(tx.date)}</p>
                                             </div>
                                         </div>
-                                        <Badge variant="outline" className={cn("text-[10px] font-semibold gap-1 shrink-0 px-1.5 py-0 border-transparent", tx.type === "investment" ? "text-primary bg-primary/10" : "text-emerald-500 bg-emerald-500/10")}>
-                                            {tx.type === "investment" ? "Invested" : "Repaid"}
-                                        </Badge>
+                                        <div className="flex flex-col items-end gap-1">
+                                            <Badge variant="outline" className={cn("text-[10px] font-semibold gap-1 shrink-0 px-1.5 py-0 border-transparent", tx.type === "investment" ? "text-primary bg-primary/10" : "text-emerald-500 bg-emerald-500/10")}>
+                                                {tx.type === "investment" ? "Invested" : "Repaid"}
+                                            </Badge>
+                                            {tx.type === "repayment" && (
+                                                <Badge variant="outline" className={cn("text-[9px] font-bold px-1.5 py-0 border", tx.repaymentType === "Profit" ? "bg-amber-500/10 text-amber-600 border-amber-500/20 dark:text-amber-400" : "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400")}>
+                                                    {tx.repaymentType === "Profit" ? "📈 Profit" : "💰 Principal"}
+                                                </Badge>
+                                            )}
+                                        </div>
                                     </div>
                                     <div className="flex items-end justify-between pt-3 border-t border-border/50 border-dashed">
                                         <div className="flex items-center gap-1.5 flex-wrap">
@@ -95,18 +102,33 @@ const RecentTransactions = ({ initialData }: RecentTransactionsProps) => {
                                                 <div className="text-[10px] font-mono text-muted-foreground">{tx.lenderId}</div>
                                             </td>
                                             <td className="px-4 py-3">
-                                                <Badge
-                                                    variant="outline"
-                                                    className={cn(
-                                                        "text-[10px] font-bold gap-1 px-1.5 py-0",
-                                                        tx.type === "investment"
-                                                            ? "bg-primary/5 text-primary border-primary/20"
-                                                            : "bg-emerald-500/5 text-emerald-500 border-emerald-500/20"
+                                                <div className="flex items-center gap-1.5">
+                                                    <Badge
+                                                        variant="outline"
+                                                        className={cn(
+                                                            "text-[10px] font-bold gap-1 px-1.5 py-0",
+                                                            tx.type === "investment"
+                                                                ? "bg-primary/5 text-primary border-primary/20"
+                                                                : "bg-emerald-500/5 text-emerald-500 border-emerald-500/20"
+                                                        )}
+                                                    >
+                                                        {tx.type === "investment" ? <ArrowDownLeft size={10} /> : <ArrowUpRight size={10} />}
+                                                        {tx.type === "investment" ? "Investment" : "Repayment"}
+                                                    </Badge>
+                                                    {tx.type === "repayment" && (
+                                                        <Badge
+                                                            variant="outline"
+                                                            className={cn(
+                                                                "text-[9px] font-bold px-1.5 py-0 border",
+                                                                tx.repaymentType === "Profit"
+                                                                    ? "bg-amber-500/10 text-amber-600 border-amber-500/20 dark:text-amber-400"
+                                                                    : "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400"
+                                                            )}
+                                                        >
+                                                            {tx.repaymentType === "Profit" ? "📈 Profit" : "💰 Principal"}
+                                                        </Badge>
                                                     )}
-                                                >
-                                                    {tx.type === "investment" ? <ArrowDownLeft size={10} /> : <ArrowUpRight size={10} />}
-                                                    {tx.type === "investment" ? "Investment" : "Repayment"}
-                                                </Badge>
+                                                </div>
                                             </td>
                                             <td className="px-4 py-3 text-right">
                                                 <span className={cn(

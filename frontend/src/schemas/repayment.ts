@@ -1,12 +1,14 @@
 import { z } from "zod";
 
 const paymentModes = ["Cash", "Online", "Cheque", "UPI"] as const;
+const repaymentTypes = ["Principal", "Profit"] as const;
 
 export const createRepaymentSchema = z.object({
     date: z.string().min(1, "Date is required"),
     lender: z.string().min(1, "Lender is required"),
     amountPaid: z.number({ message: "Amount is required" }).positive("Amount must be positive"),
     mode: z.enum(paymentModes, { message: "Payment mode is required" }),
+    repaymentType: z.enum(repaymentTypes),
     referenceNo: z.string().optional().or(z.literal("")),
     remarks: z.string().optional().or(z.literal("")),
 });

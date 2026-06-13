@@ -13,12 +13,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { formatApiErrors } from "@/lib/formatApiErrors";
 import { updateRepaymentSchema } from "@schemas/repayment";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowUpRight, X, Save, Calendar, Loader2, IndianRupee } from "lucide-react";
+import { ArrowUpRight, X, Save, Calendar, Loader2, IndianRupee, TrendingDown, TrendingUp } from "lucide-react";
 import { Form, FormItem, FormField, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PAYMENT_MODES } from "@data";
 import { formatDateInput } from "@/lib/date";
+import { cn } from "@/lib/utils";
 
 type FormData = z.infer<typeof updateRepaymentSchema>;
 type Props = { repayment: IRepayment; open: boolean; onOpenChange: (open: boolean) => void };
@@ -33,6 +34,7 @@ const UpdateRepaymentDialog = ({ repayment, open, onOpenChange }: Props) => {
             date: formatDateInput(repayment.date),
             amountPaid: repayment.amountPaid,
             mode: repayment.mode,
+            repaymentType: repayment.repaymentType ?? "Principal",
             referenceNo: repayment.referenceNo || "",
             remarks: repayment.remarks || "",
         },
@@ -43,10 +45,13 @@ const UpdateRepaymentDialog = ({ repayment, open, onOpenChange }: Props) => {
             date: formatDateInput(repayment.date),
             amountPaid: repayment.amountPaid,
             mode: repayment.mode,
+            repaymentType: repayment.repaymentType ?? "Principal",
             referenceNo: repayment.referenceNo || "",
             remarks: repayment.remarks || "",
         });
     }, [repayment, form]);
+
+    const repaymentType = form.watch("repaymentType");
 
     const { mutate, isPending } = useMutation({
         mutationFn: async (values: FormData) => {
@@ -89,6 +94,66 @@ const UpdateRepaymentDialog = ({ repayment, open, onOpenChange }: Props) => {
                     <form id="update-repayment-form" onSubmit={form.handleSubmit(values => mutate(values))} className="flex flex-col flex-1 overflow-hidden min-h-0">
                         <div className="flex-1 w-full overflow-y-auto scrollbar-thin">
                             <div className="space-y-4 p-4 sm:p-6">
+
+                                {/* Repayment Type Selector */}
+                                <FormField control={form.control} name="repaymentType" render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel className="font-semibold">Payment Type</FormLabel>
+                                        <div className="grid grid-cols-2 gap-2 mt-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => field.onChange("Principal")}
+                                                className={cn(
+                                                    "relative flex flex-col gap-1.5 rounded-xl border-2 p-3 text-left transition-all cursor-pointer",
+                                                    field.value === "Principal"
+                                                        ? "border-emerald-500 bg-emerald-500/10 shadow-sm shadow-emerald-500/20"
+                                                        : "border-border bg-muted/30 hover:border-emerald-500/40 hover:bg-emerald-500/5"
+                                                )}
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    <div className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-lg", field.value === "Principal" ? "bg-emerald-500" : "bg-muted")}>
+                                                        <TrendingDown className={cn("h-3.5 w-3.5", field.value === "Principal" ? "text-white" : "text-muted-foreground")} />
+                                                    </div>
+                                                    <span className={cn("text-sm font-bold", field.value === "Principal" ? "text-emerald-600 dark:text-emerald-400" : "text-foreground")}>Principal</span>
+                                                </div>
+                                                <p className="text-[11px] text-muted-foreground leading-snug">Reduces outstanding balance</p>
+                                                {field.value === "Principal" && <div className="absolute top-2 right-2 h-2 w-2 rounded-full bg-emerald-500" />}
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                onClick={() => field.onChange("Profit")}
+                                                className={cn(
+                                                    "relative flex flex-col gap-1.5 rounded-xl border-2 p-3 text-left transition-all cursor-pointer",
+                                                    field.value === "Profit"
+                                                        ? "border-amber-500 bg-amber-500/10 shadow-sm shadow-amber-500/20"
+                                                        : "border-border bg-muted/30 hover:border-amber-500/40 hover:bg-amber-500/5"
+                                                )}
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    <div className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-lg", field.value === "Profit" ? "bg-amber-500" : "bg-muted")}>
+                                                        <TrendingUp className={cn("h-3.5 w-3.5", field.value === "Profit" ? "text-white" : "text-muted-foreground")} />
+                                                    </div>
+                                                    <span className={cn("text-sm font-bold", field.value === "Profit" ? "text-amber-600 dark:text-amber-400" : "text-foreground")}>Profit</span>
+                                                </div>
+                                                <p className="text-[11px] text-muted-foreground leading-snug">Interest paid, balance unchanged</p>
+                                                {field.value === "Profit" && <div className="absolute top-2 right-2 h-2 w-2 rounded-full bg-amber-500" />}
+                                            </button>
+                                        </div>
+                                        <p className={cn(
+                                            "text-[11px] px-3 py-2 rounded-lg mt-1.5 border",
+                                            repaymentType === "Principal"
+                                                ? "text-emerald-700 dark:text-emerald-300 bg-emerald-500/8 border-emerald-500/20"
+                                                : "text-amber-700 dark:text-amber-300 bg-amber-500/8 border-amber-500/20"
+                                        )}>
+                                            {repaymentType === "Principal"
+                                                ? "💰 This amount will be deducted from the lender's outstanding balance."
+                                                : "📈 This is a profit/interest payment. The lender's outstanding balance will NOT change."}
+                                        </p>
+                                        <FormMessage />
+                                    </FormItem>
+                                )} />
+
                                 <FormField control={form.control} name="date" render={({ field }) => (
                                     <FormItem>
                                         <FormLabel className="font-semibold">Date</FormLabel>

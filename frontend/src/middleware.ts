@@ -7,6 +7,7 @@ const ADMIN_ONLY_PATHS = [
     "/consignments/new",
     "/vehicles/new",
     "/users",
+    "/backups",
 ];
 
 /**
@@ -24,6 +25,22 @@ function decodeJwtRole(token: string): string | null {
     }
 }
 
+/**
+ * SECURITY: Validate that a callbackUrl is an internal path.
+ * Prevents open redirect attacks where an attacker crafts:
+ *   /auth/login?callbackUrl=https://evil.com
+ *   /auth/login?callbackUrl=//evil.com  (protocol-relative bypass)
+ * Only accepts paths starting with "/" that contain no ":" character.
+ */
+function isSafeInternalPath(path: string): boolean {
+    return (
+        typeof path === "string" &&
+        path.startsWith("/") &&
+        !path.startsWith("//") &&
+        !path.includes(":")
+    );
+}
+
 export function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
     const token = request.cookies.get("vb_access_token")?.value;
@@ -38,7 +55,10 @@ export function middleware(request: NextRequest) {
     // Not logged in → redirect to login
     if (!isPublicPath && !token) {
         const loginUrl = new URL("/auth/login", request.url);
-        loginUrl.searchParams.set("callbackUrl", pathname);
+        // Only set callbackUrl for safe internal paths (prevents open redirect)
+        if (isSafeInternalPath(pathname)) {
+            loginUrl.searchParams.set("callbackUrl", pathname);
+        }
         return NextResponse.redirect(loginUrl);
     }
 

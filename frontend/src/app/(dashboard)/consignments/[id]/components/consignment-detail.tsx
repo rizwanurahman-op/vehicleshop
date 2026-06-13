@@ -50,7 +50,20 @@ const SaleTypePill = ({ type }: { type: SaleType }) => (
     </span>
 );
 
-const COST_CATEGORIES = ["workshop", "spareParts", "painting", "washing", "fuel", "paperwork", "commission", "other"] as const;
+const COST_CATEGORIES = ["travel", "workshop", "spareParts", "alignment", "painting", "washing", "fuel", "paperwork", "commission", "other"] as const;
+
+const COST_CATEGORY_LABELS: Record<string, string> = {
+    travel: "Travel / Transport",
+    workshop: "Workshop / Repair",
+    spareParts: "Spare Parts",
+    alignment: "Alignment Work",
+    painting: "Painting / Polishing",
+    washing: "Washing / Detailing",
+    fuel: "Fuel",
+    paperwork: "Paperwork / Tax",
+    commission: "Commission",
+    other: "Other Expenses",
+};
 
 // ── Edit Consignment Dialog ───────────────────────────────────────
 const EditConsignmentDialog = ({ vehicle }: { vehicle: IConsignmentVehicle }) => {
@@ -269,7 +282,7 @@ const RecordSaleDialog = ({ vehicle }: { vehicle: IConsignmentVehicle }) => {
 
     const { mutate, isPending } = useMutation({
         mutationFn: async (v: z.infer<typeof recordConsignmentSaleSchema>) => { setTid(toast.loading("Recording sale...")); return axios.post(`/consignments/${vehicle._id}/sale`, v); },
-        onSuccess: () => { toast.success("Sale recorded!", { id: tid }); qc.invalidateQueries({ queryKey: ["consignment", vehicle._id] }); setOpen(false); },
+        onSuccess: () => { toast.success("Sale recorded!", { id: tid }); qc.invalidateQueries({ queryKey: ["consignment", vehicle._id] }); qc.invalidateQueries({ queryKey: ["consignments"] }); qc.invalidateQueries({ queryKey: ["consignment-stats"] }); qc.invalidateQueries({ queryKey: ["consignment-reports"] }); qc.invalidateQueries({ queryKey: ["dashboard-stats"] }); setOpen(false); },
         onError: (err: unknown) => { const e = (err as AxiosError)?.response?.data as ErrorData; toast.error("Error!", { id: tid, description: formatApiErrors(e?.errors) || e?.message }); },
     });
 
@@ -360,7 +373,7 @@ const AddBuyerPaymentDialog = ({ vehicle }: { vehicle: IConsignmentVehicle }) =>
             setTid(toast.loading("Recording payment..."));
             return axios.post(`/consignments/${vehicle._id}/buyer-payments`, { ...v, type: "cash", createExchangeAs: "skip" });
         },
-        onSuccess: () => { toast.success("Payment recorded!", { id: tid }); qc.invalidateQueries({ queryKey: ["consignment", vehicle._id] }); form.reset(); setPaymentMethod("Cash"); setOpen(false); },
+        onSuccess: () => { toast.success("Payment recorded!", { id: tid }); qc.invalidateQueries({ queryKey: ["consignment", vehicle._id] }); qc.invalidateQueries({ queryKey: ["consignments"] }); qc.invalidateQueries({ queryKey: ["consignment-stats"] }); qc.invalidateQueries({ queryKey: ["consignment-reports"] }); qc.invalidateQueries({ queryKey: ["dashboard-stats"] }); form.reset(); setPaymentMethod("Cash"); setOpen(false); },
         onError: (err: unknown) => { const e = (err as AxiosError)?.response?.data as ErrorData; toast.error("Error!", { id: tid, description: formatApiErrors(e?.errors) || e?.message }); },
     });
 
@@ -449,7 +462,7 @@ const AddPayeePaymentDialog = ({ vehicle }: { vehicle: IConsignmentVehicle }) =>
 
     const { mutate, isPending } = useMutation({
         mutationFn: async (v: z.infer<typeof addPayeePaymentSchema>) => { setTid(toast.loading(`Recording ${label} payment...`)); return axios.post(`/consignments/${vehicle._id}/payee-payments`, v); },
-        onSuccess: () => { toast.success(`${label} payment recorded!`, { id: tid }); qc.invalidateQueries({ queryKey: ["consignment", vehicle._id] }); form.reset(); setOpen(false); },
+        onSuccess: () => { toast.success(`${label} payment recorded!`, { id: tid }); qc.invalidateQueries({ queryKey: ["consignment", vehicle._id] }); qc.invalidateQueries({ queryKey: ["consignments"] }); qc.invalidateQueries({ queryKey: ["consignment-stats"] }); qc.invalidateQueries({ queryKey: ["consignment-reports"] }); qc.invalidateQueries({ queryKey: ["dashboard-stats"] }); form.reset(); setOpen(false); },
         onError: (err: unknown) => { const e = (err as AxiosError)?.response?.data as ErrorData; toast.error("Error!", { id: tid, description: formatApiErrors(e?.errors) || e?.message }); },
     });
 
@@ -530,7 +543,7 @@ const AddCostBreakdownDialog = ({ vehicle }: { vehicle: IConsignmentVehicle }) =
 
     const { mutate, isPending } = useMutation({
         mutationFn: async (v: z.infer<typeof addConsignmentCostBreakdownItemSchema>) => { setTid(toast.loading("Adding...")); return axios.post(`/consignments/${vehicle._id}/costs/breakdown`, v); },
-        onSuccess: () => { toast.success("Cost item added!", { id: tid }); qc.invalidateQueries({ queryKey: ["consignment", vehicle._id] }); form.reset(); setOpen(false); },
+        onSuccess: () => { toast.success("Cost item added!", { id: tid }); qc.invalidateQueries({ queryKey: ["consignment", vehicle._id] }); qc.invalidateQueries({ queryKey: ["consignments"] }); qc.invalidateQueries({ queryKey: ["consignment-stats"] }); qc.invalidateQueries({ queryKey: ["consignment-reports"] }); form.reset(); setOpen(false); },
         onError: (err: unknown) => { const e = (err as AxiosError)?.response?.data as ErrorData; toast.error("Error!", { id: tid, description: formatApiErrors(e?.errors) || e?.message }); },
     });
 
@@ -552,7 +565,7 @@ const AddCostBreakdownDialog = ({ vehicle }: { vehicle: IConsignmentVehicle }) =
                             <FormField control={form.control} name="category" render={({ field }) => (
                                 <FormItem><FormLabel className="text-xs font-semibold text-foreground">Category *</FormLabel>
                                     <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger className="h-9 bg-muted/50 border-border text-sm"><SelectValue /></SelectTrigger></FormControl>
-                                        <SelectContent>{COST_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</SelectItem>)}</SelectContent>
+                                        <SelectContent>{COST_CATEGORIES.map(c => <SelectItem key={c} value={c}>{COST_CATEGORY_LABELS[c] ?? c}</SelectItem>)}</SelectContent>
                                     </Select><FormMessage /></FormItem>
                             )} />
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -793,27 +806,27 @@ const ConsignmentDetail = ({ id, initialData }: { id: string; initialData: ICons
 
     const { mutate: deleteBuyerPayment } = useMutation({
         mutationFn: async (paymentId: string) => axios.delete(`/consignments/${id}/buyer-payments/${paymentId}`),
-        onSuccess: () => { toast.success("Payment deleted"); qc.invalidateQueries({ queryKey: ["consignment", id] }); },
+        onSuccess: () => { toast.success("Payment deleted"); qc.invalidateQueries({ queryKey: ["consignment", id] }); qc.invalidateQueries({ queryKey: ["consignments"] }); qc.invalidateQueries({ queryKey: ["consignment-stats"] }); qc.invalidateQueries({ queryKey: ["consignment-reports"] }); qc.invalidateQueries({ queryKey: ["dashboard-stats"] }); },
     });
 
     const { mutate: deletePayeePayment } = useMutation({
         mutationFn: async (paymentId: string) => axios.delete(`/consignments/${id}/payee-payments/${paymentId}`),
-        onSuccess: () => { toast.success("Payment deleted"); qc.invalidateQueries({ queryKey: ["consignment", id] }); },
+        onSuccess: () => { toast.success("Payment deleted"); qc.invalidateQueries({ queryKey: ["consignment", id] }); qc.invalidateQueries({ queryKey: ["consignments"] }); qc.invalidateQueries({ queryKey: ["consignment-stats"] }); qc.invalidateQueries({ queryKey: ["consignment-reports"] }); qc.invalidateQueries({ queryKey: ["dashboard-stats"] }); },
     });
 
     const { mutate: deleteCostItem } = useMutation({
         mutationFn: async (itemId: string) => axios.delete(`/consignments/${id}/costs/breakdown/${itemId}`),
-        onSuccess: () => { toast.success("Cost item deleted"); qc.invalidateQueries({ queryKey: ["consignment", id] }); },
+        onSuccess: () => { toast.success("Cost item deleted"); qc.invalidateQueries({ queryKey: ["consignment", id] }); qc.invalidateQueries({ queryKey: ["consignments"] }); qc.invalidateQueries({ queryKey: ["consignment-stats"] }); qc.invalidateQueries({ queryKey: ["consignment-reports"] }); },
     });
 
     const { mutate: undoSale, isPending: undoingSale } = useMutation({
         mutationFn: async () => axios.delete(`/consignments/${id}/sale`),
-        onSuccess: () => { toast.success("Sale reverted"); qc.invalidateQueries({ queryKey: ["consignment", id] }); },
+        onSuccess: () => { toast.success("Sale reverted"); qc.invalidateQueries({ queryKey: ["consignment", id] }); qc.invalidateQueries({ queryKey: ["consignments"] }); qc.invalidateQueries({ queryKey: ["consignment-stats"] }); qc.invalidateQueries({ queryKey: ["consignment-reports"] }); qc.invalidateQueries({ queryKey: ["dashboard-stats"] }); },
     });
 
     const { mutate: closeSale } = useMutation({
         mutationFn: async () => axios.post(`/consignments/${id}/payee-payments/close`),
-        onSuccess: () => { toast.success("Settlement closed"); qc.invalidateQueries({ queryKey: ["consignment", id] }); },
+        onSuccess: () => { toast.success("Settlement closed"); qc.invalidateQueries({ queryKey: ["consignment", id] }); qc.invalidateQueries({ queryKey: ["consignments"] }); qc.invalidateQueries({ queryKey: ["consignment-stats"] }); qc.invalidateQueries({ queryKey: ["consignment-reports"] }); qc.invalidateQueries({ queryKey: ["dashboard-stats"] }); },
     });
 
     if (!vehicle) return (
@@ -1037,7 +1050,7 @@ const ConsignmentDetail = ({ id, initialData }: { id: string; initialData: ICons
                                     <span className="text-xs font-normal text-muted-foreground ml-1">paid to {label.toLowerCase()}</span>
                                 </p>
                                 <span className="text-[10px] text-primary group-hover:translate-x-1 transition-transform flex items-center gap-0.5">
-                                    Manage <ExternalLink className="h-2.5 w-2.5" />
+                                    {vehicle.payeePaymentStatus === "closed" ? "View" : "Manage"} <ExternalLink className="h-2.5 w-2.5" />
                                 </span>
                             </div>
 
@@ -1150,14 +1163,22 @@ const ConsignmentDetail = ({ id, initialData }: { id: string; initialData: ICons
                                 { label: "Sold Price", value: formatCurrency(vehicle.soldPrice!) },
                                 { label: "Payment Method", value: vehicle.isExchange ? "Exchange + Cash" : "Cash" },
                                 { label: "Days in Shop", value: vehicle.daysInShop != null ? `${vehicle.daysInShop} days` : "—" },
-                                { label: "Settlement", value: vehicle.settlementStatus.replace(/_/g, " ") },
                             ].map(r => (
                                 <div key={r.label} className="flex justify-between text-sm border-b border-border/50 pb-2 last:border-0 last:pb-0">
                                     <span className="text-muted-foreground">{r.label}</span>
                                     <span className={`font-medium text-right ${r.label === "Payment Method" && vehicle.isExchange ? "text-orange-400" : "text-foreground"}`}>{r.value}</span>
                                 </div>
                             ))}
-
+                            {/* Settlement — color-coded badge */}
+                            <div className="flex justify-between text-sm items-center">
+                                <span className="text-muted-foreground">Settlement</span>
+                                {{
+                                    fully_closed: <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"><CheckCircle2 className="h-3 w-3" />Fully Closed</span>,
+                                    buyer_settled: <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">Buyer Settled • {label} Pending</span>,
+                                    payee_settled: <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">{label} Settled • Buyer Pending</span>,
+                                    open: <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-500/10 text-slate-400 border border-slate-500/20">Open</span>,
+                                }[vehicle.settlementStatus] ?? <span className="text-muted-foreground text-xs capitalize">{vehicle.settlementStatus.replace(/_/g, " ")}</span>}
+                            </div>
                         </div>
                     )}
                     {vehicle.remarks && (
@@ -1183,8 +1204,10 @@ const ConsignmentDetail = ({ id, initialData }: { id: string; initialData: ICons
                     </div>
                     <div className="rounded-xl border border-border bg-card overflow-hidden">
                         {[
+                            { field: "travelCost", label: "Travel / Transport", category: "travel" },
                             { field: "workshopRepairCost", label: "Workshop / Repair", category: "workshop" },
                             { field: "sparePartsAccessories", label: "Spare Parts", category: "spareParts" },
+                            { field: "alignmentWork", label: "Alignment Work", category: "alignment" },
                             { field: "paintingPolishingCost", label: "Painting / Polishing", category: "painting" },
                             { field: "washingDetailingCost", label: "Washing / Detailing", category: "washing" },
                             { field: "fuelCost", label: "Fuel", category: "fuel" },

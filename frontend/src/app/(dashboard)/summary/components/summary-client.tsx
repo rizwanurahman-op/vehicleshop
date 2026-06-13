@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import {
     Users, Search, Download, FileText, FileSpreadsheet,
     ChevronDown, Loader2, X, Calendar, TrendingUp, TrendingDown,
-    IndianRupee, AlertCircle, CheckCircle2,
+    IndianRupee, AlertCircle, CheckCircle2, Sparkles,
 } from "lucide-react";
 import { Input }    from "@/components/ui/input";
 import { Button }   from "@/components/ui/button";
@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { TableSkeleton, StatusBadge, CurrencyDisplay } from "@components/shared";
 import { useDebounce } from "@hooks/use-debounce";
@@ -48,7 +49,7 @@ const StatCard = ({ label, value, sub, icon: Icon, gradient, textColor }: {
         </div>
         <div className="min-w-0">
             <p className="text-[10px] uppercase tracking-widest font-bold opacity-70 mb-1">{label}</p>
-            <p className={cn("text-2xl font-bold truncate", textColor)}>{value}</p>
+            <p className={cn("text-xl font-bold truncate", textColor)}>{value}</p>
             {sub && <p className="text-[11px] mt-0.5 opacity-60">{sub}</p>}
         </div>
     </div>
@@ -106,12 +107,14 @@ const SummaryClient = ({ initialData }: Props) => {
     });
 
     // ── Aggregate stats ────────────────────────────────────────────────────
-    const totalBorrowed  = (data ?? []).reduce((s, l) => s + l.totalBorrowed,  0);
-    const totalRepaid    = (data ?? []).reduce((s, l) => s + l.totalRepaid,    0);
-    const totalBalance   = (data ?? []).reduce((s, l) => s + l.balancePayable, 0);
-    const overallPct     = totalBorrowed > 0 ? (totalRepaid / totalBorrowed) * 100 : 0;
-    const activeCount    = (data ?? []).filter(l => l.isActive !== false).length;
-    const paidOffCount   = (data ?? []).filter(l => l.balancePayable <= 0).length;
+    const rows          = data ?? [];
+    const totalBorrowed = rows.reduce((s, l) => s + l.totalBorrowed,  0);
+    const totalRepaid   = rows.reduce((s, l) => s + l.totalRepaid,    0);   // principal only
+    const totalProfit   = rows.reduce((s, l) => s + (l.totalProfit ?? 0), 0);
+    const totalBalance  = rows.reduce((s, l) => s + l.balancePayable, 0);
+    const overallPct    = totalBorrowed > 0 ? (totalRepaid / totalBorrowed) * 100 : 0;
+    const activeCount   = rows.filter(l => l.isActive !== false).length;
+    const paidOffCount  = rows.filter(l => l.balancePayable <= 0).length;
 
     // ── Export ─────────────────────────────────────────────────────────────
     const handleExport = async (format: "csv" | "pdf") => {
@@ -137,7 +140,7 @@ const SummaryClient = ({ initialData }: Props) => {
     };
 
     // ── Pie data ───────────────────────────────────────────────────────────
-    const pieData = (data ?? []).filter(l => l.totalBorrowed > 0).slice(0, 6)
+    const pieData = rows.filter(l => l.totalBorrowed > 0).slice(0, 6)
         .map(l => ({ name: l.name, value: l.totalBorrowed }));
 
     return (
@@ -145,33 +148,61 @@ const SummaryClient = ({ initialData }: Props) => {
             {/* Header */}
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
+                    <div className="flex items-center gap-2 mb-1">
+                        <Sparkles className="h-4 w-4 text-primary" />
+                        <span className="text-[10px] font-bold tracking-widest text-primary uppercase">Auto-calculated</span>
+                    </div>
                     <h1 className="text-2xl font-bold text-foreground">Lender Summary</h1>
-                    <p className="text-sm text-muted-foreground">Auto-calculated from investment and repayment records</p>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                        Principal repayments reduce balance · Profit payments are tracked separately
+                    </p>
                 </div>
             </div>
 
-            {/* Stat Cards */}
-            {(data && data.length > 0) && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-                    <StatCard label="Total Lenders"   value={String((data ?? []).length)}
-                        sub={`${activeCount} active`}
+            {/* Stat Cards — 5 cards */}
+            {rows.length > 0 && (
+                <div className="grid grid-cols-2 xl:grid-cols-5 gap-3">
+                    <StatCard label="Total Lenders" value={String(rows.length)}
+                        sub={`${activeCount} active · ${paidOffCount} fully paid`}
                         icon={Users} gradient="bg-gradient-to-br from-primary/10 to-violet-500/10 border border-primary/20"
                         textColor="text-primary" />
-                    <StatCard label="Total Borrowed"  value={formatCurrency(totalBorrowed)}
+                    <StatCard label="Total Borrowed" value={formatCurrency(totalBorrowed)}
                         sub="Cumulative capital received"
                         icon={TrendingDown} gradient="bg-gradient-to-br from-violet-500/10 to-purple-600/10 border border-violet-500/20"
                         textColor="text-violet-500" />
-                    <StatCard label="Total Repaid"    value={formatCurrency(totalRepaid)}
+                    <StatCard label="Principal Repaid" value={formatCurrency(totalRepaid)}
                         sub={`${overallPct.toFixed(1)}% repayment rate`}
                         icon={TrendingUp} gradient="bg-gradient-to-br from-emerald-500/10 to-teal-600/10 border border-emerald-500/20"
                         textColor="text-emerald-500" />
+                    <StatCard label="Profit Paid" value={formatCurrency(totalProfit)}
+                        sub="Interest payments (no balance effect)"
+                        icon={IndianRupee} gradient="bg-gradient-to-br from-amber-500/10 to-orange-600/10 border border-amber-500/20"
+                        textColor="text-amber-500" />
                     <StatCard label="Outstanding Balance" value={formatCurrency(totalBalance)}
                         sub={`${paidOffCount} fully paid off`}
                         icon={totalBalance > 0 ? AlertCircle : CheckCircle2}
                         gradient={totalBalance > 0
-                            ? "bg-gradient-to-br from-amber-500/10 to-orange-600/10 border border-amber-500/20"
+                            ? "bg-gradient-to-br from-red-500/10 to-rose-600/10 border border-red-500/20"
                             : "bg-gradient-to-br from-emerald-500/10 to-teal-600/10 border border-emerald-500/20"}
-                        textColor={totalBalance > 0 ? "text-amber-500" : "text-emerald-500"} />
+                        textColor={totalBalance > 0 ? "text-red-500" : "text-emerald-500"} />
+                </div>
+            )}
+
+            {/* Principal vs Profit breakdown hint */}
+            {rows.length > 0 && (
+                <div className="flex flex-wrap gap-3">
+                    <div className="flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-xs">
+                        <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
+                        <span className="text-emerald-700 dark:text-emerald-300 font-medium">
+                            💰 Principal: <strong>{formatCurrency(totalRepaid)}</strong> — reduces lender balance
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs">
+                        <span className="h-2 w-2 rounded-full bg-amber-500 shrink-0" />
+                        <span className="text-amber-700 dark:text-amber-300 font-medium">
+                            📈 Profit: <strong>{formatCurrency(totalProfit)}</strong> — interest paid, balance unchanged
+                        </span>
+                    </div>
                 </div>
             )}
 
@@ -240,7 +271,7 @@ const SummaryClient = ({ initialData }: Props) => {
                             <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => handleExport("csv")} className="gap-2 cursor-pointer">
                                 <FileSpreadsheet className="h-4 w-4 text-emerald-500" />
-                                <div><p className="text-sm font-medium">Export CSV</p><p className="text-[10px] text-muted-foreground">Excel compatible</p></div>
+                                <div><p className="text-sm font-medium">Export CSV</p><p className="text-[10px] text-muted-foreground">Includes Principal + Profit columns</p></div>
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleExport("pdf")} className="gap-2 cursor-pointer">
                                 <FileText className="h-4 w-4 text-red-500" />
@@ -301,7 +332,7 @@ const SummaryClient = ({ initialData }: Props) => {
                         <>
                             {/* Mobile cards */}
                             <div className="grid grid-cols-1 gap-4 p-4 md:hidden bg-muted/10">
-                                {(data ?? []).map(lender => (
+                                {rows.map(lender => (
                                     <div key={lender._id} className="group relative flex flex-col rounded-2xl border border-border/60 bg-gradient-to-b from-card to-muted/10 p-5 shadow-sm hover:shadow-md hover:border-primary/30 transition-all overflow-hidden">
                                         <div className="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-primary/50 to-primary" />
                                         <div className="flex items-center justify-between mb-3">
@@ -314,10 +345,17 @@ const SummaryClient = ({ initialData }: Props) => {
                                                 <CurrencyDisplay amount={lender.totalBorrowed} />
                                             </div>
                                             <div className="text-right">
-                                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Repaid</p>
+                                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Principal Repaid</p>
                                                 <CurrencyDisplay amount={lender.totalRepaid} variant="success" />
                                             </div>
                                         </div>
+                                        {/* Profit row */}
+                                        {(lender.totalProfit ?? 0) > 0 && (
+                                            <div className="mb-3 flex items-center justify-between rounded-lg border border-amber-500/20 bg-amber-500/5 px-2.5 py-1.5">
+                                                <span className="text-[10px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400">📈 Profit Paid</span>
+                                                <CurrencyDisplay amount={lender.totalProfit} />
+                                            </div>
+                                        )}
                                         <div className="flex flex-col gap-1.5 bg-muted/30 p-2.5 rounded-lg border border-border/50">
                                             <div className="flex justify-between text-xs">
                                                 <span className="text-muted-foreground font-medium">Balance</span>
@@ -342,20 +380,25 @@ const SummaryClient = ({ initialData }: Props) => {
                                             <TableHead className="text-xs uppercase tracking-wider text-muted-foreground w-10 text-center">#</TableHead>
                                             <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Lender</TableHead>
                                             <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Borrowed</TableHead>
-                                            <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Repaid</TableHead>
+                                            <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">
+                                                <span className="text-emerald-600 dark:text-emerald-400">💰 Principal</span>
+                                            </TableHead>
+                                            <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">
+                                                <span className="text-amber-600 dark:text-amber-400">📈 Profit</span>
+                                            </TableHead>
                                             <TableHead className="text-xs uppercase tracking-wider text-muted-foreground text-right">Balance</TableHead>
                                             <TableHead className="text-xs uppercase tracking-wider text-muted-foreground w-40">Repayment %</TableHead>
                                             <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Status</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {(data ?? []).length === 0 ? (
+                                        {rows.length === 0 ? (
                                             <TableRow>
-                                                <TableCell colSpan={7} className="h-32 text-center text-muted-foreground text-sm">
+                                                <TableCell colSpan={8} className="h-32 text-center text-muted-foreground text-sm">
                                                     No lenders match the selected filters.
                                                 </TableCell>
                                             </TableRow>
-                                        ) : (data ?? []).map((lender, index) => (
+                                        ) : rows.map((lender, index) => (
                                             <TableRow key={lender._id} className="border-border hover:bg-muted/50 transition-colors">
                                                 <TableCell className="text-center text-muted-foreground font-mono text-xs">{index + 1}</TableCell>
                                                 <TableCell>
@@ -363,7 +406,20 @@ const SummaryClient = ({ initialData }: Props) => {
                                                     {lender.phone && <div className="text-xs text-muted-foreground">{lender.phone}</div>}
                                                 </TableCell>
                                                 <TableCell className="text-right"><CurrencyDisplay amount={lender.totalBorrowed} variant="primary" /></TableCell>
-                                                <TableCell className="text-right"><CurrencyDisplay amount={lender.totalRepaid} variant="success" /></TableCell>
+                                                {/* Principal */}
+                                                <TableCell className="text-right">
+                                                    <CurrencyDisplay amount={lender.totalRepaid} variant="success" />
+                                                </TableCell>
+                                                {/* Profit */}
+                                                <TableCell className="text-right">
+                                                    {(lender.totalProfit ?? 0) > 0 ? (
+                                                        <Badge variant="outline" className="text-[10px] px-1.5 font-semibold text-amber-600 border-amber-500/30 bg-amber-500/10 dark:text-amber-400">
+                                                            {formatCurrency(lender.totalProfit)}
+                                                        </Badge>
+                                                    ) : (
+                                                        <span className="text-xs text-muted-foreground">—</span>
+                                                    )}
+                                                </TableCell>
                                                 <TableCell className="text-right">
                                                     <CurrencyDisplay amount={lender.balancePayable} variant={lender.balancePayable > 0 ? "warning" : "success"} className="font-bold" />
                                                 </TableCell>
@@ -382,6 +438,18 @@ const SummaryClient = ({ initialData }: Props) => {
                                         ))}
                                     </TableBody>
                                 </Table>
+
+                                {/* Footer totals */}
+                                {rows.length > 0 && (
+                                    <div className="border-t border-border bg-muted/20 px-4 py-3 grid grid-cols-8 gap-2 items-center text-xs">
+                                        <div className="col-span-2 font-bold text-muted-foreground uppercase tracking-wider">{rows.length} lenders</div>
+                                        <div className="text-right font-bold text-primary">{formatCurrency(totalBorrowed)}</div>
+                                        <div className="text-right font-bold text-emerald-500">{formatCurrency(totalRepaid)}</div>
+                                        <div className="text-right font-bold text-amber-500">{formatCurrency(totalProfit)}</div>
+                                        <div className="text-right font-bold text-red-500">{formatCurrency(totalBalance)}</div>
+                                        <div className="col-span-2 text-right text-muted-foreground">{overallPct.toFixed(1)}% avg</div>
+                                    </div>
+                                )}
                             </div>
                         </>
                     )}

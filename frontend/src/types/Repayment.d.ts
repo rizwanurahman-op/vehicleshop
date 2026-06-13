@@ -5,6 +5,7 @@ interface IRepayment {
     lender: ILender | string;
     amountPaid: number;
     mode: PaymentMode;
+    repaymentType: "Principal" | "Profit";
     referenceNo?: string;
     remarks?: string;
     createdAt: string;

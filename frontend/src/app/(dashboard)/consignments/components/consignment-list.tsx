@@ -16,7 +16,8 @@ import {
     TrendingUp, TrendingDown, Package, AlertCircle,
     CheckCircle2, Clock, Filter, ArrowLeftRight,
     Download, FileText, FileSpreadsheet, ChevronDown, Calendar, X,
-    ChevronLeft, ChevronRight
+    ChevronLeft, ChevronRight, ArrowDownLeft, ArrowUpRight,
+    Wrench,
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import Link from "next/link";
@@ -77,13 +78,7 @@ const StatusBadge = ({ status, settlement }: { status: ConsignmentStatus; settle
     return <Badge className={cn("text-[10px]", s.color)}>{s.label}</Badge>;
 };
 
-const QuickStat = ({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) => (
-    <div className="rounded-xl border border-border bg-card p-4 flex flex-col gap-1">
-        <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{label}</p>
-        <p className={cn("text-xl font-bold", color ?? "text-foreground")}>{value}</p>
-        {sub && <p className="text-[11px] text-muted-foreground">{sub}</p>}
-    </div>
-);
+
 
 export const ConsignmentList = ({ initialData }: { initialData: ConsignmentPaginatedData | null }) => {
     const router = useRouter();
@@ -171,10 +166,13 @@ export const ConsignmentList = ({ initialData }: { initialData: ConsignmentPagin
         },
     });
 
-    const totalInvested = stats?.totalInvested ?? 0;
     const inShop = stats?.currentlyInShop ?? 0;
-    const sold = (stats?.sold ?? 0);
+    const sold = stats?.sold ?? 0;
     const totalCount = stats?.totalVehicles ?? (data?.total ?? 0);
+    const totalNetProfit = stats?.totalNetProfit ?? 0;
+    const isProfit = totalNetProfit >= 0;
+    const ps = stats?.parkSale;
+    const fs = stats?.financeSale;
 
     return (
         <div className="flex flex-col gap-5 pb-10">
@@ -225,12 +223,191 @@ export const ConsignmentList = ({ initialData }: { initialData: ConsignmentPagin
             </div>
 
 
-            {/* Quick Stats */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                <QuickStat label="Total" value={String(totalCount)} />
-                <QuickStat label="In Shop" value={String(inShop)} color="text-yellow-400" />
-                <QuickStat label="Sold" value={String(sold)} color="text-emerald-400" />
-                <QuickStat label="Invested" value={formatCurrency(totalInvested)} sub="Reconditioning + Purchase" />
+            {/* ── Consignment Dashboard ───────────────────────────────── */}
+            <div className="flex flex-col gap-3">
+
+                {/* Row 1: Summary overview (6 cards) */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                    <div className="rounded-xl border border-border bg-card p-4 flex flex-col gap-1">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Total</p>
+                        <p className="text-2xl font-bold tabular-nums text-foreground">{totalCount}</p>
+                        <p className="text-[10px] text-muted-foreground">{ps?.total ?? 0} park · {fs?.total ?? 0} finance</p>
+                    </div>
+                    {inShop > 0 ? (
+                        <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4 flex flex-col gap-1">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-yellow-500/70">In Shop</p>
+                            <p className="text-2xl font-bold tabular-nums text-yellow-400">{inShop}</p>
+                            <p className="text-[10px] text-muted-foreground">{ps?.inShop ?? 0} park · {fs?.inShop ?? 0} finance</p>
+                        </div>
+                    ) : (
+                        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 flex flex-col gap-1">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-500/70">In Shop</p>
+                            <p className="text-2xl font-bold tabular-nums text-emerald-400">0</p>
+                            <p className="text-[10px] text-emerald-500/60">All vehicles sold ✓</p>
+                        </div>
+                    )}
+                    <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 flex flex-col gap-1">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-500/70">Sold</p>
+                        <p className="text-2xl font-bold tabular-nums text-emerald-400">{sold}</p>
+                        <p className="text-[10px] text-muted-foreground">{ps?.sold ?? 0} park · {fs?.sold ?? 0} finance</p>
+                    </div>
+                    <div className="rounded-xl border border-border bg-card p-4 flex flex-col gap-1">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Recon Spent</p>
+                        <p className="text-lg font-bold tabular-nums text-foreground">{formatCurrency(stats?.totalReconCost ?? 0)}</p>
+                        <p className="text-[10px] text-muted-foreground">Workshop, parts, etc.</p>
+                    </div>
+                    <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 flex flex-col gap-1">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-blue-500/70">Total Revenue</p>
+                        <p className="text-lg font-bold tabular-nums text-blue-400">{formatCurrency(stats?.totalRevenue ?? 0)}</p>
+                        <p className="text-[10px] text-muted-foreground">From {sold} sold vehicles</p>
+                    </div>
+                    <div className={`rounded-xl border p-4 flex flex-col gap-1 ${isProfit ? "border-emerald-500/20 bg-emerald-500/5" : "border-red-500/20 bg-red-500/5"}`}>
+                        <div className="flex items-center gap-1">
+                            {isProfit ? <TrendingUp className="h-3 w-3 text-emerald-400" /> : <TrendingDown className="h-3 w-3 text-red-400" />}
+                            <p className={`text-[10px] font-bold uppercase tracking-widest ${isProfit ? "text-emerald-500/70" : "text-red-500/70"}`}>Net Profit</p>
+                        </div>
+                        <p className={`text-lg font-bold tabular-nums ${isProfit ? "text-emerald-400" : "text-red-400"}`}>{isProfit ? "+" : "−"}{formatCurrency(Math.abs(totalNetProfit))}</p>
+                        <p className="text-[10px] text-muted-foreground">Avg margin: {stats?.avgMargin ?? 0}%</p>
+                    </div>
+                </div>
+
+                {/* Row 2: Domain split (Park Sale | Finance Sale) */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+
+                    {/* Park Sale card */}
+                    <div className="rounded-2xl border border-violet-500/20 bg-gradient-to-br from-violet-500/5 to-card p-5">
+                        <div className="flex items-center gap-2 mb-4">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-500/15">
+                                <Store className="h-4 w-4 text-violet-400" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-bold text-foreground">Park Sale</p>
+                                <p className="text-[10px] text-muted-foreground">{ps?.total ?? 0} vehicles · {ps?.inShop ?? 0} in shop · {ps?.sold ?? 0} sold</p>
+                            </div>
+                            {(ps?.fullyClosed ?? 0) > 0 && (
+                                <span className="ml-auto text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                                    {ps?.fullyClosed} closed
+                                </span>
+                            )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="rounded-lg bg-muted/30 border border-border p-3">
+                                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+                                    <ArrowDownLeft className="inline h-3 w-3 mr-1 text-emerald-400" />Buyer Received
+                                </p>
+                                <p className="text-base font-bold tabular-nums text-foreground">{formatCurrency(ps?.totalReceivedFromBuyers ?? 0)}</p>
+                                {(ps?.totalBuyerBalance ?? 0) > 0 && (
+                                    <p className="text-[10px] text-amber-400 mt-0.5">₹{(ps?.totalBuyerBalance ?? 0).toLocaleString("en-IN")} pending</p>
+                                )}
+                            </div>
+                            <div className="rounded-lg bg-muted/30 border border-border p-3">
+                                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+                                    <ArrowUpRight className="inline h-3 w-3 mr-1 text-violet-400" />Paid to Owner
+                                </p>
+                                <p className="text-base font-bold tabular-nums text-foreground">{formatCurrency(ps?.totalPaidToOwner ?? 0)}</p>
+                                {(ps?.totalOwnerBalance ?? 0) > 0 && (
+                                    <p className="text-[10px] text-amber-400 mt-0.5">₹{(ps?.totalOwnerBalance ?? 0).toLocaleString("en-IN")} owed</p>
+                                )}
+                            </div>
+                            <div className="rounded-lg bg-muted/30 border border-border p-3">
+                                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+                                    <Wrench className="inline h-3 w-3 mr-1" />Recon Cost
+                                </p>
+                                <p className="text-base font-bold tabular-nums text-foreground">{formatCurrency(ps?.totalReconCost ?? 0)}</p>
+                            </div>
+                            <div className={`rounded-lg border p-3 ${ (ps?.totalNetProfit ?? 0) >= 0 ? "bg-emerald-500/5 border-emerald-500/20" : "bg-red-500/5 border-red-500/20"}`}>
+                                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Net Profit</p>
+                                <p className={`text-base font-bold tabular-nums ${ (ps?.totalNetProfit ?? 0) >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                                    {(ps?.totalNetProfit ?? 0) >= 0 ? "+" : "−"}{formatCurrency(Math.abs(ps?.totalNetProfit ?? 0))}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Finance Sale card */}
+                    <div className="rounded-2xl border border-blue-500/20 bg-gradient-to-br from-blue-500/5 to-card p-5">
+                        <div className="flex items-center gap-2 mb-4">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-500/15">
+                                <CreditCard className="h-4 w-4 text-blue-400" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-bold text-foreground">Finance Sale</p>
+                                <p className="text-[10px] text-muted-foreground">{fs?.total ?? 0} vehicles · {fs?.inShop ?? 0} in shop · {fs?.sold ?? 0} sold</p>
+                            </div>
+                            {(fs?.fullyClosed ?? 0) > 0 && (
+                                <span className="ml-auto text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                                    {fs?.fullyClosed} closed
+                                </span>
+                            )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="rounded-lg bg-muted/30 border border-border p-3">
+                                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+                                    <ArrowDownLeft className="inline h-3 w-3 mr-1 text-emerald-400" />Buyer Received
+                                </p>
+                                <p className="text-base font-bold tabular-nums text-foreground">{formatCurrency(fs?.totalReceivedFromBuyers ?? 0)}</p>
+                                {(fs?.totalBuyerBalance ?? 0) > 0 && (
+                                    <p className="text-[10px] text-amber-400 mt-0.5">₹{(fs?.totalBuyerBalance ?? 0).toLocaleString("en-IN")} pending</p>
+                                )}
+                            </div>
+                            <div className="rounded-lg bg-muted/30 border border-border p-3">
+                                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+                                    <ArrowUpRight className="inline h-3 w-3 mr-1 text-blue-400" />Paid to Finance
+                                </p>
+                                <p className="text-base font-bold tabular-nums text-foreground">{formatCurrency(fs?.totalPaidToFinance ?? 0)}</p>
+                                {(fs?.totalFinanceBalance ?? 0) > 0 && (
+                                    <p className="text-[10px] text-amber-400 mt-0.5">₹{(fs?.totalFinanceBalance ?? 0).toLocaleString("en-IN")} owed</p>
+                                )}
+                            </div>
+                            <div className="rounded-lg bg-muted/30 border border-border p-3">
+                                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+                                    <Wrench className="inline h-3 w-3 mr-1" />Recon Cost
+                                </p>
+                                <p className="text-base font-bold tabular-nums text-foreground">{formatCurrency(fs?.totalReconCost ?? 0)}</p>
+                            </div>
+                            <div className={`rounded-lg border p-3 ${ (fs?.totalNetProfit ?? 0) >= 0 ? "bg-emerald-500/5 border-emerald-500/20" : "bg-red-500/5 border-red-500/20"}`}>
+                                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Net Profit</p>
+                                <p className={`text-base font-bold tabular-nums ${ (fs?.totalNetProfit ?? 0) >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                                    {(fs?.totalNetProfit ?? 0) >= 0 ? "+" : "−"}{formatCurrency(Math.abs(fs?.totalNetProfit ?? 0))}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Row 3: Pending alerts strip (only if there are pending amounts) */}
+                {((stats?.totalBuyerBalance ?? 0) > 0 || (stats?.totalPayeeBalance ?? 0) > 0) && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {(stats?.totalBuyerBalance ?? 0) > 0 && (
+                            <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/15">
+                                        <ArrowDownLeft className="h-4 w-4 text-amber-400" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-bold text-amber-400">Pending from Buyers</p>
+                                        <p className="text-[10px] text-muted-foreground">{stats?.pendingBuyerPayments.count} vehicle(s) with balance due</p>
+                                    </div>
+                                </div>
+                                <p className="text-base font-bold tabular-nums text-amber-400">{formatCurrency(stats?.totalBuyerBalance ?? 0)}</p>
+                            </div>
+                        )}
+                        {(stats?.totalPayeeBalance ?? 0) > 0 && (
+                            <div className="rounded-xl border border-orange-500/20 bg-orange-500/5 p-4 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-500/15">
+                                        <ArrowUpRight className="h-4 w-4 text-orange-400" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-bold text-orange-400">Still Owed to Owner / Finance</p>
+                                        <p className="text-[10px] text-muted-foreground">{stats?.pendingPayeePayments.count} vehicle(s) with payee balance</p>
+                                    </div>
+                                </div>
+                                <p className="text-base font-bold tabular-nums text-orange-400">{formatCurrency(stats?.totalPayeeBalance ?? 0)}</p>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
 
             {/* Filters */}

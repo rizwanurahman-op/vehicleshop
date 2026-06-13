@@ -25,7 +25,10 @@ interface ReportData {
     agingReport: IConsignmentVehicle[];
     monthlyTrends: { byReceivedMonth: unknown[]; bySoldMonth: unknown[] };
     costAnalysis: {
-        avgWorkshop?: number; avgSpareParts?: number; avgPainting?: number;
+        avgTravel?: number;
+        avgWorkshop?: number; avgSpareParts?: number;
+        avgAlignment?: number;
+        avgPainting?: number;
         avgWashing?: number; avgFuel?: number; avgPaperwork?: number;
         avgCommission?: number; avgOtherExpenses?: number; avgTotalRecon?: number;
     };
@@ -244,14 +247,15 @@ export const ConsignmentReports = () => {
                     {/* ── Park vs Finance split ── */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         {[
-                            { label: "Park Sale 🏪", filter: "park_sale", color: "text-violet-400" },
-                            { label: "Finance Sale 💳", filter: "finance_sale", color: "text-blue-400" },
-                        ].map(({ label, filter, color }) => {
+                            { label: "Park Sale 🏪", filter: "park_sale", color: "text-violet-400", payeeLabel: "Paid to Owner" },
+                            { label: "Finance Sale 💳", filter: "finance_sale", color: "text-blue-400", payeeLabel: "Paid to Finance" },
+                        ].map(({ label, filter, color, payeeLabel }) => {
                             const items = report?.profitLoss.filter(v => v.saleType === filter) ?? [];
                             const rev   = items.reduce((s, v) => s + (v.soldPrice || 0), 0);
-                            const inv   = items.reduce((s, v) => s + (v.totalInvestment || 0), 0);
+                            const recon = items.reduce((s, v) => s + (v.totalReconCost || 0), 0);
                             const np    = items.reduce((s, v) => s + v.netProfit, 0);
                             const po    = items.reduce((s, v) => s + (v.paidToPayee || 0), 0);
+                            const bbal  = items.reduce((s, v) => s + (v.buyerBalance || 0), 0);
                             return (
                                 <div key={label} className="rounded-xl border border-border bg-card p-5">
                                     <div className="flex items-center justify-between mb-4">
@@ -263,16 +267,20 @@ export const ConsignmentReports = () => {
                                     ) : (
                                         <div className="grid grid-cols-2 gap-3">
                                             {[
-                                                { l: "Total Sold", v: String(items.length) },
-                                                { l: "Total Invested", v: formatCurrency(inv) },
-                                                { l: "Revenue", v: formatCurrency(rev) },
-                                                { l: "Paid to Payee", v: formatCurrency(po) },
-                                                { l: "Net Profit", v: formatCurrency(np) },
-                                                { l: "Avg Days", v: items.length ? `${Math.round(items.reduce((s, v) => s + (v.daysInShop || 0), 0) / items.length)}d` : "—" },
+                                                { l: "Total Sold",   v: String(items.length) },
+                                                { l: "Recon Cost",   v: formatCurrency(recon) },
+                                                { l: "Revenue",     v: formatCurrency(rev) },
+                                                { l: payeeLabel,    v: formatCurrency(po) },
+                                                { l: "Net Profit",  v: formatCurrency(np) },
+                                                { l: "Buyer Balance", v: bbal > 0 ? formatCurrency(bbal) : "Nil" },
+                                                { l: "Avg Days",    v: items.length ? `${Math.round(items.reduce((s, v) => s + (v.daysInShop || 0), 0) / items.length)}d` : "—" },
                                             ].map(row => (
                                                 <div key={row.l}>
                                                     <p className="text-xs text-muted-foreground">{row.l}</p>
-                                                    <p className={cn("font-bold text-sm mt-0.5", row.l === "Net Profit" ? color : "text-foreground")}>{row.v}</p>
+                                                    <p className={cn("font-bold text-sm mt-0.5",
+                                                        row.l === "Net Profit" ? color
+                                                        : row.l === "Buyer Balance" && bbal > 0 ? "text-amber-400"
+                                                        : "text-foreground")}>{row.v}</p>
                                                 </div>
                                             ))}
                                         </div>
@@ -329,13 +337,13 @@ export const ConsignmentReports = () => {
                                                     <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{formatDate(v.dateSold!)}</td>
                                                     <td className="px-4 py-3 text-sm font-bold text-amber-400 whitespace-nowrap">{(v.buyerBalance || 0) > 0 ? formatCurrency(v.buyerBalance) : "—"}</td>
                                                     <td className="px-4 py-3 text-sm font-bold text-blue-400 whitespace-nowrap">{(v.payeeBalance || 0) > 0 ? formatCurrency(v.payeeBalance) : "—"}</td>
-                                                        <td className="px-4 py-3 whitespace-nowrap">
-                                                        <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full",
-                                                            v.settlementStatus === "fully_closed" ? "bg-green-500/15 text-green-400"
-                                                            : v.settlementStatus === "buyer_settled" || v.settlementStatus === "payee_settled" ? "bg-amber-500/15 text-amber-400"
-                                                            : "bg-orange-500/15 text-orange-400")}>
-                                                            {(v.settlementStatus ?? "open").replace(/_/g, " ")}
-                                                        </span>
+                                                     <td className="px-4 py-3 whitespace-nowrap">
+                                                        {{
+                                                            fully_closed: <span className="text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full">Fully Closed</span>,
+                                                            buyer_settled: <span className="text-xs font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full">Buyer Settled</span>,
+                                                            payee_settled: <span className="text-xs font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full">Payee Settled</span>,
+                                                            open: <span className="text-xs font-bold bg-orange-500/10 text-orange-400 border border-orange-500/20 px-2 py-0.5 rounded-full">Open</span>,
+                                                        }[v.settlementStatus as string] ?? <span className="text-xs text-muted-foreground capitalize">{(v.settlementStatus ?? "open").replace(/_/g, " ")}</span>}
                                                     </td>
                                                 </tr>
                                             ))}
@@ -476,16 +484,18 @@ export const ConsignmentReports = () => {
                                 <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Avg Reconditioning Cost (sold vehicles)</p>
                             </div>
                             <div className="rounded-xl border border-border bg-card overflow-hidden">
-                                <div className="p-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                <div className="p-5 grid grid-cols-2 sm:grid-cols-5 gap-3">
                                     {[
-                                        { label: "Workshop",   val: report.costAnalysis.avgWorkshop },
-                                        { label: "Spare Parts",val: report.costAnalysis.avgSpareParts },
-                                        { label: "Painting",   val: report.costAnalysis.avgPainting },
-                                        { label: "Washing",    val: report.costAnalysis.avgWashing },
-                                        { label: "Fuel",       val: report.costAnalysis.avgFuel },
-                                        { label: "Paperwork",  val: report.costAnalysis.avgPaperwork },
-                                        { label: "Commission", val: report.costAnalysis.avgCommission },
-                                        { label: "Other",      val: report.costAnalysis.avgOtherExpenses },
+                                        { label: "Travel",      val: report.costAnalysis.avgTravel },
+                                        { label: "Workshop",    val: report.costAnalysis.avgWorkshop },
+                                        { label: "Spare Parts", val: report.costAnalysis.avgSpareParts },
+                                        { label: "Alignment",   val: report.costAnalysis.avgAlignment },
+                                        { label: "Painting",    val: report.costAnalysis.avgPainting },
+                                        { label: "Washing",     val: report.costAnalysis.avgWashing },
+                                        { label: "Fuel",        val: report.costAnalysis.avgFuel },
+                                        { label: "Paperwork",   val: report.costAnalysis.avgPaperwork },
+                                        { label: "Commission",  val: report.costAnalysis.avgCommission },
+                                        { label: "Other",       val: report.costAnalysis.avgOtherExpenses },
                                     ].map(c => (
                                         <div key={c.label} className="text-center rounded-lg bg-muted/20 p-3">
                                             <p className="text-[11px] text-muted-foreground mb-1">{c.label}</p>
