@@ -9,6 +9,8 @@ import { ConflictError, NotFoundError, ForbiddenError } from "../utils/api-error
 export const listUsers = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
         const users = await User.find()
+            // passwordHash, refreshToken, passwordResetToken, passwordResetExpires
+            // are already excluded by select:false on the model — this is defensive extra exclusion
             .select("_id username email role createdAt")
             .sort({ createdAt: -1 });
         res.status(200).json(apiResponse(200, "Users fetched", users));

@@ -175,14 +175,17 @@ export const exportReports = async (req: Request, res: Response): Promise<void> 
     const dFmt = (d: unknown) => d ? new Date(d as string).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "-";
     const dINR = (n: unknown) => n == null ? "-" : `Rs. ${Math.abs(n as number).toLocaleString("en-IN")}`;
     const headers = ["Consignment ID", "Sale Type", "Vehicle Type", "Make", "Model", "Reg No", "Owner",
-        "Date Received", "Date Sold", "Sold To", "Invested", "Sold Price", "Recon Cost", "Paid to Payee",
-        "Net Profit", "P/L %", "Days in Shop", "Settlement"];
+        "Date Received", "Date Sold", "Sold To", "Invested", "Sold Price", "Received Amount", "Buyer Balance",
+        "Recon Cost", "Paid to Payee", "Net Profit", "P/L %", "Days in Shop", "Settlement"];
     const rows = vehicles.map((v: any) => [
         v.consignmentId, v.saleType === "park_sale" ? "Park Sale" : "Finance Sale",
         v.vehicleType === "two_wheeler" ? "Two Wheeler" : "Four Wheeler",
         v.make, v.model, v.registrationNo, v.previousOwner,
         dFmt(v.dateReceived), dFmt(v.dateSold), v.soldTo ?? "-",
-        dINR(v.totalInvestment), dINR(v.soldPrice), dINR(v.totalReconCost), dINR(v.paidToPayee),
+        dINR(v.totalInvestment), dINR(v.soldPrice),
+        dINR(v.receivedAmount ?? v.soldPrice ?? 0),
+        v.buyerBalance > 0 ? dINR(v.buyerBalance) : "Nil",
+        dINR(v.totalReconCost), dINR(v.paidToPayee),
         dINR(v.netProfit), `${(v.profitLossPercentage ?? 0).toFixed(1)}%`,
         v.daysInShop != null ? v.daysInShop : "-", (v.settlementStatus ?? "-").replace(/_/g, " "),
     ].map(esc).join(","));

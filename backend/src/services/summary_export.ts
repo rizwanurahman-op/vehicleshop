@@ -31,7 +31,8 @@ interface SummaryRow {
     phone?: string;
     isActive?: boolean;
     totalBorrowed: number;
-    totalRepaid: number;
+    totalRepaid: number;       // Principal only
+    totalProfit: number;       // Profit/interest paid
     balancePayable: number;
     repaymentPercentage: number;
 }
@@ -45,7 +46,8 @@ interface SummaryExportFilters {
 
 export const exportSummaryPDF = async (rows: SummaryRow[], filters: SummaryExportFilters = {}): Promise<Buffer> => {
     const totalBorrowed  = rows.reduce((s, r) => s + (r.totalBorrowed  ?? 0), 0);
-    const totalRepaid    = rows.reduce((s, r) => s + (r.totalRepaid    ?? 0), 0);
+    const totalRepaid    = rows.reduce((s, r) => s + (r.totalRepaid    ?? 0), 0);  // Principal
+    const totalProfit    = rows.reduce((s, r) => s + (r.totalProfit    ?? 0), 0);  // Profit
     const totalBalance   = rows.reduce((s, r) => s + (r.balancePayable ?? 0), 0);
     const activeCount    = rows.filter(r => r.isActive !== false).length;
     const inactiveCount  = rows.length - activeCount;
@@ -105,8 +107,9 @@ export const exportSummaryPDF = async (rows: SummaryRow[], filters: SummaryExpor
         const metrics = [
             { label: "TOTAL LENDERS",      value: String(rows.length),   sub: `${activeCount} active / ${inactiveCount} inactive`, accent: C.indigo  },
             { label: "TOTAL BORROWED",      value: dINR(totalBorrowed),   sub: "Cumulative capital received",                        accent: C.violet  },
-            { label: "TOTAL REPAID",        value: dINR(totalRepaid),     sub: `${overallPct.toFixed(1)}% overall repayment rate`,   accent: C.emerald },
-            { label: "BALANCE OUTSTANDING", value: dINR(totalBalance),    sub: `${paidOffCount} of ${rows.length} fully paid off`,   accent: totalBalance > 0 ? C.amber : C.green },
+            { label: "PRINCIPAL REPAID",    value: dINR(totalRepaid),     sub: `${overallPct.toFixed(1)}% repayment rate`,           accent: C.emerald },
+            { label: "PROFIT PAID",         value: dINR(totalProfit),     sub: "Interest / balance unchanged",                       accent: C.amber   },
+            { label: "BALANCE OUTSTANDING", value: dINR(totalBalance),    sub: `${paidOffCount} of ${rows.length} fully paid off`,   accent: totalBalance > 0 ? "#dc2626" : C.green },
         ];
         const mW = CW / metrics.length;
         metrics.forEach((m, i) => {
@@ -120,15 +123,16 @@ export const exportSummaryPDF = async (rows: SummaryRow[], filters: SummaryExpor
 
         // ── TABLE ──────────────────────────────────────────────────────────
         const cols: [string, number, "left" | "right" | "center"][] = [
-            ["#",          16,  "center"],
-            ["Lender ID",  58,  "left"  ],
-            ["Name",      110,  "left"  ],
-            ["Phone",      76,  "left"  ],
-            ["Borrowed",   90,  "right" ],
-            ["Repaid",     90,  "right" ],
-            ["Balance",    90,  "right" ],
-            ["Repaid %",   70,  "right" ],
-            ["Status",     76,  "center"],
+            ["#",           16,  "center"],
+            ["Lender ID",   52,  "left"  ],
+            ["Name",        96,  "left"  ],
+            ["Phone",       68,  "left"  ],
+            ["Borrowed",    80,  "right" ],
+            ["Principal",   78,  "right" ],
+            ["Profit Paid", 78,  "right" ],
+            ["Balance",     78,  "right" ],
+            ["Repaid %",    60,  "right" ],
+            ["Status",      68,  "center"],
         ];
 
         const HDR_H = 16; const ROW_H = 15;
@@ -181,15 +185,16 @@ export const exportSummaryPDF = async (rows: SummaryRow[], filters: SummaryExpor
 
                 cell(`${idx + 1}`,                       0, C.muted);
                 cell(r.lenderId ?? "-",                  1, C.indigo);
-                cell(trunc(r.name, 22),                  2, C.text, true);
+                cell(trunc(r.name, 18),                  2, C.text, true);
                 cell(r.phone || "-",                     3, C.slate);
                 cell(dINR(r.totalBorrowed),              4, C.violet, true);
                 cell(dINR(r.totalRepaid),                5, C.green);
-                cell(dINR(r.balancePayable),             6, balColor, true);
-                cell(`${pct.toFixed(1)}%`,               7, pct >= 100 ? C.green : pct >= 50 ? C.amber : "#dc2626", true);
+                cell(dINR(r.totalProfit ?? 0),           6, C.amber);
+                cell(dINR(r.balancePayable),             7, balColor, true);
+                cell(`${pct.toFixed(1)}%`,               8, pct >= 100 ? C.green : pct >= 50 ? C.amber : "#dc2626", true);
 
                 // Status badge
-                const [, stW] = cols[8];
+                const [, stW] = cols[9];
                 doc.fontSize(5.8).font("Helvetica-Bold").fillColor(isActive ? C.green : "#dc2626")
                     .text(isActive ? "Active" : "Inactive", rx + 2, textY, { width: stW - 4, align: "center", lineBreak: false });
 
@@ -202,7 +207,7 @@ export const exportSummaryPDF = async (rows: SummaryRow[], filters: SummaryExpor
         doc.rect(MG, y, CW, 24).fill(C.navy);
         doc.fontSize(6.5).font("Helvetica-Bold").fillColor(C.white)
             .text(
-                `${rows.length} lenders  |  Total Borrowed: ${dINR(totalBorrowed)}  |  Total Repaid: ${dINR(totalRepaid)}  |  Balance: ${dINR(totalBalance)}  |  Overall Repayment: ${overallPct.toFixed(1)}%  |  ${activeCount} active / ${paidOffCount} paid off`,
+                `${rows.length} lenders  |  Borrowed: ${dINR(totalBorrowed)}  |  Principal: ${dINR(totalRepaid)}  |  Profit: ${dINR(totalProfit)}  |  Balance: ${dINR(totalBalance)}  |  ${overallPct.toFixed(1)}% repaid  |  ${activeCount} active / ${paidOffCount} paid off`,
                 MG + 8, y + 8, { lineBreak: false }
             );
         y += 24;

@@ -33,7 +33,8 @@ interface LenderRow {
     remarks?: string;
     isActive?: boolean;
     totalBorrowed: number;
-    totalRepaid: number;
+    totalRepaid: number;    // Principal only
+    totalProfit: number;    // Profit/interest paid
     balancePayable: number;
 }
 
@@ -46,7 +47,8 @@ interface LenderExportFilters {
 
 export const exportLendersPDF = async (lenders: LenderRow[], filters: LenderExportFilters = {}): Promise<Buffer> => {
     const totalBorrowed = lenders.reduce((s, l) => s + (l.totalBorrowed ?? 0), 0);
-    const totalRepaid   = lenders.reduce((s, l) => s + (l.totalRepaid   ?? 0), 0);
+    const totalRepaid   = lenders.reduce((s, l) => s + (l.totalRepaid   ?? 0), 0);  // Principal
+    const totalProfit   = lenders.reduce((s, l) => s + (l.totalProfit   ?? 0), 0);  // Profit
     const totalBalance  = lenders.reduce((s, l) => s + (l.balancePayable ?? 0), 0);
     const activeCount   = lenders.filter(l => l.isActive !== false).length;
     const inactiveCount = lenders.length - activeCount;
@@ -103,10 +105,11 @@ export const exportLendersPDF = async (lenders: LenderRow[], filters: LenderExpo
         // ── SUMMARY CARDS ──────────────────────────────────────────────────
         const SY = 58; const SH = 42;
         const metrics = [
-            { label: "TOTAL LENDERS",   value: String(lenders.length),   sub: `${activeCount} active / ${inactiveCount} inactive`, accent: C.indigo },
-            { label: "TOTAL BORROWED",  value: dINR(totalBorrowed),       sub: "Cumulative capital received",                        accent: C.violet },
-            { label: "TOTAL REPAID",    value: dINR(totalRepaid),         sub: "Cumulative repayments made",                         accent: C.green  },
-            { label: "BALANCE PAYABLE", value: dINR(totalBalance),        sub: `${paidOffCount} fully paid off`,                     accent: totalBalance > 0 ? C.amber : C.green },
+            { label: "TOTAL LENDERS",    value: String(lenders.length),  sub: `${activeCount} active / ${inactiveCount} inactive`, accent: C.indigo },
+            { label: "TOTAL BORROWED",   value: dINR(totalBorrowed),      sub: "Cumulative capital received",                        accent: C.violet },
+            { label: "PRINCIPAL REPAID", value: dINR(totalRepaid),        sub: "Reduces outstanding balance",                        accent: C.green  },
+            { label: "PROFIT PAID",      value: dINR(totalProfit),        sub: "Interest paid / balance unchanged",                  accent: C.amber  },
+            { label: "BALANCE PAYABLE",  value: dINR(totalBalance),       sub: `${paidOffCount} fully paid off`,                     accent: totalBalance > 0 ? C.red : C.green },
         ];
         const mW = CW / metrics.length;
         metrics.forEach((m, i) => {
@@ -119,17 +122,18 @@ export const exportLendersPDF = async (lenders: LenderRow[], filters: LenderExpo
         });
 
         // ── TABLE ──────────────────────────────────────────────────────────
-        // Cols: 16+54+90+78+90+82+82+70+80 = 642 (CW ~786 — plenty of slack)
+        // Cols: 16+54+86+70+80+80+72+72+60+80 = 670 (CW ~786)
         const cols: [string, number, "left" | "right" | "center"][] = [
-            ["#",            16, "center"],
-            ["Lender ID",    54, "left"  ],
-            ["Name",         90, "left"  ],
-            ["Phone",        78, "left"  ],
-            ["Address",      90, "left"  ],
-            ["Borrowed",     82, "right" ],
-            ["Repaid",       82, "right" ],
-            ["Balance",      70, "right" ],
-            ["Status",       80, "center"],
+            ["#",           16, "center"],
+            ["Lender ID",   54, "left"  ],
+            ["Name",        86, "left"  ],
+            ["Phone",       70, "left"  ],
+            ["Address",     80, "left"  ],
+            ["Borrowed",    80, "right" ],
+            ["Principal",   72, "right" ],
+            ["Profit Paid", 72, "right" ],
+            ["Balance",     60, "right" ],
+            ["Status",      80, "center"],
         ];
 
         const HDR_H = 16; const ROW_H = 15;
@@ -181,15 +185,16 @@ export const exportLendersPDF = async (lenders: LenderRow[], filters: LenderExpo
 
                 cell(`${idx + 1}`,                          0, C.muted);
                 cell(l.lenderId ?? "-",                     1, C.indigo);
-                cell(trunc(l.name, 20),                     2, C.text, true);
+                cell(trunc(l.name, 18),                     2, C.text, true);
                 cell(l.phone || "-",                        3, C.slate);
-                cell(trunc(l.address, 18),                  4, C.slate);
+                cell(trunc(l.address, 16),                  4, C.slate);
                 cell(dINR(l.totalBorrowed),                 5, C.violet, true);
                 cell(dINR(l.totalRepaid),                   6, C.green);
-                cell(dINR(l.balancePayable),                7, balColor, true);
+                cell(dINR(l.totalProfit ?? 0),              7, C.amber);
+                cell(dINR(l.balancePayable),                8, balColor, true);
 
                 // Status badge
-                const [, stW] = cols[8];
+                const [, stW] = cols[9];
                 doc.fontSize(5.8).font("Helvetica-Bold").fillColor(isActive ? C.green : C.red)
                     .text(isActive ? "Active" : "Inactive", rx + 2, textY, { width: stW - 4, align: "center", lineBreak: false });
 
@@ -201,7 +206,7 @@ export const exportLendersPDF = async (lenders: LenderRow[], filters: LenderExpo
         need(24);
         doc.rect(MG, y, CW, 24).fill(C.navy);
         doc.fontSize(6.5).font("Helvetica-Bold").fillColor(C.white)
-            .text(`${lenders.length} lenders  |  Total Borrowed: ${dINR(totalBorrowed)}  |  Total Repaid: ${dINR(totalRepaid)}  |  Balance Payable: ${dINR(totalBalance)}  |  ${activeCount} active / ${inactiveCount} inactive  |  ${paidOffCount} fully paid off`,
+            .text(`${lenders.length} lenders  |  Borrowed: ${dINR(totalBorrowed)}  |  Principal Repaid: ${dINR(totalRepaid)}  |  Profit Paid: ${dINR(totalProfit)}  |  Balance: ${dINR(totalBalance)}  |  ${activeCount} active  |  ${paidOffCount} fully paid off`,
                 MG + 8, y + 8, { lineBreak: false });
         y += 24;
 

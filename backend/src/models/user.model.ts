@@ -35,6 +35,7 @@ const userSchema = new Schema<IUser>(
         passwordHash: {
             type: String,
             required: true,
+            select: false, // Never returned by default — must be explicitly requested
         },
         role: {
             type: String,
@@ -44,14 +45,18 @@ const userSchema = new Schema<IUser>(
         refreshToken: {
             type: String,
             default: null,
+            select: false, // Never returned by default — sensitive session credential
         },
         passwordResetToken: {
             type: String,
             default: null,
+            index: true, // Sparse index for fast token lookup during password reset
+            select: false, // Never returned by default
         },
         passwordResetExpires: {
             type: Date,
             default: null,
+            select: false,
         },
     },
     { timestamps: true }

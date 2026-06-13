@@ -7,19 +7,20 @@ import {
 import { validate } from "../middleware/validate.middleware";
 import { authenticate, isAdmin } from "../middleware/auth.middleware";
 import { asyncHandler } from "../utils/async-handler";
+import { exportLimiter, writeLimiter } from "../middleware/rate-limit.middleware";
 import { createInvestmentSchema, updateInvestmentSchema } from "../schemas/investment.schema";
 
 const router = Router();
 router.use(authenticate);
 
 router.get("/stats",               asyncHandler(getInvestmentStats));
-router.get("/export",              asyncHandler(exportInvestments));
-router.get("/export/csv",          asyncHandler(exportInvestments)); // legacy compat
+router.get("/export",              exportLimiter, asyncHandler(exportInvestments));
+router.get("/export/csv",          exportLimiter, asyncHandler(exportInvestments)); // legacy compat
 router.get("/by-lender/:lenderId", asyncHandler(getInvestmentsByLender));
 router.get("/",                    asyncHandler(listInvestments));
-router.post("/",                   isAdmin, validate(createInvestmentSchema), asyncHandler(createInvestment));
+router.post("/",                   isAdmin, writeLimiter, validate(createInvestmentSchema), asyncHandler(createInvestment));
 router.get("/:id",                 asyncHandler(getInvestment));
-router.patch("/:id",               isAdmin, validate(updateInvestmentSchema), asyncHandler(updateInvestment));
-router.delete("/:id",              isAdmin, asyncHandler(deleteInvestment));
+router.patch("/:id",               isAdmin, writeLimiter, validate(updateInvestmentSchema), asyncHandler(updateInvestment));
+router.delete("/:id",              isAdmin, writeLimiter, asyncHandler(deleteInvestment));
 
 export default router;

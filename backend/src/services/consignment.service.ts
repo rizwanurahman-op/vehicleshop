@@ -19,8 +19,10 @@ interface ConsignmentQuery {
 
 // ── Maps cost breakdown category → field name ─────────────────────
 const CATEGORY_TO_FIELD: Record<string, string> = {
+    travel: "travelCost",
     workshop: "workshopRepairCost",
     spareParts: "sparePartsAccessories",
+    alignment: "alignmentWork",
     painting: "paintingPolishingCost",
     washing: "washingDetailingCost",
     fuel: "fuelCost",
@@ -160,41 +162,78 @@ export const getConsignmentStats = async (saleType?: string) => {
                 sold: { $sum: { $cond: [{ $in: ["$status", ["sold", "sold_pending"]] }, 1, 0] } },
                 returned: { $sum: { $cond: [{ $eq: ["$status", "returned"] }, 1, 0] } },
                 totalInvested: { $sum: "$totalInvestment" },
+                totalReconCost: { $sum: { $ifNull: ["$totalReconCost", 0] } },
                 totalRevenue: { $sum: { $ifNull: ["$soldPrice", 0] } },
                 totalNetProfit: { $sum: { $cond: [{ $ne: ["$dateSold", null] }, "$netProfit", 0] } },
+                // Buyer payment tracking
+                totalReceivedFromBuyers: { $sum: { $ifNull: ["$receivedAmount", 0] } },
+                totalBuyerBalance: { $sum: { $ifNull: ["$buyerBalance", 0] } },
                 pendingBuyerCount: { $sum: { $cond: [{ $gt: ["$buyerBalance", 0] }, 1, 0] } },
-                pendingBuyerAmt: { $sum: "$buyerBalance" },
+                // Payee payment tracking (Owner for park_sale, Finance for finance_sale)
+                totalPaidToPayee: { $sum: { $ifNull: ["$paidToPayee", 0] } },
+                totalPayeeBalance: { $sum: { $ifNull: ["$payeeBalance", 0] } },
                 pendingPayeeCount: { $sum: { $cond: [{ $in: ["$payeePaymentStatus", ["not_started", "partial"]] }, 1, 0] } },
-                pendingPayeeAmt: { $sum: "$payeeBalance" },
+                // Settlement
+                fullyClosed: { $sum: { $cond: [{ $eq: ["$settlementStatus", "fully_closed"] }, 1, 0] } },
             },
         },
     ]);
 
-    const parkSale = stats.find(s => s._id === "park_sale") ?? { total: 0, inShop: 0, sold: 0, returned: 0, totalInvested: 0, totalRevenue: 0, totalNetProfit: 0 };
-    const financeSale = stats.find(s => s._id === "finance_sale") ?? { total: 0, inShop: 0, sold: 0, returned: 0, totalInvested: 0, totalRevenue: 0, totalNetProfit: 0 };
+    const p = stats.find(s => s._id === "park_sale") ?? {};
+    const f = stats.find(s => s._id === "finance_sale") ?? {};
+    const z = (v: unknown) => (v as number) || 0;
 
     const combined = {
-        totalVehicles: parkSale.total + financeSale.total,
-        currentlyInShop: parkSale.inShop + financeSale.inShop,
-        sold: parkSale.sold + financeSale.sold,
-        returned: parkSale.returned + financeSale.returned,
-        totalInvested: parkSale.totalInvested + financeSale.totalInvested,
-        totalRevenue: parkSale.totalRevenue + financeSale.totalRevenue,
-        totalNetProfit: parkSale.totalNetProfit + financeSale.totalNetProfit,
+        totalVehicles: z(p.total) + z(f.total),
+        currentlyInShop: z(p.inShop) + z(f.inShop),
+        sold: z(p.sold) + z(f.sold),
+        returned: z(p.returned) + z(f.returned),
+        totalInvested: z(p.totalInvested) + z(f.totalInvested),
+        totalReconCost: z(p.totalReconCost) + z(f.totalReconCost),
+        totalRevenue: z(p.totalRevenue) + z(f.totalRevenue),
+        totalNetProfit: z(p.totalNetProfit) + z(f.totalNetProfit),
         avgMargin: 0,
+        // Buyer aggregate
+        totalReceivedFromBuyers: z(p.totalReceivedFromBuyers) + z(f.totalReceivedFromBuyers),
+        totalBuyerBalance: z(p.totalBuyerBalance) + z(f.totalBuyerBalance),
         pendingBuyerPayments: {
-            count: (parkSale.pendingBuyerCount || 0) + (financeSale.pendingBuyerCount || 0),
-            amount: (parkSale.pendingBuyerAmt || 0) + (financeSale.pendingBuyerAmt || 0),
+            count: z(p.pendingBuyerCount) + z(f.pendingBuyerCount),
+            amount: z(p.totalBuyerBalance) + z(f.totalBuyerBalance),
         },
+        // Payee aggregate
+        totalPaidToPayee: z(p.totalPaidToPayee) + z(f.totalPaidToPayee),
+        totalPayeeBalance: z(p.totalPayeeBalance) + z(f.totalPayeeBalance),
         pendingPayeePayments: {
-            count: (parkSale.pendingPayeeCount || 0) + (financeSale.pendingPayeeCount || 0),
-            amount: (parkSale.pendingPayeeAmt || 0) + (financeSale.pendingPayeeAmt || 0),
+            count: z(p.pendingPayeeCount) + z(f.pendingPayeeCount),
+            amount: z(p.totalPayeeBalance) + z(f.totalPayeeBalance),
         },
-        parkSale: { total: parkSale.total, inShop: parkSale.inShop, sold: parkSale.sold },
-        financeSale: { total: financeSale.total, inShop: financeSale.inShop, sold: financeSale.sold },
+        // Park Sale breakdown
+        parkSale: {
+            total: z(p.total), inShop: z(p.inShop), sold: z(p.sold), returned: z(p.returned),
+            totalReconCost: z(p.totalReconCost),
+            totalRevenue: z(p.totalRevenue),
+            totalNetProfit: z(p.totalNetProfit),
+            totalPaidToOwner: z(p.totalPaidToPayee),
+            totalOwnerBalance: z(p.totalPayeeBalance),
+            totalReceivedFromBuyers: z(p.totalReceivedFromBuyers),
+            totalBuyerBalance: z(p.totalBuyerBalance),
+            fullyClosed: z(p.fullyClosed),
+        },
+        // Finance Sale breakdown
+        financeSale: {
+            total: z(f.total), inShop: z(f.inShop), sold: z(f.sold), returned: z(f.returned),
+            totalReconCost: z(f.totalReconCost),
+            totalRevenue: z(f.totalRevenue),
+            totalNetProfit: z(f.totalNetProfit),
+            totalPaidToFinance: z(f.totalPaidToPayee),
+            totalFinanceBalance: z(f.totalPayeeBalance),
+            totalReceivedFromBuyers: z(f.totalReceivedFromBuyers),
+            totalBuyerBalance: z(f.totalBuyerBalance),
+            fullyClosed: z(f.fullyClosed),
+        },
     };
-    combined.avgMargin = combined.totalInvested > 0
-        ? parseFloat(((combined.totalNetProfit / combined.totalInvested) * 100).toFixed(2))
+    combined.avgMargin = combined.totalReconCost > 0
+        ? parseFloat(((combined.totalNetProfit / combined.totalReconCost) * 100).toFixed(2))
         : 0;
 
     return combined;
@@ -558,7 +597,7 @@ export const getConsignmentReports = async (saleType?: string, dateFrom?: string
 
     const [profitLoss, openSettlements, agingReport, monthlyTrends, costAnalysis] = await Promise.all([
         ConsignmentVehicle.find(soldMatch)
-            .select("consignmentId saleType vehicleType make model registrationNo dateReceived dateSold purchasePrice totalReconCost totalInvestment soldPrice paidToPayee grossMargin netProfit profitLossPercentage daysInShop previousOwner settlementStatus")
+            .select("consignmentId saleType vehicleType make model registrationNo dateReceived dateSold purchasePrice totalReconCost totalInvestment soldPrice receivedAmount buyerBalance paidToPayee payeeBalance grossMargin netProfit profitLossPercentage daysInShop previousOwner settlementStatus buyerPaymentStatus payeePaymentStatus")
             .sort({ dateSold: -1 })
             .lean(),
         ConsignmentVehicle.find({ ...match, dateSold: { $ne: null }, settlementStatus: { $ne: "fully_closed" } })
@@ -606,8 +645,10 @@ export const getConsignmentReports = async (saleType?: string, dateFrom?: string
             {
                 $group: {
                     _id: null,
+                    avgTravel: { $avg: "$travelCost" },
                     avgWorkshop: { $avg: "$workshopRepairCost" },
                     avgSpareParts: { $avg: "$sparePartsAccessories" },
+                    avgAlignment: { $avg: "$alignmentWork" },
                     avgPainting: { $avg: "$paintingPolishingCost" },
                     avgWashing: { $avg: "$washingDetailingCost" },
                     avgFuel: { $avg: "$fuelCost" },

@@ -155,7 +155,7 @@ export const exportConsignmentsPDF = async (query: ConsignmentListExportQuery): 
         const mW = CW / 4;
         [
             { label: "TOTAL CONSIGNMENTS", value: vehicles.length.toString(), accent: C.indigo },
-            { label: "IN SHOP",            value: inShopCount.toString(),      accent: C.amber },
+            { label: inShopCount === 0 ? "IN SHOP (CLEAR)" : "IN SHOP", value: inShopCount.toString(), accent: inShopCount === 0 ? C.green : C.amber },
             { label: "TOTAL INVESTED",     value: dINR(totalInvested),          accent: C.slate },
             { label: "NET PROFIT (SOLD)",  value: dINR(totalProfit),            accent: totalProfit >= 0 ? C.green : C.red },
         ].forEach((m, i) => {

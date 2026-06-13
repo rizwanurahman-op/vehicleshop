@@ -55,16 +55,18 @@ const register = async (data: RegisterInput): Promise<{ user: IUser; tokens: Tok
     });
 
     const tokens = generateTokens(user._id.toString(), user.role);
-    user.refreshToken = tokens.refreshToken;
-    await user.save();
+    // Reload with +refreshToken since it's select:false — we need to set it
+    const userWithToken = await User.findById(user._id).select("+refreshToken");
+    userWithToken!.refreshToken = tokens.refreshToken;
+    await userWithToken!.save();
 
-    return { user, tokens };
+    return { user: userWithToken!, tokens };
 };
 
 const login = async (data: LoginInput): Promise<{ user: IUser; tokens: TokenPair }> => {
     const user = await User.findOne({
         $or: [{ username: data.usernameOrEmail.toLowerCase() }, { email: data.usernameOrEmail.toLowerCase() }],
-    });
+    }).select("+passwordHash +refreshToken"); // Explicitly select sensitive fields needed for auth
     if (!user) throw new UnauthorizedError("Invalid credentials");
 
     const isValid = await user.comparePassword(data.password);
@@ -85,7 +87,7 @@ const refreshAccessToken = async (refreshToken: string): Promise<string> => {
         throw new UnauthorizedError("Invalid or expired refresh token");
     }
 
-    const user = await User.findById(decoded.userId);
+    const user = await User.findById(decoded.userId).select("+refreshToken");
     if (!user || user.refreshToken !== refreshToken) {
         throw new UnauthorizedError("Refresh token revoked");
     }
@@ -102,7 +104,8 @@ const logout = async (userId: string): Promise<void> => {
 
 // Revoke session by refreshToken — used during logout when access token may be expired
 const logoutByRefreshToken = async (refreshToken: string): Promise<void> => {
-    await User.findOneAndUpdate({ refreshToken }, { refreshToken: null });
+    // Must use updateOne since refreshToken is select:false — findOneAndUpdate would work too
+    await User.updateOne({ refreshToken }, { $set: { refreshToken: null } });
 };
 
 const getMe = async (userId: string): Promise<IUser> => {
@@ -145,7 +148,7 @@ interface ChangePasswordInput {
 }
 
 const changePassword = async (userId: string, data: ChangePasswordInput): Promise<void> => {
-    const user = await User.findById(userId);
+    const user = await User.findById(userId).select("+passwordHash");
     if (!user) throw new NotFoundError("User");
 
     const isValid = await user.comparePassword(data.currentPassword);
@@ -157,13 +160,17 @@ const changePassword = async (userId: string, data: ChangePasswordInput): Promis
 
 /**
  * Generate a password reset token, store its hash in DB, and send email.
- * Throws NotFoundError if no account is registered with the given email.
+ * SECURITY: Always returns success to prevent user enumeration.
+ * (We never reveal whether an email address is registered.)
  */
 const forgotPassword = async (email: string): Promise<void> => {
     const user = await User.findOne({ email: email.toLowerCase() });
 
+    // Silently bail if no account found — do NOT throw, to prevent user enumeration
     if (!user) {
-        throw new NotFoundError("No account found with that email address");
+        // Simulate processing time to prevent timing-based enumeration attacks
+        await new Promise(resolve => setTimeout(resolve, 200 + Math.floor(Math.random() * 200)));
+        return;
     }
 
     // Generate a cryptographically secure random token
@@ -205,7 +212,7 @@ const resetPassword = async (data: ResetPasswordInput): Promise<void> => {
     const user = await User.findOne({
         passwordResetToken: hashedToken,
         passwordResetExpires: { $gt: new Date() }, // token not expired
-    });
+    }).select("+passwordResetToken +passwordResetExpires +refreshToken");
 
     if (!user) {
         throw new ApiError(400, "Password reset token is invalid or has expired");

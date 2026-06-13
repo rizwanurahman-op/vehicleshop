@@ -27,6 +27,7 @@ import vehicleOwnerRoutes from "./routes/vehicle-owner.routes";
 import exchangeRoutes from "./routes/exchange.routes";
 import salesRoutes from "./routes/sales.routes";
 import userRoutes from "./routes/user.routes";
+import backupRoutes from "./routes/backup.routes";
 
 const app = express();
 
@@ -37,13 +38,44 @@ const app = express();
 app.set("trust proxy", 1);
 
 // ─── Security Middleware ───────────────────────────────────────
-app.use(helmet());
+// Disable "X-Powered-By: Express" to reduce server fingerprinting
+app.disable("x-powered-by");
+
+app.use(
+    helmet({
+        // Content Security Policy
+        contentSecurityPolicy: {
+            directives: {
+                defaultSrc: ["'self'"],
+                scriptSrc: ["'self'"],
+                styleSrc: ["'self'"],
+                imgSrc: ["'self'", "data:"],
+                connectSrc: ["'self'"],
+                frameAncestors: ["'none'"],
+                formAction: ["'self'"],
+                baseUri: ["'self'"],
+            },
+        },
+        // HTTP Strict Transport Security — only in production
+        hsts: env.NODE_ENV === "production"
+            ? { maxAge: 63072000, includeSubDomains: true, preload: true }
+            : false,
+        // Block MIME type sniffing
+        noSniff: true,
+        // Prevent framing (clickjacking)
+        frameguard: { action: "deny" },
+        // Enable XSS filter in legacy browsers
+        xssFilter: true,
+        // Remove referrer information on cross-origin navigation
+        referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+    })
+);
 app.use(cors(corsOptions));
 app.use(mongoSanitize());
 
 // ─── Request Parsing ───────────────────────────────────────────
 app.use(express.json({ limit: "10kb" }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: "10kb" }));
 app.use(cookieParser());
 
 // ─── Logging ──────────────────────────────────────────────────
@@ -69,6 +101,7 @@ app.use("/api/v1/consignments", consignmentRoutes);
 app.use("/api/v1/vehicle-owners", vehicleOwnerRoutes);
 app.use("/api/v1/exchanges", exchangeRoutes);
 app.use("/api/v1/sales", salesRoutes);
+app.use("/api/v1/backups", backupRoutes);
 
 // ─── 404 Handler ──────────────────────────────────────────────
 app.use("*", (_req, res) => {
@@ -82,6 +115,10 @@ app.use(errorHandler);
 const startServer = async () => {
     await connectDB();
     await initializeCounters();
+
+    // Initialize scheduled backup jobs (reads settings from DB)
+    const { initializeBackupScheduler } = await import("./services/backup-scheduler.service");
+    await initializeBackupScheduler();
 
     const PORT = parseInt(env.PORT, 10);
     app.listen(PORT, () => {

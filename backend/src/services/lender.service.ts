@@ -55,26 +55,32 @@ const list = async (query: ListLendersQuery) => {
         Lender.countDocuments(filter),
     ]);
 
-    // Attach aggregated summary data
+    // Attach aggregated summary data — only Principal repayments reduce the balance
     const lenderIds = lenders.map(l => l._id);
-    const [investmentAggs, repaymentAggs] = await Promise.all([
+    const [investmentAggs, principalAggs, profitAggs] = await Promise.all([
         Investment.aggregate([
             { $match: { lender: { $in: lenderIds } } },
             { $group: { _id: "$lender", totalBorrowed: { $sum: "$amountReceived" } } },
         ]),
         Repayment.aggregate([
-            { $match: { lender: { $in: lenderIds } } },
+            { $match: { lender: { $in: lenderIds }, repaymentType: { $in: ["Principal", null, undefined] } } },
             { $group: { _id: "$lender", totalRepaid: { $sum: "$amountPaid" } } },
+        ]),
+        Repayment.aggregate([
+            { $match: { lender: { $in: lenderIds }, repaymentType: "Profit" } },
+            { $group: { _id: "$lender", totalProfit: { $sum: "$amountPaid" } } },
         ]),
     ]);
 
-    const investMap = new Map(investmentAggs.map(a => [a._id.toString(), a.totalBorrowed]));
-    const repayMap = new Map(repaymentAggs.map(a => [a._id.toString(), a.totalRepaid]));
+    const investMap   = new Map(investmentAggs.map(a => [a._id.toString(), a.totalBorrowed]));
+    const repayMap    = new Map(principalAggs.map(a => [a._id.toString(), a.totalRepaid]));
+    const profitMap   = new Map(profitAggs.map(a  => [a._id.toString(), a.totalProfit]));
 
     const enriched = lenders.map(l => {
         const totalBorrowed = investMap.get(l._id.toString()) ?? 0;
-        const totalRepaid = repayMap.get(l._id.toString()) ?? 0;
-        return { ...l, totalBorrowed, totalRepaid, balancePayable: totalBorrowed - totalRepaid };
+        const totalRepaid   = repayMap.get(l._id.toString())  ?? 0;
+        const totalProfit   = profitMap.get(l._id.toString()) ?? 0;
+        return { ...l, totalBorrowed, totalRepaid, totalProfit, balancePayable: totalBorrowed - totalRepaid };
     });
 
     return { data: enriched, meta: buildPaginationMeta(total, page, limit) };
@@ -84,21 +90,27 @@ const getById = async (id: string) => {
     const lender = await Lender.findById(id).lean();
     if (!lender) throw new NotFoundError("Lender");
 
-    const [investAgg, repayAgg] = await Promise.all([
+    // Principal repayments reduce balance; Profit payments are tracked separately
+    const [investAgg, principalAgg, profitAgg] = await Promise.all([
         Investment.aggregate([
             { $match: { lender: lender._id } },
             { $group: { _id: null, totalBorrowed: { $sum: "$amountReceived" } } },
         ]),
         Repayment.aggregate([
-            { $match: { lender: lender._id } },
+            { $match: { lender: lender._id, repaymentType: { $in: ["Principal", null] } } },
             { $group: { _id: null, totalRepaid: { $sum: "$amountPaid" } } },
+        ]),
+        Repayment.aggregate([
+            { $match: { lender: lender._id, repaymentType: "Profit" } },
+            { $group: { _id: null, totalProfit: { $sum: "$amountPaid" } } },
         ]),
     ]);
 
-    const totalBorrowed = investAgg[0]?.totalBorrowed ?? 0;
-    const totalRepaid = repayAgg[0]?.totalRepaid ?? 0;
+    const totalBorrowed = investAgg[0]?.totalBorrowed  ?? 0;
+    const totalRepaid   = principalAgg[0]?.totalRepaid ?? 0;
+    const totalProfit   = profitAgg[0]?.totalProfit    ?? 0;
 
-    return { ...lender, totalBorrowed, totalRepaid, balancePayable: totalBorrowed - totalRepaid };
+    return { ...lender, totalBorrowed, totalRepaid, totalProfit, balancePayable: totalBorrowed - totalRepaid };
 };
 
 const update = async (id: string, data: UpdateLenderInput): Promise<ILender> => {
@@ -152,23 +164,29 @@ const exportAll = async (query: { status?: string; search?: string; dateFrom?: s
     const repayMatch:  Record<string, unknown> = { lender: { $in: lenderIds } };
     if (hasDateFilter) { investMatch.date = txDateFilter; repayMatch.date = txDateFilter; }
 
-    const [investAggs, repayAggs] = await Promise.all([
+    const [investAggs, principalAggs, profitAggs] = await Promise.all([
         Investment.aggregate([
             { $match: investMatch },
             { $group: { _id: "$lender", totalBorrowed: { $sum: "$amountReceived" } } },
         ]),
         Repayment.aggregate([
-            { $match: repayMatch },
+            { $match: { ...repayMatch, repaymentType: { $in: ["Principal", null] } } },
             { $group: { _id: "$lender", totalRepaid: { $sum: "$amountPaid" } } },
+        ]),
+        Repayment.aggregate([
+            { $match: { ...repayMatch, repaymentType: "Profit" } },
+            { $group: { _id: "$lender", totalProfit: { $sum: "$amountPaid" } } },
         ]),
     ]);
 
-    const investMap = new Map(investAggs.map(a => [a._id.toString(), a.totalBorrowed]));
-    const repayMap  = new Map(repayAggs.map(a  => [a._id.toString(), a.totalRepaid]));
+    const investMap = new Map(investAggs.map(a   => [a._id.toString(), a.totalBorrowed]));
+    const repayMap  = new Map(principalAggs.map(a => [a._id.toString(), a.totalRepaid]));
+    const profitMap = new Map(profitAggs.map(a   => [a._id.toString(), a.totalProfit]));
 
     return lenders.map(l => {
         const totalBorrowed  = investMap.get(l._id.toString()) ?? 0;
         const totalRepaid    = repayMap.get(l._id.toString())  ?? 0;
+        const totalProfit    = profitMap.get(l._id.toString()) ?? 0;
         const balancePayable = totalBorrowed - totalRepaid;
         return {
             lenderId: l.lenderId,
@@ -178,6 +196,7 @@ const exportAll = async (query: { status?: string; search?: string; dateFrom?: s
             remarks: l.remarks || "",
             totalBorrowed,
             totalRepaid,
+            totalProfit,
             balancePayable,
             isActive: l.isActive,
             // CSV-friendly aliases
@@ -188,6 +207,7 @@ const exportAll = async (query: { status?: string; search?: string; dateFrom?: s
             "Remarks": l.remarks || "",
             "Total Borrowed (Rs.)": totalBorrowed,
             "Total Repaid (Rs.)": totalRepaid,
+            "Total Profit Paid (Rs.)": totalProfit,
             "Balance Payable (Rs.)": balancePayable,
             "Status": l.isActive !== false ? "Active" : "Inactive",
         };
@@ -222,34 +242,41 @@ const getStats = async (query: { status?: string; search?: string; dateFrom?: st
         repayMatch.date  = txDateFilter;
     }
 
-    const [investAggs, repayAggs] = await Promise.all([
+    const [investAggs, principalAggs, profitAggs] = await Promise.all([
         Investment.aggregate([
             { $match: investMatch },
             { $group: { _id: "$lender", totalBorrowed: { $sum: "$amountReceived" } } },
         ]),
         Repayment.aggregate([
-            { $match: repayMatch },
+            { $match: { ...repayMatch, repaymentType: { $in: ["Principal", null] } } },
             { $group: { _id: "$lender", totalRepaid: { $sum: "$amountPaid" } } },
+        ]),
+        Repayment.aggregate([
+            { $match: { ...repayMatch, repaymentType: "Profit" } },
+            { $group: { _id: "$lender", totalProfit: { $sum: "$amountPaid" } } },
         ]),
     ]);
 
-    const investMap = new Map(investAggs.map(a => [a._id.toString(), a.totalBorrowed]));
-    const repayMap  = new Map(repayAggs.map(a  => [a._id.toString(), a.totalRepaid]));
+    const investMap = new Map(investAggs.map(a   => [a._id.toString(), a.totalBorrowed]));
+    const repayMap  = new Map(principalAggs.map(a => [a._id.toString(), a.totalRepaid]));
+    const profitMap = new Map(profitAggs.map(a   => [a._id.toString(), a.totalProfit]));
 
     const enriched = lenders.map(l => ({
         ...l,
         totalBorrowed:  investMap.get(l._id.toString()) ?? 0,
         totalRepaid:    repayMap.get(l._id.toString())  ?? 0,
+        totalProfit:    profitMap.get(l._id.toString()) ?? 0,
         balancePayable: (investMap.get(l._id.toString()) ?? 0) - (repayMap.get(l._id.toString()) ?? 0),
     }));
 
     const totalBorrowed  = enriched.reduce((s, l) => s + l.totalBorrowed,  0);
     const totalRepaid    = enriched.reduce((s, l) => s + l.totalRepaid,    0);
+    const totalProfit    = enriched.reduce((s, l) => s + l.totalProfit,    0);
     const balancePayable = enriched.reduce((s, l) => s + l.balancePayable, 0);
     const activeCount    = lenders.filter(l => l.isActive !== false).length;
     const inactiveCount  = lenders.length - activeCount;
     const paidOffCount   = enriched.filter(l => l.balancePayable <= 0).length;
-    return { totalLenders: lenders.length, totalBorrowed, totalRepaid, balancePayable, activeCount, inactiveCount, paidOffCount };
+    return { totalLenders: lenders.length, totalBorrowed, totalRepaid, totalProfit, balancePayable, activeCount, inactiveCount, paidOffCount };
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

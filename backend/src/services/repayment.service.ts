@@ -9,6 +9,7 @@ interface CreateRepaymentInput {
     lender: string;
     amountPaid: number;
     mode: string;
+    repaymentType?: string;
     referenceNo?: string;
     remarks?: string;
 }
@@ -17,6 +18,7 @@ interface UpdateRepaymentInput {
     date?: string;
     amountPaid?: number;
     mode?: string;
+    repaymentType?: string;
     referenceNo?: string;
     remarks?: string;
 }
@@ -26,6 +28,7 @@ interface ListRepaymentsQuery {
     limit?: string;
     lenderId?: string;
     mode?: string;
+    repaymentType?: string;
     dateFrom?: string;
     dateTo?: string;
 }
@@ -49,6 +52,7 @@ const list = async (query: ListRepaymentsQuery) => {
 
     if (query.lenderId) filter.lender = query.lenderId;
     if (query.mode) filter.mode = query.mode;
+    if (query.repaymentType) filter.repaymentType = query.repaymentType;
     if (query.dateFrom || query.dateTo) {
         const dateFilter: Record<string, Date> = {};
         if (query.dateFrom) dateFilter.$gte = new Date(query.dateFrom);
@@ -99,10 +103,11 @@ const getByLender = async (lenderId: string, query: { page?: string; limit?: str
     return { data: repayments, meta: buildPaginationMeta(total, page, limit) };
 };
 
-const exportAll = async (query: { lenderId?: string; mode?: string; dateFrom?: string; dateTo?: string; search?: string } = {}) => {
+const exportAll = async (query: { lenderId?: string; mode?: string; repaymentType?: string; dateFrom?: string; dateTo?: string; search?: string } = {}) => {
     const filter: Record<string, unknown> = {};
-    if (query.lenderId) filter.lender = query.lenderId;
-    if (query.mode)     filter.mode   = query.mode;
+    if (query.lenderId)      filter.lender        = query.lenderId;
+    if (query.mode)          filter.mode          = query.mode;
+    if (query.repaymentType) filter.repaymentType = query.repaymentType;
     if (query.dateFrom || query.dateTo) {
         const df: Record<string, Date> = {};
         if (query.dateFrom) df.$gte = new Date(query.dateFrom);
@@ -125,18 +130,20 @@ const exportAll = async (query: { lenderId?: string; mode?: string; dateFrom?: s
         : repayments;
 
     return filtered.map(rep => ({
-        repaymentId: rep.repaymentId,
-        date:        rep.date,
-        lender:      rep.lender,
-        amountPaid:  rep.amountPaid,
-        mode:        rep.mode,
-        referenceNo: rep.referenceNo || "",
-        remarks:     rep.remarks || "",
+        repaymentId:   rep.repaymentId,
+        date:          rep.date,
+        lender:        rep.lender,
+        amountPaid:    rep.amountPaid,
+        mode:          rep.mode,
+        repaymentType: rep.repaymentType ?? "Principal",
+        referenceNo:   rep.referenceNo || "",
+        remarks:       rep.remarks || "",
         // CSV-friendly aliases
         "Repayment ID":      rep.repaymentId,
         "Date":              new Date(rep.date).toLocaleDateString("en-IN"),
         "Lender ID":         rep.lender?.lenderId || "",
         "Lender Name":       rep.lender?.name || "",
+        "Type":              rep.repaymentType ?? "Principal",
         "Amount Paid (Rs.)": rep.amountPaid,
         "Mode":              rep.mode,
         "Reference No":      rep.referenceNo || "",
@@ -144,15 +151,17 @@ const exportAll = async (query: { lenderId?: string; mode?: string; dateFrom?: s
     }));
 };
 
-const getStats = async (query: { lenderId?: string; mode?: string; dateFrom?: string; dateTo?: string } = {}) => {
+const getStats = async (query: { lenderId?: string; mode?: string; repaymentType?: string; dateFrom?: string; dateTo?: string } = {}) => {
     const data = await exportAll(query);
-    const totalPaid = data.reduce((s, r) => s + r.amountPaid, 0);
+    const totalPaid      = data.reduce((s, r) => s + r.amountPaid, 0);
+    const totalPrincipal = data.filter(r => r.repaymentType === "Principal").reduce((s, r) => s + r.amountPaid, 0);
+    const totalProfit    = data.filter(r => r.repaymentType === "Profit").reduce((s, r) => s + r.amountPaid, 0);
     const avgAmount = data.length > 0 ? Math.round(totalPaid / data.length) : 0;
     const modeMap = new Map<string, number>();
     data.forEach(r => modeMap.set(r.mode, (modeMap.get(r.mode) ?? 0) + r.amountPaid));
     const byMode = Object.fromEntries(modeMap);
     const uniqueLenders = new Set(data.map(r => typeof r.lender === "object" ? (r.lender as {name?:string})?.name : r.lender)).size;
-    return { totalRepayments: data.length, totalPaid, avgAmount, byMode, uniqueLenders };
+    return { totalRepayments: data.length, totalPaid, totalPrincipal, totalProfit, avgAmount, byMode, uniqueLenders };
 };
 
 const repaymentService = { create, list, getById, update, remove, getByLender, exportAll, getStats };

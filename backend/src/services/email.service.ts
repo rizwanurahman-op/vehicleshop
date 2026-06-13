@@ -125,3 +125,21 @@ export const sendPasswordResetEmail = async (to: string, resetUrl: string): Prom
         text: `Reset your VehicleBook password by visiting this link (expires in ${expiryMinutes} minutes):\n\n${resetUrl}\n\nIf you did not request this, ignore this email.`,
     });
 };
+
+// ─── Generic sendEmail ────────────────────────────────────────────────────────
+// Used by backup service for success/failure notifications.
+
+export const sendEmail = async (opts: {
+    to: string;
+    subject: string;
+    html: string;
+    text?: string;
+}): Promise<void> => {
+    await transporter.sendMail({
+        from: env.EMAIL_FROM,
+        to: opts.to,
+        subject: opts.subject,
+        html: opts.html,
+        text: opts.text,
+    });
+};

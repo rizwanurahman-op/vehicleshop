@@ -69,9 +69,10 @@ export const exportRepayments = async (req: AuthRequest, res: Response, next: Ne
         }
 
         const esc = (x: unknown) => { const s = String(x ?? ""); return s.includes(",") || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s; };
-        const headers = ["Repayment ID", "Date", "Lender", "Lender ID", "Amount Paid", "Mode", "Reference No", "Remarks"];
+        const headers = ["Repayment ID", "Date", "Type", "Lender", "Lender ID", "Amount Paid", "Mode", "Reference No", "Remarks"];
         const rows = (data as Record<string, unknown>[]).map(r => [
             r["Repayment ID"], r["Date"],
+            r["Type"] ?? r["repaymentType"] ?? "Principal",
             r["Lender Name"], r["Lender ID"],
             r["Amount Paid (Rs.)"] ?? r["amountPaid"],
             r["Mode"], r["Reference No"], r["Remarks"],

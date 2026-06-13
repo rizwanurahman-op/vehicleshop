@@ -31,6 +31,7 @@ interface RepaymentRow {
     lender?: { lenderId?: string; name?: string } | string;
     amountPaid: number;
     mode: string;
+    repaymentType?: "Principal" | "Profit";
     referenceNo?: string;
     remarks?: string;
 }
@@ -43,7 +44,9 @@ interface RepaymentExportFilters {
 }
 
 export const exportRepaymentsPDF = async (repayments: RepaymentRow[], filters: RepaymentExportFilters = {}): Promise<Buffer> => {
-    const total = repayments.reduce((s, r) => s + (r.amountPaid ?? 0), 0);
+    const total          = repayments.reduce((s, r) => s + (r.amountPaid ?? 0), 0);
+    const totalPrincipal = repayments.filter(r => (r.repaymentType ?? "Principal") !== "Profit").reduce((s, r) => s + r.amountPaid, 0);
+    const totalProfit    = repayments.filter(r => r.repaymentType === "Profit").reduce((s, r) => s + r.amountPaid, 0);
     const modeMap = new Map<string, number>();
     repayments.forEach(r => modeMap.set(r.mode, (modeMap.get(r.mode) ?? 0) + r.amountPaid));
     const uniqueLenders = new Set(repayments.map(r => typeof r.lender === "object" ? (r.lender as {name?:string})?.name : r.lender)).size;
@@ -102,10 +105,10 @@ export const exportRepaymentsPDF = async (repayments: RepaymentRow[], filters: R
         const topModes = [...modeMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2);
         const modeSub = topModes.map(([m, v]) => `${m}: ${dINR(v)}`).join(" / ") || "No data";
         const metrics = [
-            { label: "TOTAL REPAYMENTS",  value: String(repayments.length), sub: `To ${uniqueLenders} lenders`,      accent: C.emerald },
-            { label: "TOTAL PAID",        value: dINR(total),               sub: "Cumulative repaid amount",          accent: C.green   },
-            { label: "AVERAGE AMOUNT",    value: dINR(avgAmt),              sub: "Per repayment",                     accent: C.cyan    },
-            { label: "TOP PAYMENT MODES", value: topModes[0]?.[0] || "-",  sub: modeSub,                             accent: C.violet  },
+            { label: "TOTAL REPAYMENTS",  value: String(repayments.length), sub: `To ${uniqueLenders} lender(s)`,          accent: C.emerald },
+            { label: "PRINCIPAL REPAID",  value: dINR(totalPrincipal),      sub: "Reduces outstanding balance",             accent: C.green   },
+            { label: "PROFIT PAID",       value: dINR(totalProfit),         sub: "Interest paid / balance unchanged",       accent: C.amber   },
+            { label: "TOP PAYMENT MODES", value: topModes[0]?.[0] || "-",  sub: modeSub,                                   accent: C.violet  },
         ];
         const mW = CW / metrics.length;
         metrics.forEach((m, i) => {
@@ -120,13 +123,14 @@ export const exportRepaymentsPDF = async (repayments: RepaymentRow[], filters: R
         // TABLE
         const cols: [string, number, "left" | "right" | "center"][] = [
             ["#",           16, "center"],
-            ["Rep ID",      64, "left"  ],
-            ["Date",        52, "left"  ],
-            ["Lender",      90, "left"  ],
-            ["Lender ID",   90, "left"  ],
-            ["Amount Paid", 78, "right" ],
-            ["Mode",        80, "left"  ],
-            ["Ref No",     100, "left"  ],
+            ["Rep ID",      60, "left"  ],
+            ["Date",        50, "left"  ],
+            ["Type",        60, "center"],
+            ["Lender",      84, "left"  ],
+            ["Lender ID",   70, "left"  ],
+            ["Amount Paid", 76, "right" ],
+            ["Mode",        68, "left"  ],
+            ["Ref No",      86, "left"  ],
             ["Remarks",     96, "left"  ],
         ];
 
@@ -179,12 +183,15 @@ export const exportRepaymentsPDF = async (repayments: RepaymentRow[], filters: R
                 cell(`${idx + 1}`,                            0, C.muted);
                 cell(rep.repaymentId ?? "-",                  1, C.emerald);
                 cell(dFmt(rep.date),                          2, C.muted);
-                cell(trunc(lenderObj?.name ?? "-", 18),       3, C.text, true);
-                cell(lenderObj?.lenderId ?? "-",              4, C.slate);
-                cell(dINR(rep.amountPaid),                    5, C.green, true);
-                cell(rep.mode || "-",                         6, C.cyan);
-                cell(trunc(rep.referenceNo, 16),              7, C.slate);
-                cell(trunc(rep.remarks, 18),                  8, C.slate);
+                // Type badge
+                const rType = rep.repaymentType ?? "Principal";
+                cell(rType === "Profit" ? "PROFIT" : "PRINCIPAL", 3, rType === "Profit" ? C.amber : C.green, true);
+                cell(trunc(lenderObj?.name ?? "-", 16),       4, C.text, true);
+                cell(lenderObj?.lenderId ?? "-",              5, C.slate);
+                cell(dINR(rep.amountPaid),                    6, rType === "Profit" ? C.amber : C.green, true);
+                cell(rep.mode || "-",                         7, C.cyan);
+                cell(trunc(rep.referenceNo, 14),              8, C.slate);
+                cell(trunc(rep.remarks, 18),                  9, C.slate);
 
                 y += ROW_H;
             });
@@ -195,7 +202,7 @@ export const exportRepaymentsPDF = async (repayments: RepaymentRow[], filters: R
         doc.rect(MG, y, CW, 24).fill(C.navy);
         const modeSummary = [...modeMap.entries()].map(([m, v]) => `${m}: ${dINR(v)}`).join("  |  ");
         doc.fontSize(6.5).font("Helvetica-Bold").fillColor(C.white)
-            .text(`${repayments.length} repayments  |  Total: ${dINR(total)}  |  Avg: ${dINR(avgAmt)}  |  ${modeSummary}`,
+            .text(`${repayments.length} repayments  |  Principal: ${dINR(totalPrincipal)}  |  Profit: ${dINR(totalProfit)}  |  Total: ${dINR(total)}  |  ${modeSummary}`,
                 MG + 8, y + 8, { lineBreak: false });
         y += 24;
         addFooter();

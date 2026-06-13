@@ -1,9 +1,19 @@
 import { z } from "zod";
 
+// Password strength validator reused across schemas
+const passwordSchema = z
+    .string()
+    .min(8, "Password must be at least 8 characters")
+    // Prevent bcrypt DoS — bcrypt silently truncates beyond 72 bytes
+    .max(72, "Password must be 72 characters or fewer")
+    .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
+    .regex(/[a-z]/, "Password must contain at least one lowercase letter")
+    .regex(/[0-9]/, "Password must contain at least one number");
+
 export const registerSchema = z.object({
-    username: z.string().min(3).max(30),
+    username: z.string().min(3).max(30).regex(/^[a-zA-Z0-9_-]+$/, "Username may only contain letters, numbers, hyphens, and underscores"),
     email: z.string().email(),
-    password: z.string().min(8, "Password must be at least 8 characters"),
+    password: passwordSchema,
 });
 
 export const loginSchema = z.object({
@@ -23,7 +33,7 @@ export const updateProfileSchema = z
 export const changePasswordSchema = z
     .object({
         currentPassword: z.string().min(1, "Current password is required"),
-        newPassword: z.string().min(8, "New password must be at least 8 characters"),
+        newPassword: passwordSchema,
         confirmPassword: z.string().min(1, "Please confirm your new password"),
     })
     .refine(data => data.newPassword === data.confirmPassword, {
@@ -38,7 +48,7 @@ export const forgotPasswordSchema = z.object({
 export const resetPasswordSchema = z
     .object({
         token: z.string().min(1, "Reset token is required"),
-        newPassword: z.string().min(8, "Password must be at least 8 characters"),
+        newPassword: passwordSchema,
         confirmPassword: z.string().min(1, "Please confirm your new password"),
     })
     .refine(data => data.newPassword === data.confirmPassword, {

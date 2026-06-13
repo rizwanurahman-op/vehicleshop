@@ -117,8 +117,9 @@ export const exportConsignmentPLReportPDF = async (
         const metrics = [
             { label: "TOTAL SOLD",       value: String(vehicles.length), sub: `${profitCount} profit / ${lossCount} loss`,  accent: C.indigo },
             { label: "SALE TYPE SPLIT",  value: `PS: ${parkSaleCount}`,  sub: `FS: ${financeSaleCount}`,                    accent: C.violet },
-            { label: "TOTAL INVESTED",   value: dINR(totalInvested),     sub: "Purchase + recon",                           accent: C.amber  },
-            { label: "TOTAL REVENUE",    value: dINR(totalRevenue),      sub: totalBalance > 0 ? `Bal: ${dINR(totalBalance)}` : "Fully collected", accent: C.cyan },
+            { label: "RECON COST",       value: dINR(vehicles.reduce((s,v) => s + (v.totalReconCost ?? 0), 0)), sub: "Workshop, parts & misc",                        accent: C.amber  },
+            { label: "TOTAL REVENUE",    value: dINR(totalRevenue),      sub: "Total sold price",                           accent: C.cyan },
+            { label: "BUYER BALANCE",    value: totalBalance > 0 ? dINR(totalBalance) : "Fully Collected", sub: totalBalance > 0 ? "Pending from buyers" : "All payments received", accent: totalBalance > 0 ? C.orange : C.green },
             { label: "PAID TO PAYEE",    value: dINR(totalPaidOut),      sub: "Owner / Finance payout",                     accent: C.blue   },
             { label: "NET PROFIT / LOSS",value: (totalProfit >= 0 ? "+" : "") + dINR(totalProfit), sub: `${margin} margin`, accent: totalProfit >= 0 ? C.green : C.red },
         ];
@@ -141,23 +142,25 @@ export const exportConsignmentPLReportPDF = async (
         // ── TABLE ─────────────────────────────────────────────────────────────
         const tableY = SY + SH + 6;
 
-        // Columns: total = 16+44+42+58+86+62+60+48+48+58+62+60+36+26+56 = 762px (CW ~786 — 24px slack)
+        // Columns: total widths fit within CW ~786
         const cols: [string, number, "left" | "right" | "center"][] = [
-            ["#",            16, "center"],
-            ["CS ID",        44, "left"  ],
-            ["Type",         42, "left"  ],
-            ["Sale Type",    58, "left"  ],
-            ["Make / Model", 86, "left"  ],
-            ["Reg No",       62, "left"  ],
-            ["Owner",        60, "left"  ],
-            ["Received",     48, "left"  ],
-            ["Sold",         48, "left"  ],
-            ["Invested",     58, "right" ],
-            ["Sold Price",   62, "right" ],
-            ["Paid Out",     60, "right" ],
-            ["Net P/L",      60, "right" ],
-            ["Days",         26, "center"],
-            ["Settlement",   56, "center"],
+            ["#",            14, "center"],
+            ["CS ID",        40, "left"  ],
+            ["Type",         36, "left"  ],
+            ["Sale Type",    52, "left"  ],
+            ["Make / Model", 80, "left"  ],
+            ["Reg No",       58, "left"  ],
+            ["Owner",        56, "left"  ],
+            ["Received",     46, "left"  ],
+            ["Sold",         46, "left"  ],
+            ["Invested",     54, "right" ],
+            ["Sold Price",   58, "right" ],
+            ["Rcvd",         50, "right" ],
+            ["Buyer Bal",    50, "right" ],
+            ["Paid Out",     50, "right" ],
+            ["Net P/L",      52, "right" ],
+            ["Days",         24, "center"],
+            ["Settlement",   52, "center"],
         ];
 
         const ROW_H = 15;
@@ -165,17 +168,19 @@ export const exportConsignmentPLReportPDF = async (
 
         const settlementColor = (s: string | null | undefined): string => {
             if (!s) return C.muted;
-            if (s === "fully_closed")     return C.green;
-            if (s === "partial")          return C.amber;
-            if (s === "open")             return C.orange;
+            if (s === "fully_closed")  return C.green;
+            if (s === "buyer_settled") return C.blue;
+            if (s === "payee_settled") return C.amber;
+            if (s === "open")          return C.orange;
             return C.muted;
         };
 
         const settlementLabel = (s: string | null | undefined): string => {
             if (!s) return "-";
-            if (s === "fully_closed") return "Closed";
-            if (s === "partial")      return "Partial";
-            if (s === "open")         return "Open";
+            if (s === "fully_closed")  return "Closed";
+            if (s === "buyer_settled") return "Buyer Done";
+            if (s === "payee_settled") return "Payee Done";
+            if (s === "open")          return "Open";
             return dSl(s);
         };
 
@@ -233,6 +238,9 @@ export const exportConsignmentPLReportPDF = async (
                     rx += w;
                 };
 
+                const bbal  = v.buyerBalance ?? 0;
+                const rcvd  = v.receivedAmount ?? v.soldPrice ?? 0;
+
                 cell(`${idx + 1}`,                                                          0, C.muted);
                 cell(v.consignmentId ?? "-",                                                1);
                 cell(v.vehicleType === "two_wheeler" ? "2W" : "4W",                        2, C.slate);
@@ -244,12 +252,14 @@ export const exportConsignmentPLReportPDF = async (
                 cell(dFmt(v.dateSold),                                                      8, C.muted);
                 cell(dINR(v.totalInvestment),                                               9);
                 cell(dINR(v.soldPrice),                                                    10);
-                cell(dINR(v.paidToPayee),                                                  11, C.muted);
-                cell((np >= 0 ? "+" : "") + dINR(np),                                     12, npColor, true);
-                cell(v.daysInShop != null ? `${v.daysInShop}d` : "-",                     13, C.muted);
+                cell(dINR(rcvd),                                                           11, C.muted);
+                cell(bbal > 0 ? dINR(bbal) : "Nil",                                       12, bbal > 0 ? C.orange : C.muted);
+                cell(dINR(v.paidToPayee),                                                  13, C.muted);
+                cell((np >= 0 ? "+" : "") + dINR(np),                                     14, npColor, true);
+                cell(v.daysInShop != null ? `${v.daysInShop}d` : "-",                     15, C.muted);
 
                 // Settlement status (last column)
-                const [, stW] = cols[14];
+                const [, stW] = cols[16];
                 doc.fontSize(5.8).font("Helvetica-Bold").fillColor(settlementColor(v.settlementStatus))
                     .text(settlementLabel(v.settlementStatus), rx + 2, textY, { width: stW - 4, align: "center", lineBreak: false });
 
@@ -262,7 +272,7 @@ export const exportConsignmentPLReportPDF = async (
         doc.rect(MG, y, CW, 24).fill(C.navy);
         doc.fontSize(6.5).font("Helvetica-Bold").fillColor(C.white)
             .text(
-                `${vehicles.length} sold  |  Invested: ${dINR(totalInvested)}  |  Revenue: ${dINR(totalRevenue)}  |  Received: ${dINR(totalReceived)}  |  Paid Out: ${dINR(totalPaidOut)}  |  Net P/L: ${totalProfit >= 0 ? "+" : ""}${dINR(totalProfit)} (${margin})  |  ${profitCount} profit / ${lossCount} loss  |  Avg ${Math.round(avgDays || 0)}d`,
+                `${vehicles.length} sold  |  Invested: ${dINR(totalInvested)}  |  Revenue: ${dINR(totalRevenue)}  |  Buyer Bal: ${totalBalance > 0 ? dINR(totalBalance) : "Nil"}  |  Paid Out: ${dINR(totalPaidOut)}  |  Net P/L: ${totalProfit >= 0 ? "+" : ""}${dINR(totalProfit)} (${margin})  |  ${profitCount} profit / ${lossCount} loss  |  Avg ${Math.round(avgDays || 0)}d`,
                 MG + 8, y + 8, { lineBreak: false },
             );
         y += 24;

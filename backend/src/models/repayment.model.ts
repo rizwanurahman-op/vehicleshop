@@ -1,6 +1,7 @@
 import mongoose, { Schema, Document } from "mongoose";
 
 export type PaymentMode = "Cash" | "Online" | "Cheque" | "UPI";
+export type RepaymentType = "Principal" | "Profit";
 
 export interface IRepayment extends Document {
     repaymentId: string;
@@ -8,6 +9,8 @@ export interface IRepayment extends Document {
     lender: mongoose.Types.ObjectId;
     amountPaid: number;
     mode: PaymentMode;
+    /** Principal → reduces the outstanding balance. Profit → interest/profit paid, balance unchanged. */
+    repaymentType: RepaymentType;
     referenceNo?: string;
     remarks?: string;
     createdAt: Date;
@@ -41,6 +44,12 @@ const repaymentSchema = new Schema<IRepayment>(
             type: String,
             enum: ["Cash", "Online", "Cheque", "UPI"],
             required: true,
+        },
+        repaymentType: {
+            type: String,
+            enum: ["Principal", "Profit"],
+            default: "Principal", // existing records = Principal (no migration needed)
+            index: true,
         },
         referenceNo: {
             type: String,

@@ -8,17 +8,17 @@ import { env } from "../config/env";
 const REFRESH_COOKIE_OPTIONS = {
     httpOnly: true,
     secure: env.NODE_ENV === "production",
-    // "lax" allows the refresh cookie to be sent for cross-origin requests in dev
-    // (frontend :3000 → backend :5000). In production (same origin) this is equally safe.
-    sameSite: "lax" as const,
+    // In production: strict prevents all cross-site cookie sending (CSRF mitigation)
+    // In development: lax is needed to allow frontend :3000 → backend :5001 cross-origin requests
+    sameSite: (env.NODE_ENV === "production" ? "strict" : "lax") as "strict" | "lax",
     path: "/",
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days — matches JWT_REFRESH_EXPIRY
 };
 
 const CLEAR_COOKIE_OPTIONS = {
     httpOnly: true,
     secure: env.NODE_ENV === "production",
-    sameSite: "lax" as const,
+    sameSite: (env.NODE_ENV === "production" ? "strict" : "lax") as "strict" | "lax",
     path: "/",
 };
 
