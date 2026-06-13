@@ -11,9 +11,9 @@ import { User } from "../models/user.model";
 
 // ─── Admin credentials (change password after first login!) ───────────────────
 const ADMIN = {
-    username: "Rizwanu",
-    email: "Rizwanurahman321@gmail.com",
-    password: "Rizwanu@123",
+    username: "acfriendsmotors",
+    email: "itsafeefvp@gmail.com",
+    password: "Motorsfriends#2026",
     role: "admin" as const,
 };
 
