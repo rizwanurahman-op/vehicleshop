@@ -9,7 +9,7 @@ export const createVehicleSchema = z.object({
     color: z.string().optional(),
     engineNo: z.string().optional(),
     chassisNo: z.string().optional(),
-    purchasedFrom: z.string().min(1, "Seller name is required"),
+    purchasedFrom: z.string().optional(),
     purchasedFromPhone: z.string().optional(),
     datePurchased: z.string().min(1, "Purchase date is required"),
     purchasePrice: z.number().min(0, "Purchase price is required"),
