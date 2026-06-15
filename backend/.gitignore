@@ -5,3 +5,4 @@ dist
 *.log
 coverage
 src/scripts/seed.ts
+backups/
