@@ -37,23 +37,40 @@ const getPresetRange = (preset: DatePreset): { dateFrom?: string; dateTo?: strin
     return {};
 };
 
+// ── Adaptive font size for stat card values ──────────────────────────────────
+const statSizeClass = (val: string): string => {
+    const len = val.length;
+    if (len <= 5)  return "text-xl sm:text-2xl";
+    if (len <= 8)  return "text-lg sm:text-xl";
+    if (len <= 11) return "text-base sm:text-lg";
+    if (len <= 14) return "text-sm sm:text-base";
+    return "text-xs sm:text-sm";
+};
+
 // ── Stat Card ──────────────────────────────────────────────────────────────────
 const StatCard = ({ label, value, sub, icon: Icon, gradient, textColor }: {
     label: string; value: string; sub?: string;
     icon: React.ComponentType<{ className?: string }>;
     gradient: string; textColor: string;
-}) => (
-    <div className={cn("rounded-2xl p-5 flex items-start gap-4 shadow-sm hover:shadow-md transition-all group", gradient)}>
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 backdrop-blur-sm shadow-inner">
-            <Icon className={cn("h-5 w-5", textColor)} />
+}) => {
+    const sizeClass = statSizeClass(value);
+    return (
+        <div className={cn("relative rounded-2xl p-4 sm:p-5 pr-4 sm:pr-16 shadow-sm hover:shadow-md transition-all group overflow-hidden", gradient)}>
+            {/* Icon absolutely positioned top-right */}
+            <div className="absolute top-3 sm:top-4 right-3 sm:right-4 flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-lg sm:rounded-xl bg-white/15 backdrop-blur-sm shadow-inner">
+                <Icon className={cn("h-4 w-4 sm:h-5 sm:w-5", textColor)} />
+            </div>
+            <p className="text-[9px] sm:text-[10px] uppercase tracking-widest font-bold opacity-70 mb-1 pr-8 sm:pr-0 truncate">{label}</p>
+            <p
+                title={value}
+                className={cn("font-mono font-bold tabular-nums whitespace-nowrap overflow-hidden leading-tight pr-8 sm:pr-0", sizeClass, textColor)}
+            >
+                {value}
+            </p>
+            {sub && <p className="text-[10px] sm:text-[11px] mt-1 opacity-60 pr-8 sm:pr-0 truncate">{sub}</p>}
         </div>
-        <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-widest font-bold opacity-70 mb-1">{label}</p>
-            <p className={cn("text-xl font-bold truncate", textColor)}>{value}</p>
-            {sub && <p className="text-[11px] mt-0.5 opacity-60">{sub}</p>}
-        </div>
-    </div>
-);
+    );
+};
 
 // ── PIE colors ─────────────────────────────────────────────────────────────────
 const PIE_COLORS = [

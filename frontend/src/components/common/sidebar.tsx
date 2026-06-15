@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import { useState, Suspense } from "react";
+import Link from "next/link";
 import { Car, LogOut, ChevronLeft, ChevronRight } from "lucide-react";
 import { SidebarNav } from "./sidebar-nav";
 import { useUiStore } from "@stores/ui";
@@ -28,17 +29,20 @@ const Sidebar = () => {
             )}
         >
             {/* Logo */}
-            <div className="flex h-16 items-center gap-3 border-b border-border px-4 transition-all overflow-hidden whitespace-nowrap">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-brand shadow-md">
+            <Link
+                href="/dashboard"
+                className="flex h-16 items-center gap-3 border-b border-border px-4 transition-all overflow-hidden whitespace-nowrap hover:opacity-90 group cursor-pointer"
+            >
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-brand shadow-md group-hover:scale-105 transition-transform">
                     <Car className="h-5 w-5 text-white" />
                 </div>
                 {!collapsed && (
                     <div className="min-w-0">
-                        <p className="truncate text-base font-bold text-foreground">VehicleBook</p>
+                        <p className="truncate text-base font-bold text-foreground group-hover:text-primary transition-colors">VehicleBook</p>
                         <p className="truncate text-[10px] text-muted-foreground">Shop Management</p>
                     </div>
                 )}
-            </div>
+            </Link>
 
             {/* Navigation */}
             <Suspense fallback={<SidebarFallback />}>

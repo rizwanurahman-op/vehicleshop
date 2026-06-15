@@ -87,11 +87,11 @@ const getPresetRange = (preset: DatePreset): { dateFrom?: string; dateTo?: strin
 // ── Adaptive font size for stat card values ──────────────────────────────────
 const statSizeClass = (val: string): string => {
     const len = val.length;
-    if (len <= 5)  return "text-2xl";
-    if (len <= 8)  return "text-xl";
-    if (len <= 11) return "text-lg";
-    if (len <= 14) return "text-base";
-    return "text-sm";
+    if (len <= 5)  return "text-xl sm:text-2xl";
+    if (len <= 8)  return "text-lg sm:text-xl";
+    if (len <= 11) return "text-base sm:text-lg";
+    if (len <= 14) return "text-sm sm:text-base";
+    return "text-xs sm:text-sm";
 };
 
 // ── Stat Card ─────────────────────────────────────────────────────────────────
@@ -102,19 +102,19 @@ const StatCard = ({ label, value, sub, icon: Icon, color }: {
 }) => {
     const sizeClass = statSizeClass(value);
     return (
-        <div className="relative rounded-2xl border border-border bg-card p-5 pr-16 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+        <div className="relative rounded-2xl border border-border bg-card p-4 sm:p-5 pr-4 sm:pr-16 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
             {/* Icon absolutely positioned top-right */}
-            <div className={cn("absolute top-4 right-4 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl shadow-inner", color)}>
-                <Icon className="h-5 w-5 text-white" />
+            <div className={cn("absolute top-3 sm:top-4 right-3 sm:right-4 flex h-8 w-8 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-lg sm:rounded-xl shadow-inner", color)}>
+                <Icon className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
             </div>
-            <p className="text-[11px] uppercase tracking-widest font-bold text-muted-foreground mb-1">{label}</p>
+            <p className="text-[10px] sm:text-[11px] uppercase tracking-widest font-bold text-muted-foreground mb-1 pr-8 sm:pr-0 truncate">{label}</p>
             <p
                 title={value}
-                className={cn("font-mono font-bold tabular-nums whitespace-nowrap overflow-hidden leading-tight text-foreground", sizeClass)}
+                className={cn("font-mono font-bold tabular-nums whitespace-nowrap overflow-hidden leading-tight text-foreground pr-8 sm:pr-0", sizeClass)}
             >
                 {value}
             </p>
-            {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
+            {sub && <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 pr-8 sm:pr-0 truncate">{sub}</p>}
         </div>
     );
 };

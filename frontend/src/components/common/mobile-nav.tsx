@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { usePathname } from "next/navigation";
+import Link from "next/link";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Menu, Car } from "lucide-react";
 import { SidebarNav } from "./sidebar-nav";
@@ -44,15 +45,19 @@ const MobileNav = ({ customTrigger }: MobileNavProps = {}) => {
                 <SheetDescription className="sr-only">Mobile navigation menu</SheetDescription>
                 
                 {/* Mobile Sidebar Header */}
-                <div className="flex h-16 items-center gap-3 border-b border-border px-4 shrink-0">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-brand shadow-md">
+                <Link
+                    href="/dashboard"
+                    onClick={() => setOpen(false)}
+                    className="flex h-16 items-center gap-3 border-b border-border px-4 shrink-0 hover:opacity-90 group cursor-pointer"
+                >
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-brand shadow-md group-hover:scale-105 transition-transform">
                         <Car className="h-5 w-5 text-white" />
                     </div>
                     <div className="min-w-0">
-                        <p className="truncate text-base font-bold text-foreground">VehicleBook</p>
+                        <p className="truncate text-base font-bold text-foreground group-hover:text-primary transition-colors">VehicleBook</p>
                         <p className="truncate text-[10px] text-muted-foreground">Shop Management</p>
                     </div>
-                </div>
+                </Link>
 
                 {/* Mobile Navigation Links */}
                 <Suspense fallback={<SidebarFallback />}>
