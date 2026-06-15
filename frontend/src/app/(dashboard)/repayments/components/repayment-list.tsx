@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import axios from "@config/axios";
 import { getClientSession } from "@/lib/auth";
-import { formatCurrency } from "@lib/currency";
+import { formatINR } from "@lib/currency";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -49,23 +49,40 @@ const getPresetRange = (preset: DatePreset): { dateFrom?: string; dateTo?: strin
     return {};
 };
 
+// ── Adaptive font size for stat card values ──────────────────────────────────
+const statSizeClass = (val: string): string => {
+    const len = val.length;
+    if (len <= 5)  return "text-2xl";
+    if (len <= 8)  return "text-xl";
+    if (len <= 11) return "text-lg";
+    if (len <= 14) return "text-base";
+    return "text-sm";
+};
+
 // ── Stat Card ─────────────────────────────────────────────────────────────────
 const StatCard = ({ label, value, sub, icon: Icon, gradient, textColor }: {
     label: string; value: string; sub?: string;
     icon: React.ComponentType<{ className?: string }>;
     gradient: string; textColor: string;
-}) => (
-    <div className={cn("rounded-2xl p-5 flex items-start gap-4 shadow-sm hover:shadow-md transition-all", gradient)}>
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 backdrop-blur-sm shadow-inner">
-            <Icon className={cn("h-5 w-5", textColor)} />
-        </div>
-        <div className="min-w-0">
+}) => {
+    const sizeClass = statSizeClass(value);
+    return (
+        <div className={cn("relative rounded-2xl p-5 pr-16 shadow-sm hover:shadow-md transition-all overflow-hidden", gradient)}>
+            {/* Icon absolutely positioned top-right */}
+            <div className="absolute top-4 right-4 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/15 backdrop-blur-sm shadow-inner">
+                <Icon className={cn("h-5 w-5", textColor)} />
+            </div>
             <p className="text-[10px] uppercase tracking-widest font-bold opacity-70 mb-1">{label}</p>
-            <p className={cn("text-xl font-bold truncate", textColor)}>{value}</p>
-            {sub && <p className="text-[11px] mt-0.5 opacity-60">{sub}</p>}
+            <p
+                title={value}
+                className={cn("font-mono font-bold tabular-nums whitespace-nowrap overflow-hidden leading-tight", sizeClass, textColor)}
+            >
+                {value}
+            </p>
+            {sub && <p className="text-[11px] mt-1 opacity-60">{sub}</p>}
         </div>
-    </div>
-);
+    );
+};
 
 const fetchRepayments = async (params: Record<string, string>): Promise<IRepayment[]> => {
     const res = await axios.get<ApiResponse<IRepayment[]>>("/repayments", {
@@ -179,16 +196,16 @@ const RepaymentList = ({ initialData }: RepaymentListProps) => {
                         sub={`To ${stats.uniqueLenders} lenders`} icon={BarChart3}
                         gradient="bg-gradient-to-br from-emerald-500/10 to-teal-600/10 border border-emerald-500/20"
                         textColor="text-emerald-500" />
-                    <StatCard label="Principal Repaid" value={formatCurrency(stats.totalPrincipal ?? stats.totalPaid)}
+                    <StatCard label="Principal Repaid" value={formatINR(stats.totalPrincipal ?? stats.totalPaid)}
                         sub="Reduces balance" icon={TrendingDown}
                         gradient="bg-gradient-to-br from-primary/10 to-indigo-600/10 border border-primary/20"
                         textColor="text-primary" />
-                    <StatCard label="Profit Paid" value={formatCurrency(stats.totalProfit ?? 0)}
+                    <StatCard label="Profit Paid" value={formatINR(stats.totalProfit ?? 0)}
                         sub="Interest payments" icon={TrendingUp}
                         gradient="bg-gradient-to-br from-amber-500/10 to-orange-600/10 border border-amber-500/20"
                         textColor="text-amber-500" />
                     <StatCard label="Top Mode" value={topMode?.[0] ?? "—"}
-                        sub={topMode ? `${formatCurrency(topMode[1])} via this mode` : "No data"} icon={CreditCard}
+                        sub={topMode ? `${formatINR(topMode[1])} via this mode` : "No data"} icon={CreditCard}
                         gradient="bg-gradient-to-br from-violet-500/10 to-purple-600/10 border border-violet-500/20"
                         textColor="text-violet-500" />
                 </div>
@@ -335,7 +352,7 @@ const RepaymentList = ({ initialData }: RepaymentListProps) => {
                                                 </div>
                                                 <div className="text-right">
                                                     <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-500 mb-1">Amount Paid</p>
-                                                    <p className="text-xl font-bold text-emerald-500 tabular-nums leading-none"><CurrencyDisplay amount={rep.amountPaid} /></p>
+                                                    <p className="text-xl font-mono font-bold text-emerald-500 tabular-nums whitespace-nowrap leading-none"><CurrencyDisplay amount={rep.amountPaid} /></p>
                                                 </div>
                                             </div>
                                             {rep.remarks && <p className="text-[11px] text-muted-foreground bg-muted/30 p-2 rounded-lg line-clamp-2 mt-2">{rep.remarks}</p>}

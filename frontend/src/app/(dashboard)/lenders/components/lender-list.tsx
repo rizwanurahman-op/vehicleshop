@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import axios from "@config/axios";
 import { useRouter } from "next/navigation";
 import { getClientSession } from "@/lib/auth";
-import { formatCurrency } from "@lib/currency";
+import { formatINR, formatINRCompact } from "@lib/currency";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -22,23 +22,40 @@ import { CreateLenderDialog, DeleteLenderDialog, UpdateLenderDialog } from ".";
 import { EmptyState, TableSkeleton, StatusBadge, CurrencyDisplay, AdminOnly } from "@components/shared";
 import { useDebounce } from "@hooks/use-debounce";
 
+// ── Adaptive font size for stat card values ──────────────────────────────────
+const statSizeClass = (val: string): string => {
+    const len = val.length;
+    if (len <= 5)  return "text-2xl";
+    if (len <= 8)  return "text-xl";
+    if (len <= 11) return "text-lg";
+    if (len <= 14) return "text-base";
+    return "text-sm";
+};
+
 // ── Stat Card ─────────────────────────────────────────────────────────────────
 const StatCard = ({ label, value, sub, icon: Icon, gradient, textColor }: {
     label: string; value: string; sub?: string;
     icon: React.ComponentType<{ className?: string }>;
     gradient: string; textColor: string;
-}) => (
-    <div className={cn("rounded-2xl p-5 flex items-start gap-4 shadow-sm hover:shadow-md transition-all group", gradient)}>
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 backdrop-blur-sm shadow-inner">
-            <Icon className={cn("h-5 w-5", textColor)} />
-        </div>
-        <div className="min-w-0">
+}) => {
+    const sizeClass = statSizeClass(value);
+    return (
+        <div className={cn("relative rounded-2xl p-5 pr-16 shadow-sm hover:shadow-md transition-all group overflow-hidden", gradient)}>
+            {/* Icon absolutely positioned top-right */}
+            <div className="absolute top-4 right-4 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/15 backdrop-blur-sm shadow-inner">
+                <Icon className={cn("h-5 w-5", textColor)} />
+            </div>
             <p className="text-[10px] uppercase tracking-widest font-bold opacity-70 mb-1">{label}</p>
-            <p className={cn("text-2xl font-bold truncate", textColor)}>{value}</p>
-            {sub && <p className="text-[11px] mt-0.5 opacity-60">{sub}</p>}
+            <p
+                title={value}
+                className={cn("font-mono font-bold tabular-nums whitespace-nowrap overflow-hidden leading-tight", sizeClass, textColor)}
+            >
+                {value}
+            </p>
+            {sub && <p className="text-[11px] mt-1 opacity-60">{sub}</p>}
         </div>
-    </div>
-);
+    );
+};
 
 // ── Date Preset ───────────────────────────────────────────────────────────────
 type DatePreset = "all" | "today" | "this_week" | "this_month" | "this_year" | "last_year" | "custom";
@@ -172,19 +189,19 @@ const LenderList = ({ initialData }: LenderListProps) => {
                             sub={`${stats.activeCount} active · ${stats.paidOffCount} paid off`}
                             icon={Users} gradient="bg-gradient-to-br from-primary/10 to-violet-500/10 border border-primary/20"
                             textColor="text-primary" />
-                        <StatCard label="Total Borrowed"    value={formatCurrency(stats.totalBorrowed)}
+                        <StatCard label="Total Borrowed"    value={formatINR(stats.totalBorrowed)}
                             sub="Capital received" icon={TrendingDown}
                             gradient="bg-gradient-to-br from-violet-500/10 to-purple-600/10 border border-violet-500/20"
                             textColor="text-violet-500" />
-                        <StatCard label="💰 Principal Repaid" value={formatCurrency(stats.totalRepaid)}
+                        <StatCard label="💰 Principal Repaid" value={formatINR(stats.totalRepaid)}
                             sub="Reduces balance" icon={TrendingUp}
                             gradient="bg-gradient-to-br from-emerald-500/10 to-teal-600/10 border border-emerald-500/20"
                             textColor="text-emerald-500" />
-                        <StatCard label="📈 Profit Paid"     value={formatCurrency(stats.totalProfit ?? 0)}
+                        <StatCard label="📈 Profit Paid"     value={formatINR(stats.totalProfit ?? 0)}
                             sub="Interest · balance unchanged" icon={IndianRupee}
                             gradient="bg-gradient-to-br from-amber-500/10 to-orange-600/10 border border-amber-500/20"
                             textColor="text-amber-500" />
-                        <StatCard label="Balance Payable"   value={formatCurrency(stats.balancePayable)}
+                        <StatCard label="Balance Payable"   value={formatINR(stats.balancePayable)}
                             sub={`${stats.paidOffCount} fully paid off`}
                             icon={stats.balancePayable > 0 ? AlertCircle : CheckCircle2}
                             gradient={stats.balancePayable > 0
@@ -197,13 +214,13 @@ const LenderList = ({ initialData }: LenderListProps) => {
                         <div className="flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-xs">
                             <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
                             <span className="text-emerald-700 dark:text-emerald-300 font-medium">
-                                💰 Principal: <strong>{formatCurrency(stats.totalRepaid)}</strong> — reduces lender balance
+                                💰 Principal: <strong>{formatINR(stats.totalRepaid)}</strong> — reduces lender balance
                             </span>
                         </div>
                         <div className="flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs">
                             <span className="h-2 w-2 rounded-full bg-amber-500 shrink-0" />
                             <span className="text-amber-700 dark:text-amber-300 font-medium">
-                                📈 Profit: <strong>{formatCurrency(stats.totalProfit ?? 0)}</strong> — interest paid, balance unchanged
+                                📈 Profit: <strong>{formatINR(stats.totalProfit ?? 0)}</strong> — interest paid, balance unchanged
                             </span>
                         </div>
                     </div>
@@ -337,7 +354,7 @@ const LenderList = ({ initialData }: LenderListProps) => {
                                         {(lender.totalProfit ?? 0) > 0 && (
                                             <div className="mb-3 flex items-center justify-between rounded-lg border border-amber-500/20 bg-amber-500/5 px-2.5 py-1.5">
                                                 <span className="text-[10px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400">📈 Profit Paid</span>
-                                                <span className="text-xs font-bold text-amber-600 dark:text-amber-400 tabular-nums">{formatCurrency(lender.totalProfit)}</span>
+                                                <span className="text-xs font-bold text-amber-600 dark:text-amber-400 tabular-nums">{formatINR(lender.totalProfit)}</span>
                                             </div>
                                         )}
                                         <div className="flex items-center justify-between bg-muted/30 p-2.5 rounded-lg border border-border/50">
@@ -394,7 +411,7 @@ const LenderList = ({ initialData }: LenderListProps) => {
                                             <TableCell className="text-right"><CurrencyDisplay amount={lender.totalRepaid} variant="success" /></TableCell>
                                             <TableCell className="text-right">
                                                 {(lender.totalProfit ?? 0) > 0
-                                                    ? <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">{formatCurrency(lender.totalProfit)}</span>
+                                                    ? <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">{formatINR(lender.totalProfit)}</span>
                                                     : <span className="text-xs text-muted-foreground">—</span>}
                                             </TableCell>
                                             <TableCell className="text-right"><CurrencyDisplay amount={lender.balancePayable} variant={lender.balancePayable > 0 ? "warning" : "success"} className="font-bold" /></TableCell>

@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import axios from "@config/axios";
-import { formatCurrency } from "@lib/currency";
+import { formatINR } from "@lib/currency";
 import { formatDate } from "@lib/date";
 import { cn } from "@/lib/utils";
 import { getClientSession } from "@/lib/auth";
@@ -84,23 +84,40 @@ const getPresetRange = (preset: DatePreset): { dateFrom?: string; dateTo?: strin
     return {};
 };
 
+// ── Adaptive font size for stat card values ──────────────────────────────────
+const statSizeClass = (val: string): string => {
+    const len = val.length;
+    if (len <= 5)  return "text-2xl";
+    if (len <= 8)  return "text-xl";
+    if (len <= 11) return "text-lg";
+    if (len <= 14) return "text-base";
+    return "text-sm";
+};
+
 // ── Stat Card ─────────────────────────────────────────────────────────────────
 const StatCard = ({ label, value, sub, icon: Icon, color }: {
     label: string; value: string; sub?: string;
     icon: React.ComponentType<{ className?: string }>;
     color: string;
-}) => (
-    <div className="rounded-2xl border border-border bg-card p-5 flex items-start gap-4 shadow-sm hover:shadow-md transition-shadow">
-        <div className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-xl shadow-inner", color)}>
-            <Icon className="h-5 w-5 text-white" />
-        </div>
-        <div className="min-w-0">
+}) => {
+    const sizeClass = statSizeClass(value);
+    return (
+        <div className="relative rounded-2xl border border-border bg-card p-5 pr-16 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+            {/* Icon absolutely positioned top-right */}
+            <div className={cn("absolute top-4 right-4 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl shadow-inner", color)}>
+                <Icon className="h-5 w-5 text-white" />
+            </div>
             <p className="text-[11px] uppercase tracking-widest font-bold text-muted-foreground mb-1">{label}</p>
-            <p className="text-2xl font-bold text-foreground truncate">{value}</p>
+            <p
+                title={value}
+                className={cn("font-mono font-bold tabular-nums whitespace-nowrap overflow-hidden leading-tight text-foreground", sizeClass)}
+            >
+                {value}
+            </p>
             {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
         </div>
-    </div>
-);
+    );
+};
 
 // ── Source Vehicle Cell ───────────────────────────────────────────────────────
 const SourceCell = ({ deal }: { deal: ExchangeDeal }) => {
@@ -153,7 +170,7 @@ const ExchangeCell = ({ deal }: { deal: ExchangeDeal }) => {
                 )}
                 <div className="mt-1 flex items-center gap-1.5 flex-wrap">
                     <Badge className="bg-orange-500/10 text-orange-400 text-[10px]">
-                        {formatCurrency(deal.exchangeAmount)}
+                        {formatINR(deal.exchangeAmount)}
                     </Badge>
                     {hasInventory && href ? (
                         <Link href={href} className="inline-flex items-center gap-1 text-[10px] text-orange-400 hover:underline">
@@ -192,22 +209,22 @@ const SettlementCell = ({ deal }: { deal: ExchangeDeal }) => {
             <div className="space-y-1 text-[11px]">
                 <div className="flex justify-between text-muted-foreground">
                     <span>Sold</span>
-                    <span className="font-semibold text-foreground">{formatCurrency(deal.sourceSoldPrice)}</span>
+                    <span className="font-semibold text-foreground font-mono">{formatINR(deal.sourceSoldPrice)}</span>
                 </div>
                 <div className="flex justify-between text-muted-foreground">
                     <span>Exchange</span>
-                    <span className="text-orange-400 font-medium">−{formatCurrency(deal.exchangeAmount)}</span>
+                    <span className="text-orange-400 font-medium font-mono">−{formatINR(deal.exchangeAmount)}</span>
                 </div>
                 {deal.sourceTotalCashReceived > 0 && (
                     <div className="flex justify-between text-muted-foreground">
                         <span>Cash</span>
-                        <span className="text-emerald-400 font-medium">−{formatCurrency(deal.sourceTotalCashReceived)}</span>
+                        <span className="text-emerald-400 font-medium font-mono">−{formatINR(deal.sourceTotalCashReceived)}</span>
                     </div>
                 )}
                 <div className="flex justify-between font-bold border-t border-border/60 pt-1">
                     <span className="text-muted-foreground">Balance</span>
-                    <span className={deal.sourceRemainingBalance > 0 ? "text-red-400" : "text-emerald-400"}>
-                        {formatCurrency(deal.sourceRemainingBalance)}
+                        <span className={deal.sourceRemainingBalance > 0 ? "text-red-400 font-mono" : "text-emerald-400 font-mono"}>
+                            {formatINR(deal.sourceRemainingBalance)}
                     </span>
                 </div>
             </div>
@@ -413,14 +430,14 @@ export default function ExchangeList() {
                     />
                     <StatCard
                         label="Total Exchange Value"
-                        value={formatCurrency(stats.totalExchangeValue)}
+                        value={formatINR(stats.totalExchangeValue)}
                         sub="Combined value of all exchanged vehicles"
                         icon={IndianRupee}
                         color="bg-gradient-to-br from-violet-500 to-purple-600"
                     />
                     <StatCard
                         label="Pending Balance"
-                        value={formatCurrency(stats.totalRemainingBalance)}
+                        value={formatINR(stats.totalRemainingBalance)}
                         sub={`${stats.pendingSettlement} deals pending cash`}
                         icon={AlertCircle}
                         color="bg-gradient-to-br from-amber-500 to-orange-600"
@@ -484,7 +501,7 @@ export default function ExchangeList() {
                                         </Badge>
                                     ) : deal.sourceRemainingBalance > 0 ? (
                                         <Badge className="bg-orange-500/10 text-orange-400 text-[10px] gap-1">
-                                            <Clock className="h-2.5 w-2.5" />Cash Pending · {formatCurrency(deal.sourceRemainingBalance)}
+                                            <Clock className="h-2.5 w-2.5" />Cash Pending · {formatINR(deal.sourceRemainingBalance)}
                                         </Badge>
                                     ) : (
                                         <Badge className="bg-emerald-500/10 text-emerald-400 text-[10px]">Exchange Only</Badge>

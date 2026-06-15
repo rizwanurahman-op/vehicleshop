@@ -17,8 +17,12 @@ export const registerSchema = z.object({
 });
 
 export const loginSchema = z.object({
-    usernameOrEmail: z.string().min(1, "Username or email is required"),
-    password: z.string().min(1, "Password is required"),
+    // max 254 = RFC 5321 email length limit (covers both username and email)
+    usernameOrEmail: z.string().min(1, "Username or email is required").max(254),
+    // SECURITY: max 72 matches bcrypt's truncation boundary.
+    // Without this, an attacker can send a very long password string that makes
+    // bcrypt hang for minutes, denying service (bcrypt DoS attack).
+    password: z.string().min(1, "Password is required").max(72),
 });
 
 export const updateProfileSchema = z

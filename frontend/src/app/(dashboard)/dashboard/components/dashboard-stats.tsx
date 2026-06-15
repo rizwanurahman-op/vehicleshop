@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import axios from "@config/axios";
-import { formatINRCompact } from "@/lib/currency";
+import { formatINR, formatINRCompact } from "@/lib/currency";
 import { Card, CardContent } from "@/components/ui/card";
 import {
     TrendingUp, Users, Wallet,
@@ -26,31 +26,79 @@ type StatCardProps = {
     badge?: { label: string; cls: string };
 };
 
-const StatCard = ({ title, value, subtitle, icon: Icon, color, bg, badge }: StatCardProps) => (
-    <Card className="bg-card border-border group relative overflow-hidden transition-all hover:border-primary/30">
-        <CardContent className="relative p-5">
-            <div className="flex items-start justify-between">
-                <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap mb-2">
-                        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{title}</p>
-                        {badge && (
-                            <span className={cn("inline-flex items-center text-[9px] font-bold px-1.5 py-0.5 rounded-full border", badge.cls)}>
-                                {badge.label}
-                            </span>
-                        )}
-                    </div>
-                    <p className="font-mono text-2xl font-bold tabular-nums text-foreground">
-                        {typeof value === "number" ? formatINRCompact(value) : value}
+/**
+ * Auto-scale font size by character length.
+ * Icon is absolutely positioned so full card width is available for the number.
+ * Even a 10-char Indian number (e.g. ₹54,04,900) fits on one line at text-xl.
+ */
+const valueSizeClass = (formatted: string): string => {
+    const len = formatted.length;
+    if (len <= 5)  return "text-3xl";   // ₹999, 13
+    if (len <= 7)  return "text-2xl";   // ₹7,500
+    if (len <= 10) return "text-xl";    // ₹54,04,900  (~10L)
+    if (len <= 13) return "text-lg";    // ₹10,00,00,000  (~10Cr)
+    if (len <= 16) return "text-base";  // ₹1,00,00,00,000  (~100Cr)
+    return "text-sm";                   // ₹1,000 Cr+
+};
+
+const StatCard = ({ title, value, subtitle, icon: Icon, color, bg, badge }: StatCardProps) => {
+    const isNumeric      = typeof value === "number";
+    const fullFormatted  = isNumeric ? formatINR(value)       : String(value);
+    const compactHint    = isNumeric ? formatINRCompact(value) : "";
+    const showHint       = isNumeric && compactHint !== fullFormatted;
+    const sizeClass      = valueSizeClass(fullFormatted);
+
+    return (
+        <Card className="bg-card border-border group relative overflow-hidden transition-all hover:border-primary/30">
+            <CardContent className="relative p-5 pr-16">
+                {/* Icon — absolutely positioned top-right so it never squeezes the number */}
+                <div className={cn(
+                    "absolute top-4 right-4 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+                    bg,
+                )}>
+                    <Icon className={cn("h-5 w-5", color)} />
+                </div>
+
+                {/* Title + optional badge */}
+                <div className="flex items-center gap-2 flex-wrap mb-2">
+                    <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground leading-none">
+                        {title}
                     </p>
-                    <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>
+                    {badge && (
+                        <span className={cn(
+                            "inline-flex items-center text-[9px] font-bold px-1.5 py-0.5 rounded-full border",
+                            badge.cls,
+                        )}>
+                            {badge.label}
+                        </span>
+                    )}
                 </div>
-                <div className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-xl", bg)}>
-                    <Icon className={cn("h-6 w-6", color)} />
-                </div>
-            </div>
-        </CardContent>
-    </Card>
-);
+
+                {/* Primary value — full format, whitespace-nowrap prevents mid-digit breaks.
+                     overflow-hidden + title ensure extreme crore values never break layout. */}
+                <p
+                    title={fullFormatted}
+                    className={cn(
+                        "font-mono font-bold tabular-nums text-foreground whitespace-nowrap overflow-hidden leading-tight",
+                        sizeClass,
+                    )}
+                >
+                    {fullFormatted}
+                </p>
+
+                {/* Subtitle */}
+                <p className="mt-1.5 text-xs text-muted-foreground leading-snug">{subtitle}</p>
+
+                {/* Compact hint — dimmed, only for values large enough to need it */}
+                {showHint && (
+                    <p className="mt-1 text-[10px] font-semibold text-muted-foreground/50 font-mono">
+                        ≈ {compactHint}
+                    </p>
+                )}
+            </CardContent>
+        </Card>
+    );
+};
 
 type DashboardStatsProps = { initialData: IDashboardStats | null };
 

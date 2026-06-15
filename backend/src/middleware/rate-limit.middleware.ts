@@ -17,7 +17,9 @@ export const authLimiter = rateLimit({
     message: { success: false, statusCode: 429, message: "Too many authentication attempts. Try again in 15 minutes." },
     standardHeaders: true,
     legacyHeaders: false,
-    skipSuccessfulRequests: false,
+    // Only count FAILED attempts against the limit — successful logins should never
+    // trigger a lockout. Without this, 5 successful logins would block the 6th.
+    skipSuccessfulRequests: true,
 });
 
 // Limiter for mutating operations (create/update/delete) — 60 per 15 min

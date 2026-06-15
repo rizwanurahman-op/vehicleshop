@@ -15,7 +15,7 @@ export interface IConsignmentVehicle extends Omit<Document, 'model'> {
     chassisNo?: string;
 
     // Source Details
-    previousOwner: string;
+    previousOwner?: string;
     previousOwnerPhone?: string;
     sourceType: "friend" | "customer" | "agent" | "owner" | "other";
     sourceNotes?: string;
@@ -205,7 +205,7 @@ const ConsignmentVehicleSchema = new Schema<IConsignmentVehicle>({
     engineNo: String,
     chassisNo: String,
 
-    previousOwner: { type: String, required: true, trim: true },
+    previousOwner: { type: String, trim: true },
     previousOwnerPhone: String,
     sourceType: { type: String, enum: ["friend", "customer", "agent", "owner", "other"], default: "owner" },
     sourceNotes: String,

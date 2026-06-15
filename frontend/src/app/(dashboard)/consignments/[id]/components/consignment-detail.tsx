@@ -84,7 +84,7 @@ const EditConsignmentDialog = ({ vehicle }: { vehicle: IConsignmentVehicle }) =>
         color: vehicle.color ?? "",
         engineNo: vehicle.engineNo ?? "",
         chassisNo: vehicle.chassisNo ?? "",
-        previousOwner: vehicle.previousOwner,
+        previousOwner: vehicle.previousOwner ?? "",
         previousOwnerPhone: vehicle.previousOwnerPhone ?? "",
         financeCompany: vehicle.financeCompany ?? "",
         dateReceived: toDateStr(vehicle.dateReceived),
@@ -212,7 +212,7 @@ const EditConsignmentDialog = ({ vehicle }: { vehicle: IConsignmentVehicle }) =>
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{isParkSale ? "Owner" : "Finance Owner"} Information</p>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <FormField control={form.control} name="previousOwner" render={({ field }) => (
-                                        <FormItem><FormLabel className="text-xs font-semibold">{isParkSale ? "Owner" : "Finance Owner"} Name *</FormLabel>
+                                        <FormItem><FormLabel className="text-xs font-semibold">{isParkSale ? "Owner" : "Finance Owner"} Name</FormLabel>
                                             <FormControl><Input className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl><FormMessage /></FormItem>
                                     )} />
                                     <FormField control={form.control} name="previousOwnerPhone" render={({ field }) => (
@@ -316,7 +316,7 @@ const RecordSaleDialog = ({ vehicle }: { vehicle: IConsignmentVehicle }) => {
                                 )} />
                             </div>
                             <FormField control={form.control} name="soldTo" render={({ field }) => (
-                                <FormItem><FormLabel className="text-xs font-semibold text-foreground">Buyer Name *</FormLabel><FormControl><Input placeholder="Buyer's name" className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl><FormMessage /></FormItem>
+                                <FormItem><FormLabel className="text-xs font-semibold text-foreground">Buyer Name <span className="text-muted-foreground font-normal">(optional)</span></FormLabel><FormControl><Input placeholder="Buyer's name" className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl><FormMessage /></FormItem>
                             )} />
                             <FormField control={form.control} name="soldToPhone" render={({ field }) => (
                                 <FormItem><FormLabel className="text-xs font-semibold text-foreground">Buyer Phone</FormLabel><FormControl><Input placeholder="+91 9876543210" className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl></FormItem>
@@ -477,7 +477,7 @@ const AddPayeePaymentDialog = ({ vehicle }: { vehicle: IConsignmentVehicle }) =>
                         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-brand shadow-lg"><ArrowUpRight className="h-4 w-4 text-white" /></div>
                         <div>
                             <DialogTitle className="text-base font-bold text-foreground">Pay {label}</DialogTitle>
-                            <DialogDescription className="text-xs text-muted-foreground">Payment to {label === "Owner" ? vehicle.previousOwner : (vehicle.financeCompany || "Finance")}</DialogDescription>
+                            <DialogDescription className="text-xs text-muted-foreground">Payment to {label === "Owner" ? (vehicle.previousOwner || "Owner") : (vehicle.financeCompany || "Finance")}</DialogDescription>
                         </div>
                     </div>
                 </div>
@@ -882,7 +882,7 @@ const ConsignmentDetail = ({ id, initialData }: { id: string; initialData: ICons
                                 <h1 className="text-xl sm:text-2xl font-bold text-foreground leading-tight">{vehicle.make} {vehicle.model}</h1>
                                 <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                                     <span className="font-mono bg-muted/50 px-1.5 py-0.5 rounded text-[10px] sm:text-xs mr-2">{vehicle.registrationNo}</span>
-                                    <User className="inline h-3 w-3 mr-1" />{vehicle.previousOwner}
+                                    <User className="inline h-3 w-3 mr-1" />{vehicle.previousOwner || "—"}
                                     {vehicle.financeCompany && <span className="ml-2 text-blue-400">· {vehicle.financeCompany}</span>}
                                     {vehicle.daysInShop != null && <span className="ml-2">· {vehicle.daysInShop}d in shop</span>}
                                 </p>
@@ -953,7 +953,7 @@ const ConsignmentDetail = ({ id, initialData }: { id: string; initialData: ICons
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-border border-y border-border">
                     {[
                         { label: "Total Investment", value: formatCurrency(vehicle.totalInvestment), sub: `Recon: ${formatCurrency(vehicle.totalReconCost)}` },
-                        { label: isSold ? "Sold Price" : "Status", value: isSold ? formatCurrency(vehicle.soldPrice!) : vehicle.status.replace(/_/g, " "), sub: isSold ? `To: ${vehicle.soldTo}` : formatDate(vehicle.dateReceived) },
+                        { label: isSold ? "Sold Price" : "Status", value: isSold ? formatCurrency(vehicle.soldPrice!) : vehicle.status.replace(/_/g, " "), sub: isSold ? (vehicle.soldTo ? `To: ${vehicle.soldTo}` : "Buyer not recorded") : formatDate(vehicle.dateReceived) },
                         { label: `Paid to ${label}`, value: formatCurrency(vehicle.paidToPayee), sub: `Balance: ${formatCurrency(vehicle.payeeBalance)}`, color: vehicle.payeeBalance > 0 ? "text-orange-400" : "text-foreground" },
                         { label: isSold ? "Net Profit" : "P&L (Unrealized)", value: formatCurrency(Math.abs(vehicle.netProfit)), sub: `${isProfit ? "+" : ""}${vehicle.profitLossPercentage.toFixed(1)}%`, color: isSold ? (isProfit ? "text-emerald-400" : "text-red-400") : "text-muted-foreground" },
                     ].map(s => (
@@ -1120,7 +1120,7 @@ const ConsignmentDetail = ({ id, initialData }: { id: string; initialData: ICons
                             { label: "Engine No", value: vehicle.engineNo || "—" },
                             { label: "Chassis No", value: vehicle.chassisNo || "—" },
                             { label: "Date Received", value: formatDate(vehicle.dateReceived) },
-                            { label: vehicle.saleType === "park_sale" ? "Owner" : "Previous Owner", value: vehicle.previousOwner },
+                            { label: vehicle.saleType === "park_sale" ? "Owner" : "Previous Owner", value: vehicle.previousOwner || "—" },
                             { label: "Phone", value: vehicle.previousOwnerPhone || "—" },
                             vehicle.financeCompany ? { label: "Finance Company", value: vehicle.financeCompany } : null,
                         ].filter(Boolean).map(r => (
@@ -1489,7 +1489,7 @@ const ConsignmentDetail = ({ id, initialData }: { id: string; initialData: ICons
                                         </div>
                                         <div>
                                             <p className="text-[11px] text-muted-foreground mb-0.5">Received From (Buyer)</p>
-                                            <p className="font-semibold text-foreground">{vehicle.previousOwner}</p>
+                                            <p className="font-semibold text-foreground">{vehicle.previousOwner || "—"}</p>
                                         </div>
                                         <div>
                                             <p className="text-[11px] text-muted-foreground mb-0.5">Date Received</p>

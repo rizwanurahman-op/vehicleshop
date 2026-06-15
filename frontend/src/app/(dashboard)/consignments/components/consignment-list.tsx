@@ -551,7 +551,7 @@ export const ConsignmentList = ({ initialData }: { initialData: ConsignmentPagin
                                             </div>
                                             
                                             <div className="inline-flex items-center gap-2 rounded-lg bg-muted/40 px-2.5 py-1.5 border border-border/50">
-                                                <span className="text-[10px] font-medium text-muted-foreground">Owner: <span className="text-xs font-medium text-foreground truncate max-w-[150px] inline-block align-bottom">{v.previousOwner}</span></span>
+                                                <span className="text-[10px] font-medium text-muted-foreground">Owner: <span className="text-xs font-medium text-foreground truncate max-w-[150px] inline-block align-bottom">{v.previousOwner || "—"}</span></span>
                                                 {v.daysInShop != null && <span className="text-[10px] text-muted-foreground ml-1 shrink-0 flex items-center gap-1">· <Clock className="h-2.5 w-2.5" />{v.daysInShop}d</span>}
                                             </div>
                                         </div>
@@ -631,8 +631,7 @@ export const ConsignmentList = ({ initialData }: { initialData: ConsignmentPagin
                                             </div>
                                             <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground flex-wrap">
                                                 <span className="font-mono">{v.registrationNo}</span>
-                                                <span>•</span>
-                                                <span>{v.previousOwner}</span>
+                                                {v.previousOwner && <><span>•</span><span>{v.previousOwner}</span></>}
                                                 {v.daysInShop != null && (
                                                     <><span>•</span><span className="flex items-center gap-1"><Clock className="h-3 w-3" />{v.daysInShop}d</span></>
                                                 )}

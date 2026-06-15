@@ -56,7 +56,7 @@ export const editBasicInfoSchema = z.object({
 export const recordSaleSchema = z.object({
     dateSold: z.string().min(1, "Sale date is required"),
     soldPrice: z.number().min(0, "Sold price is required"),
-    soldTo: z.string().min(1, "Buyer name is required"),
+    soldTo: z.string().optional(),
     soldToPhone: z.string().optional(),
     nocStatus: z.enum(["not_applicable", "pending", "received", "submitted", "completed"]).optional(),
     remarks: z.string().optional(),

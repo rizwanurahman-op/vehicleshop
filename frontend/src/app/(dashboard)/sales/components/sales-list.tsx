@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import axios from "@config/axios";
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { formatCurrency } from "@lib/currency";
+import { formatINR } from "@lib/currency";
 import { formatDate } from "@lib/date";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -78,20 +78,38 @@ const SaleStatusBadge = ({ status }: { status: string }) => {
     return <Badge className="bg-muted/50 text-muted-foreground text-[10px]">{status.replace(/_/g, " ")}</Badge>;
 };
 
+// ── Adaptive font size for stat card values ──────────────────────────────────
+const statSizeClass = (val: string): string => {
+    const len = val.length;
+    if (len <= 5)  return "text-2xl";
+    if (len <= 8)  return "text-xl";
+    if (len <= 11) return "text-lg";
+    if (len <= 14) return "text-base";
+    return "text-sm";
+};
+
 const StatCard = ({ label, value, sub, color = "text-foreground", bg = "bg-card border-border", icon: Icon }: {
     label: string; value: string; sub?: string; color?: string; bg?: string; icon: React.ElementType;
-}) => (
-    <div className={cn("rounded-xl border p-4 flex items-start gap-3", bg)}>
-        <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-xl", bg.includes("emerald") ? "bg-emerald-500/15" : bg.includes("red") ? "bg-red-500/15" : bg.includes("orange") ? "bg-orange-500/15" : bg.includes("blue") ? "bg-blue-500/15" : bg.includes("violet") ? "bg-violet-500/20" : "bg-primary/10")}>
-            <Icon className={cn("h-4 w-4", color)} />
-        </div>
-        <div>
+}) => {
+    const sizeClass = statSizeClass(value);
+    const iconBg = bg.includes("emerald") ? "bg-emerald-500/15" : bg.includes("red") ? "bg-red-500/15" : bg.includes("orange") ? "bg-orange-500/15" : bg.includes("blue") ? "bg-blue-500/15" : bg.includes("violet") ? "bg-violet-500/20" : "bg-primary/10";
+    return (
+        <div className={cn("relative rounded-xl border p-4 pr-14 overflow-hidden", bg)}>
+            {/* Icon absolutely positioned top-right */}
+            <div className={cn("absolute top-3 right-3 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl", iconBg)}>
+                <Icon className={cn("h-4 w-4", color)} />
+            </div>
             <p className="text-[11px] text-muted-foreground uppercase tracking-widest font-semibold mb-0.5">{label}</p>
-            <p className={cn("text-lg font-bold leading-tight", color)}>{value}</p>
+            <p
+                title={value}
+                className={cn("font-mono font-bold tabular-nums whitespace-nowrap overflow-hidden leading-tight", sizeClass, color)}
+            >
+                {value}
+            </p>
             {sub && <p className="text-[11px] text-muted-foreground mt-0.5">{sub}</p>}
         </div>
-    </div>
-);
+    );
+};
 
 const SalesList = ({ initialData }: SalesListProps) => {
     const [page, setPage] = useState(1);
@@ -249,10 +267,10 @@ const SalesList = ({ initialData }: SalesListProps) => {
             {/* Stats Grid */}
             {stats && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    <StatCard label="Total Revenue" value={formatCurrency(stats.totalRevenue)} sub={`${stats.totalSales} sales`} icon={IndianRupee} bg="bg-card border-border" />
-                    <StatCard label="Total Received" value={formatCurrency(stats.totalReceived)} color="text-emerald-400" bg="bg-emerald-500/5 border-emerald-500/20" icon={CheckCircle2} />
-                    <StatCard label="Outstanding" value={formatCurrency(stats.totalBalance)} sub={`${stats.pendingCount} pending`} color="text-red-400" bg="bg-red-500/5 border-red-500/20" icon={Clock} />
-                    <StatCard label="Total Profit" value={formatCurrency(stats.totalProfit)} color={stats.totalProfit >= 0 ? "text-emerald-400" : "text-red-400"} bg={stats.totalProfit >= 0 ? "bg-emerald-500/5 border-emerald-500/20" : "bg-red-500/5 border-red-500/20"} icon={stats.totalProfit >= 0 ? TrendingUp : TrendingDown} />
+                    <StatCard label="Total Revenue" value={formatINR(stats.totalRevenue)} sub={`${stats.totalSales} sales`} icon={IndianRupee} bg="bg-card border-border" />
+                    <StatCard label="Total Received" value={formatINR(stats.totalReceived)} color="text-emerald-400" bg="bg-emerald-500/5 border-emerald-500/20" icon={CheckCircle2} />
+                    <StatCard label="Outstanding" value={formatINR(stats.totalBalance)} sub={`${stats.pendingCount} pending`} color="text-red-400" bg="bg-red-500/5 border-red-500/20" icon={Clock} />
+                    <StatCard label="Total Profit" value={formatINR(stats.totalProfit)} color={stats.totalProfit >= 0 ? "text-emerald-400" : "text-red-400"} bg={stats.totalProfit >= 0 ? "bg-emerald-500/5 border-emerald-500/20" : "bg-red-500/5 border-red-500/20"} icon={stats.totalProfit >= 0 ? TrendingUp : TrendingDown} />
                 </div>
             )}
 
@@ -280,7 +298,7 @@ const SalesList = ({ initialData }: SalesListProps) => {
                     <AlertTriangle className="h-4 w-4 shrink-0 text-orange-400" />
                     <p className="text-sm text-orange-300">
                         <strong>{stats.pendingCount}</strong> sale{stats.pendingCount !== 1 ? "s" : ""} with outstanding balance.
-                        Outstanding amount: <strong className="text-orange-400">{formatCurrency(stats.totalBalance)}</strong>
+                        Outstanding amount: <strong className="text-orange-400">{formatINR(stats.totalBalance)}</strong>
                     </p>
                 </div>
             )}
@@ -463,13 +481,13 @@ const SalesList = ({ initialData }: SalesListProps) => {
                                         <div className="flex items-end justify-between mb-4">
                                             <div>
                                                 <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Sold Price</p>
-                                                <p className="text-xl font-bold text-foreground tabular-nums leading-none tracking-tight">{formatCurrency(r.soldPrice)}</p>
+                                                <p className="text-xl font-mono font-bold text-foreground tabular-nums whitespace-nowrap leading-none tracking-tight">{formatINR(r.soldPrice)}</p>
                                             </div>
                                             <div className="text-right">
                                                 <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Profit/Loss</p>
                                                 <span className={cn("inline-flex items-center justify-end gap-1 font-bold text-base tabular-nums leading-none", isProfit ? "text-emerald-500" : "text-red-500")}>
                                                     {isProfit ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-                                                    {isProfit ? "+" : ""}{formatCurrency(r.profitLoss)}
+                                                    {isProfit ? "+" : ""}{formatINR(r.profitLoss)}
                                                 </span>
                                             </div>
                                         </div>
@@ -477,8 +495,8 @@ const SalesList = ({ initialData }: SalesListProps) => {
                                         {/* Progress Bar & Balances */}
                                         <div>
                                             <div className="flex justify-between text-[11px] font-bold mb-1.5">
-                                                <span className="text-emerald-500">Recv: {formatCurrency(r.receivedAmount)}</span>
-                                                <span className={r.balanceAmount > 0 ? "text-red-500" : "text-emerald-500"}>Bal: {formatCurrency(r.balanceAmount)}</span>
+                                                <span className="text-emerald-500">Recv: {formatINR(r.receivedAmount)}</span>
+                                                <span className={r.balanceAmount > 0 ? "text-red-500" : "text-emerald-500"}>Bal: {formatINR(r.balanceAmount)}</span>
                                             </div>
                                             <div className="relative h-1.5 w-full rounded-full bg-muted/80 overflow-hidden">
                                                 <div 
@@ -565,21 +583,21 @@ const SalesList = ({ initialData }: SalesListProps) => {
                                                 <p className="text-sm text-foreground">{r.soldTo}</p>
                                                 {r.soldToPhone && <p className="text-[11px] text-muted-foreground">{r.soldToPhone}</p>}
                                             </td>
-                                            <td className="px-4 py-3 text-right font-semibold text-foreground whitespace-nowrap">
-                                                {formatCurrency(r.soldPrice)}
+                                            <td className="px-4 py-3 text-right font-semibold text-foreground whitespace-nowrap font-mono">
+                                                {formatINR(r.soldPrice)}
                                             </td>
-                                            <td className="px-4 py-3 text-right text-emerald-400 font-semibold whitespace-nowrap">
-                                                {formatCurrency(r.receivedAmount)}
+                                            <td className="px-4 py-3 text-right text-emerald-400 font-semibold whitespace-nowrap font-mono">
+                                                {formatINR(r.receivedAmount)}
                                             </td>
                                             <td className="px-4 py-3 text-right whitespace-nowrap">
                                                 <span className={cn("font-semibold", r.balanceAmount > 0 ? "text-red-400" : "text-emerald-400")}>
-                                                    {formatCurrency(r.balanceAmount)}
+                                                    {formatINR(r.balanceAmount)}
                                                 </span>
                                             </td>
                                             <td className="px-4 py-3 text-right whitespace-nowrap">
                                                 <span className={cn("flex items-center justify-end gap-1 text-xs font-semibold", isProfit ? "text-emerald-400" : "text-red-400")}>
                                                     {isProfit ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                                                    {isProfit ? "+" : ""}{formatCurrency(r.profitLoss)}
+                                                    {isProfit ? "+" : ""}{formatINR(r.profitLoss)}
                                                 </span>
                                                 <p className="text-[10px] text-muted-foreground text-right">{r.profitLossPercentage.toFixed(1)}%</p>
                                             </td>

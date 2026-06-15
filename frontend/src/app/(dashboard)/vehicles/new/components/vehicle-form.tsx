@@ -139,7 +139,7 @@ const VehicleForm = () => {
 
     const nextStep = async () => {
         const fieldsToValidate: (keyof FormData)[][] = [
-            ["vehicleType", "make", "model", "registrationNo", "purchasedFrom"],
+            ["vehicleType", "make", "model", "registrationNo"],
             ["datePurchased", "purchasePrice"],
             [],
         ];
@@ -346,7 +346,7 @@ const VehicleForm = () => {
                                     )} />
                                     <FormField control={form.control} name="purchasedFrom" render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel className="font-semibold text-foreground">Purchased From <span className="text-destructive">*</span></FormLabel>
+                                            <FormLabel className="font-semibold text-foreground">Purchased From</FormLabel>
                                             <FormControl><Input placeholder="Seller name" className="h-10 bg-muted/50 border-border" {...field} /></FormControl>
                                             <FormMessage />
                                         </FormItem>

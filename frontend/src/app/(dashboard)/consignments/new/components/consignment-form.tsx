@@ -401,7 +401,7 @@ export const ConsignmentForm = () => {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <FormField control={form.control} name="previousOwner" render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel className="text-xs font-semibold">{saleType === "park_sale" ? "Owner Name" : "Previous Owner"} *</FormLabel>
+                                            <FormLabel className="text-xs font-semibold">{saleType === "park_sale" ? "Owner Name" : "Previous Owner"}</FormLabel>
                                             <FormControl><Input placeholder="Name" className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl>
                                             <FormMessage />
                                         </FormItem>
@@ -657,7 +657,7 @@ export const ConsignmentForm = () => {
                                 onClick={async () => {
                                     // Validate step 0 fields before moving to step 1
                                     if (step === 0) {
-                                        const ok = await form.trigger(["make", "model", "registrationNo", "previousOwner", "dateReceived"]);
+                                        const ok = await form.trigger(["make", "model", "registrationNo", "dateReceived"]);
                                         if (!ok) return;
                                     }
                                     setStep(s => s + 1);

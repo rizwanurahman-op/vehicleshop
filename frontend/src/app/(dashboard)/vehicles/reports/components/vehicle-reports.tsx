@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import axios from "@config/axios";
-import { formatCurrency } from "@lib/currency";
+import { formatINR } from "@lib/currency";
 import { cn } from "@/lib/utils";
 import { TrendingUp, TrendingDown, Package, DollarSign, BarChart3, AlertTriangle, ShoppingCart, ExternalLink, Calendar, X, Download, FileText, FileSpreadsheet, Loader2, ChevronDown, Filter } from "lucide-react";
 import Link from "next/link";
@@ -132,13 +132,27 @@ const VehicleReports = () => {
         return pending.filter((v) => v.saleStatus && ["balance_pending", "noc_pending", "noc_cash_pending"].includes(v.saleStatus));
     }, [pending]);
 
+    const statSizeClass = (val: string): string => {
+        const len = val.length;
+        if (len <= 5)  return "text-xl";
+        if (len <= 9)  return "text-lg";
+        if (len <= 12) return "text-base";
+        if (len <= 15) return "text-sm";
+        return "text-xs";
+    };
+
     const StatCard = ({ label, value, sub, color, icon: Icon }: { label: string; value: string; sub?: string; color?: string; icon?: React.ComponentType<{ className?: string }> }) => (
         <div className="rounded-xl border border-border bg-card p-4">
             <div className="flex items-center justify-between mb-2">
                 <p className="text-[11px] text-muted-foreground uppercase tracking-widest font-semibold">{label}</p>
-                {Icon && <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-muted/50"><Icon className="h-3.5 w-3.5 text-muted-foreground" /></div>}
+                {Icon && <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-muted/50 shrink-0"><Icon className="h-3.5 w-3.5 text-muted-foreground" /></div>}
             </div>
-            <p className={cn("text-xl font-bold", color || "text-foreground")}>{value}</p>
+            <p
+                title={value}
+                className={cn("font-mono font-bold tabular-nums whitespace-nowrap overflow-hidden leading-tight", statSizeClass(value), color || "text-foreground")}
+            >
+                {value}
+            </p>
             {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
         </div>
     );
@@ -242,9 +256,9 @@ const VehicleReports = () => {
                 ) : (
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                         <StatCard label="Total Vehicles" value={combined?.total?.toString() || "0"} sub={`${combined?.inStock || 0} in stock`} icon={Package} />
-                        <StatCard label="Total Invested" value={formatCurrency(combined?.totalInvested || 0)} sub="All purchases + costs" icon={DollarSign} />
-                        <StatCard label="Total Revenue" value={formatCurrency(combined?.totalRevenue || 0)} sub={`${(combined?.sold || 0) + (combined?.soldPending || 0)} sold`} icon={TrendingUp} color="text-emerald-400" />
-                        <StatCard label="Net Profit" value={formatCurrency(combined?.netProfit || 0)} sub={`${(combined?.avgMargin || 0).toFixed(1)}% margin (sold only)`} icon={BarChart3} color={(combined?.netProfit || 0) >= 0 ? "text-emerald-400" : "text-red-400"} />
+                        <StatCard label="Total Invested" value={formatINR(combined?.totalInvested || 0)} sub="All purchases + costs" icon={DollarSign} />
+                        <StatCard label="Total Revenue" value={formatINR(combined?.totalRevenue || 0)} sub={`${(combined?.sold || 0) + (combined?.soldPending || 0)} sold`} icon={TrendingUp} color="text-emerald-400" />
+                        <StatCard label="Net Profit" value={formatINR(combined?.netProfit || 0)} sub={`${(combined?.avgMargin || 0).toFixed(1)}% margin (sold only)`} icon={BarChart3} color={(combined?.netProfit || 0) >= 0 ? "text-emerald-400" : "text-red-400"} />
                     </div>
                 )}
             </div>
@@ -261,10 +275,10 @@ const VehicleReports = () => {
                             {[
                                 { l: "Total", v: (data?.total || 0).toString() },
                                 { l: "In Stock", v: (data?.inStock || 0).toString() },
-                                { l: "Invested", v: formatCurrency(data?.totalInvested || 0) },
-                                { l: "Revenue", v: formatCurrency(data?.totalRevenue || 0) },
-                                { l: "Net Profit", v: formatCurrency(data?.netProfit || 0) },
-                                { l: "Balance Due", v: formatCurrency(data?.totalBalancePending || 0) },
+                                { l: "Invested",   v: formatINR(data?.totalInvested || 0) },
+                                { l: "Revenue",    v: formatINR(data?.totalRevenue || 0) },
+                                { l: "Net Profit", v: formatINR(data?.netProfit || 0) },
+                                { l: "Balance Due",v: formatINR(data?.totalBalancePending || 0) },
                             ].map((row) => (
                                 <div key={row.l}>
                                     <p className="text-xs text-muted-foreground">{row.l}</p>
@@ -284,7 +298,7 @@ const VehicleReports = () => {
                         <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Purchase Payments Due to Sellers</p>
                         {purchaseDueStats && purchaseDueStats.pendingCount > 0 && (
                             <span className="text-xs font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full">
-                                {formatCurrency(purchaseDueStats.totalPending)} pending
+                                {formatINR(purchaseDueStats.totalPending)} pending
                             </span>
                         )}
                     </div>
@@ -321,8 +335,8 @@ const VehicleReports = () => {
                                             <td className="px-4 py-3 text-xs font-mono text-foreground whitespace-nowrap">{v.registrationNo}</td>
                                             <td className="px-4 py-3 text-sm text-foreground whitespace-nowrap">{v.purchasedFrom}</td>
                                             <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{formatDate(v.datePurchased)}</td>
-                                            <td className="px-4 py-3 text-right text-sm font-medium text-foreground whitespace-nowrap">{formatCurrency(v.purchasePrice)}</td>
-                                            <td className="px-4 py-3 text-right text-sm font-bold text-red-400 whitespace-nowrap">{formatCurrency(v.purchasePendingAmount)}</td>
+                                            <td className="px-4 py-3 text-right text-sm font-medium text-foreground whitespace-nowrap font-mono">{formatINR(v.purchasePrice)}</td>
+                                            <td className="px-4 py-3 text-right text-sm font-bold text-red-400 whitespace-nowrap font-mono">{formatINR(v.purchasePendingAmount)}</td>
                                             <td className="px-4 py-3 whitespace-nowrap">
                                                 <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full",
                                                     v.purchasePaymentStatus === "partial" ? "bg-orange-500/15 text-orange-400" : "bg-red-500/15 text-red-400")}>
@@ -376,7 +390,7 @@ const VehicleReports = () => {
                                                     </span>
                                                 ) : "—"}
                                             </td>
-                                            <td className="px-4 py-3 text-sm font-bold text-red-400 whitespace-nowrap">{formatCurrency(v.balanceAmount)}</td>
+                                            <td className="px-4 py-3 text-sm font-bold text-red-400 whitespace-nowrap font-mono">{formatINR(v.balanceAmount)}</td>
                                             <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{v.nocStatus.replace(/_/g, " ")}</td>
                                         </tr>
                                     ))}
@@ -417,12 +431,12 @@ const VehicleReports = () => {
                                                 <td className="px-4 py-3 text-xs font-mono text-foreground whitespace-nowrap">{v.registrationNo}</td>
                                                 <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{v.datePurchased ? new Date(v.datePurchased).toLocaleDateString("en-IN") : "—"}</td>
                                                 <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{v.dateSold ? new Date(v.dateSold).toLocaleDateString("en-IN") : "—"}</td>
-                                                <td className="px-4 py-3 font-medium text-foreground whitespace-nowrap">{formatCurrency(v.totalInvestment)}</td>
-                                                <td className="px-4 py-3 font-medium text-foreground whitespace-nowrap">{formatCurrency(v.soldPrice || 0)}</td>
+                                                <td className="px-4 py-3 font-medium text-foreground whitespace-nowrap font-mono">{formatINR(v.totalInvestment)}</td>
+                                                <td className="px-4 py-3 font-medium text-foreground whitespace-nowrap font-mono">{formatINR(v.soldPrice || 0)}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap">
-                                                    <span className={cn("flex items-center gap-1 font-bold text-sm", isProfit ? "text-emerald-400" : "text-red-400")}>
+                                                    <span className={cn("flex items-center gap-1 font-bold font-mono text-sm", isProfit ? "text-emerald-400" : "text-red-400")}>
                                                         {isProfit ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                                                        {isProfit ? "+" : ""}{formatCurrency(v.profitLoss)}
+                                                        {isProfit ? "+" : ""}{formatINR(v.profitLoss)}
                                                     </span>
                                                 </td>
                                                 <td className="px-4 py-3 whitespace-nowrap">

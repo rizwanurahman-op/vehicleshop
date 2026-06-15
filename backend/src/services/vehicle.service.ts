@@ -32,7 +32,7 @@ export const createVehicle = async (data: Partial<IVehicle>): Promise<IVehicle> 
     const vehicleId = await getNextId("vehicle");
     const vehicle = new Vehicle({ ...data, vehicleId });
     await vehicle.save();
-    vehicle.activityLog.push({ action: "created", description: `Vehicle ${vehicle.make} ${vehicle.model} (${vehicle.registrationNo}) purchased from ${vehicle.purchasedFrom}`, date: new Date() });
+    vehicle.activityLog.push({ action: "created", description: `Vehicle ${vehicle.make} ${vehicle.model} (${vehicle.registrationNo}) purchased${vehicle.purchasedFrom ? ` from ${vehicle.purchasedFrom}` : ""}`, date: new Date() });
     await vehicle.save();
     return vehicle;
 };
@@ -229,21 +229,21 @@ export const getVehicleStats = async (filter?: VehicleStatsFilter): Promise<unkn
 };
 
 // ── Sale Management ──────────────────────────────────────────────
-export const recordSale = async (id: string, data: { dateSold: string; soldPrice: number; soldTo: string; soldToPhone?: string; nocStatus?: string; remarks?: string }) => {
+export const recordSale = async (id: string, data: { dateSold: string; soldPrice: number; soldTo?: string; soldToPhone?: string; nocStatus?: string; remarks?: string }) => {
     if (!mongoose.Types.ObjectId.isValid(id)) return null;
     const vehicle = await Vehicle.findOne({ _id: id, isActive: true });
     if (!vehicle) return null;
 
     vehicle.dateSold = new Date(data.dateSold);
     vehicle.soldPrice = data.soldPrice;
-    vehicle.soldTo = data.soldTo;
+    if (data.soldTo) vehicle.soldTo = data.soldTo;
     if (data.soldToPhone) vehicle.soldToPhone = data.soldToPhone;
     if (data.nocStatus) vehicle.nocStatus = data.nocStatus as IVehicle["nocStatus"];
     if (data.remarks) vehicle.remarks = data.remarks;
 
     vehicle.activityLog.push({
         action: "sold",
-        description: `Sold to ${data.soldTo} for ₹${data.soldPrice.toLocaleString("en-IN")}`,
+        description: `Sold to ${data.soldTo || "a buyer"} for ₹${data.soldPrice.toLocaleString("en-IN")}`,
         amount: data.soldPrice,
         date: new Date(),
     });

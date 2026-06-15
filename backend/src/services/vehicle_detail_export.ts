@@ -250,7 +250,7 @@ export const exportVehicleDetailPDF = async (id: string): Promise<Buffer | null>
         let rightY = y;
         rightY = sectionBar("PURCHASE INFORMATION", "", rightY);
         const pRows: [string, string, boolean?][] = [
-            ["Purchased From", v.purchasedFrom, true],
+            ["Purchased From", v.purchasedFrom ?? "—", true],
             ["Seller Phone", (v as any).purchasedFromPhone ?? "—"],
             ["Date Purchased", dFmt(v.datePurchased)],
             ["Purchase Price", dINR(v.purchasePrice), true],

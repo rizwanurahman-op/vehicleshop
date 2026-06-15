@@ -123,7 +123,7 @@ const RecordSaleDialog = ({ vehicle }: { vehicle: IVehicle }) => {
                                 </div>
                                 <FormField control={form.control} name="soldTo" render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel className="font-semibold text-foreground text-xs">Buyer Name <span className="text-destructive">*</span></FormLabel>
+                                        <FormLabel className="font-semibold text-foreground text-xs">Buyer Name <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
                                         <FormControl><Input placeholder="Buyer's name" className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl>
                                         <FormMessage />
                                     </FormItem>
@@ -590,7 +590,7 @@ const EditBasicInfoDialog = ({ vehicle }: { vehicle: IVehicle }) => {
         color: vehicle.color ?? "",
         engineNo: vehicle.engineNo ?? "",
         chassisNo: vehicle.chassisNo ?? "",
-        purchasedFrom: vehicle.purchasedFrom,
+        purchasedFrom: vehicle.purchasedFrom ?? "",
         purchasedFromPhone: vehicle.purchasedFromPhone ?? "",
         datePurchased: toDateStr(vehicle.datePurchased),
         purchasePrice: vehicle.purchasePrice,
@@ -609,7 +609,7 @@ const EditBasicInfoDialog = ({ vehicle }: { vehicle: IVehicle }) => {
     const { mutate, isPending } = useMutation({
         mutationFn: async (values: z.infer<typeof editBasicInfoSchema>) => {
             setTid(toast.loading("Saving changes..."));
-            return axios.put(`/vehicles/${vehicle._id}`, values);
+            return axios.patch(`/vehicles/${vehicle._id}`, values);
         },
         onSuccess: () => {
             toast.success("Vehicle updated!", { id: tid });
@@ -713,7 +713,7 @@ const EditBasicInfoDialog = ({ vehicle }: { vehicle: IVehicle }) => {
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Purchase Information</p>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <FormField control={form.control} name="purchasedFrom" render={({ field }) => (
-                                        <FormItem><FormLabel className="text-xs font-semibold">Seller Name *</FormLabel>
+                                        <FormItem><FormLabel className="text-xs font-semibold">Seller Name</FormLabel>
                                             <FormControl><Input className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl><FormMessage /></FormItem>
                                     )} />
                                     <FormField control={form.control} name="purchasedFromPhone" render={({ field }) => (
@@ -1225,7 +1225,7 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                                 <h1 className="text-xl sm:text-2xl font-bold text-foreground leading-tight">{vehicle.make} {vehicle.model}</h1>
                                 <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                                     <span className="font-mono bg-muted/50 px-1.5 py-0.5 rounded text-[10px] sm:text-xs mr-2">{vehicle.registrationNo}</span>
-                                    Purchased {formatDate(vehicle.datePurchased)} from <strong className="text-foreground">{vehicle.purchasedFrom}</strong>
+                                    Purchased {formatDate(vehicle.datePurchased)}{vehicle.purchasedFrom ? <> from <strong className="text-foreground">{vehicle.purchasedFrom}</strong></> : ""}
                                 </p>
                             </div>
                         </div>
@@ -1283,7 +1283,7 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                     {[
                         { label: "Purchase Price", value: formatCurrency(vehicle.purchasePrice), sub: "Original cost" },
                         { label: "Total Investment", value: formatCurrency(vehicle.totalInvestment), sub: "Incl. reconditioning" },
-                        { label: isSold ? "Sold Price" : "Status", value: isSold ? formatCurrency(vehicle.soldPrice!) : vehicle.status.replace("_", " "), sub: isSold ? `To: ${vehicle.soldTo}` : "Current status" },
+                        { label: isSold ? "Sold Price" : "Status", value: isSold ? formatCurrency(vehicle.soldPrice!) : vehicle.status.replace("_", " "), sub: isSold ? (vehicle.soldTo ? `To: ${vehicle.soldTo}` : "Buyer not recorded") : "Current status" },
                         {
                             label: isSold ? "Profit / Loss" : "P&L (Unrealized)",
                             value: formatCurrency(Math.abs(pl)),
@@ -1461,6 +1461,8 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                             { label: "Color", value: vehicle.color || "—" },
                             { label: "Engine No", value: vehicle.engineNo || "—" },
                             { label: "Chassis No", value: vehicle.chassisNo || "—" },
+                            { label: "Purchased From", value: vehicle.purchasedFrom || "—" },
+                            { label: "Seller Phone", value: vehicle.purchasedFromPhone || "—" },
                         ].map((r) => (
                             <div key={r.label} className="flex justify-between text-sm border-b border-border/50 pb-2 last:border-0 last:pb-0">
                                 <span className="text-muted-foreground">{r.label}</span>

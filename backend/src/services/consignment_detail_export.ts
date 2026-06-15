@@ -54,7 +54,7 @@ export const exportConsignmentDetailCSV = async (id: string): Promise<string | n
         row("Engine No", (v as any).engineNo ?? ""),
         row("Chassis No", (v as any).chassisNo ?? ""),
         "",
-        row("Previous Owner", v.previousOwner),
+        row("Previous Owner", v.previousOwner ?? ""),
         row("Owner Phone", (v as any).previousOwnerPhone ?? ""),
         ...(v.financeCompany ? [row("Finance Company", v.financeCompany)] : []),
         row("Date Received", dFmt(v.dateReceived)),
@@ -205,7 +205,7 @@ export const exportConsignmentDetailPDF = async (id: string): Promise<Buffer | n
             doc.fontSize(8).font("Helvetica-Bold").fillColor(sColor)
                .text(safe(dSl(v.status)), PW - MG - 83, y + 21, { lineBreak: false });
             doc.fontSize(7).font("Helvetica").fillColor(C.muted)
-               .text(safe(`Owner: ${v.previousOwner}   |   Received: ${dFmt(v.dateReceived)}`), MG + 12, y + 52, { lineBreak: false });
+               .text(safe(`Owner: ${v.previousOwner ?? "-"}   |   Received: ${dFmt(v.dateReceived)}`), MG + 12, y + 52, { lineBreak: false });
             y += 70;
 
             // â”€â”€ METRICS ROW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

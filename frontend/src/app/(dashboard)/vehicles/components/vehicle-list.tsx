@@ -6,7 +6,7 @@ import { getClientSession } from "@/lib/auth";
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { formatCurrency } from "@lib/currency";
+import { formatINR } from "@lib/currency";
 import { formatDate } from "@lib/date";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -406,7 +406,7 @@ const VehicleList = ({ initialData }: VehicleListProps) => {
                                         
                                         <div className="flex flex-wrap items-center gap-1.5">
                                             <div className="inline-flex items-center gap-1.5 rounded-lg bg-muted/40 px-2 py-1 border border-border/50">
-                                                <span className="text-[10px] font-medium text-muted-foreground">From: <span className="text-foreground truncate max-w-[100px] inline-block align-bottom">{v.purchasedFrom}</span></span>
+                                                <span className="text-[10px] font-medium text-muted-foreground">From: <span className="text-foreground truncate max-w-[100px] inline-block align-bottom">{v.purchasedFrom || "—"}</span></span>
                                             </div>
                                             {v.saleStatus && <VehicleStatusBadge saleStatus={v.saleStatus} />}
                                             {v.isExchange && (
@@ -427,7 +427,7 @@ const VehicleList = ({ initialData }: VehicleListProps) => {
                                         <div className="flex items-end justify-between">
                                             <div>
                                                 <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Total Invested</p>
-                                                <p className="text-xl font-bold text-foreground tabular-nums leading-none tracking-tight">{formatCurrency(v.totalInvestment)}</p>
+                                                <p className="text-xl font-mono font-bold text-foreground tabular-nums whitespace-nowrap leading-none tracking-tight">{formatINR(v.totalInvestment)}</p>
                                             </div>
                                             <div className="text-right">
                                                 {isSold ? (
@@ -435,7 +435,7 @@ const VehicleList = ({ initialData }: VehicleListProps) => {
                                                         <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Profit/Loss</p>
                                                         <span className={cn("inline-flex items-center justify-end gap-1 font-bold text-base tabular-nums leading-none", isProfit ? "text-emerald-500" : "text-red-500")}>
                                                             {isProfit ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-                                                            {isProfit ? "+" : ""}{formatCurrency(pl)}
+                                                            {isProfit ? "+" : ""}{formatINR(pl)}
                                                         </span>
                                                     </>
                                                 ) : (
@@ -509,7 +509,7 @@ const VehicleList = ({ initialData }: VehicleListProps) => {
                                             <td className="px-4 py-3">
                                                 <div>
                                                     <p className="font-semibold text-foreground">{v.make} {v.model}</p>
-                                                    <p className="text-[11px] text-muted-foreground">{v.vehicleId} • from {v.purchasedFrom}</p>
+                                                    <p className="text-[11px] text-muted-foreground">{v.vehicleId}{v.purchasedFrom ? ` • from ${v.purchasedFrom}` : ""}</p>
                                                 </div>
                                             </td>
                                             <td className="px-4 py-3">
@@ -518,13 +518,13 @@ const VehicleList = ({ initialData }: VehicleListProps) => {
                                                 </span>
                                             </td>
                                             <td className="px-4 py-3 text-right font-semibold text-foreground">
-                                                {formatCurrency(v.totalInvestment)}
+                                                {formatINR(v.totalInvestment)}
                                             </td>
                                             <td className="px-4 py-3 text-right">
                                                 {isSold ? (
                                                     <span className={cn("flex items-center justify-end gap-1 font-semibold text-xs", isProfit ? "text-emerald-400" : "text-red-400")}>
                                                         {isProfit ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                                                        {isProfit ? "+" : ""}{formatCurrency(pl)}
+                                                        {isProfit ? "+" : ""}{formatINR(pl)}
                                                     </span>
                                                 ) : (
                                                     <span className="text-xs text-muted-foreground italic">Unrealized</span>

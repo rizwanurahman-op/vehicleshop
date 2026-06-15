@@ -45,8 +45,21 @@ const LoginForm = () => {
             router.push(callbackUrl);
             router.refresh();
         } catch (error: unknown) {
-            const errorData = (error as AxiosError)?.response?.data as ErrorData;
-            toast.error("Login failed", { id: toastId, description: errorData?.message || "Invalid credentials" });
+            const axiosErr = error as AxiosError;
+            const errorData = axiosErr?.response?.data as ErrorData;
+            const status = axiosErr?.response?.status;
+
+            if (status === 429) {
+                toast.error("Too many attempts", {
+                    id: toastId,
+                    description: errorData?.message || "Please wait a few minutes before trying again.",
+                });
+            } else {
+                toast.error("Login failed", {
+                    id: toastId,
+                    description: errorData?.message || "Invalid credentials. Please check your username and password.",
+                });
+            }
         } finally {
             setIsLoading(false);
         }

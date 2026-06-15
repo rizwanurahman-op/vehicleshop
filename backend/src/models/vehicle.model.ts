@@ -10,7 +10,7 @@ export interface IVehicle extends Omit<Document, 'model'> {
     color?: string;
     engineNo?: string;
     chassisNo?: string;
-    purchasedFrom: string;
+    purchasedFrom?: string;
     purchasedFromPhone?: string;
     datePurchased: Date;
     purchasePrice: number;
@@ -153,11 +153,11 @@ const VehicleSchema = new Schema<IVehicle>({
     make: { type: String, required: true, trim: true },
     model: { type: String, required: true, trim: true },
     year: { type: Number, default: null },
-    registrationNo: { type: String, required: true, unique: true, trim: true, uppercase: true },
+    registrationNo: { type: String, required: true, trim: true, uppercase: true },
     color: String,
     engineNo: String,
     chassisNo: String,
-    purchasedFrom: { type: String, required: true, trim: true },
+    purchasedFrom: { type: String, trim: true },
     purchasedFromPhone: String,
     datePurchased: { type: Date, required: true },
     purchasePrice: { type: Number, required: true, min: 0 },
@@ -217,6 +217,12 @@ VehicleSchema.index({ vehicleType: 1, status: 1 });
 VehicleSchema.index({ fundingSource: 1 });
 VehicleSchema.index({ nocStatus: 1 });
 VehicleSchema.index({ purchasedFrom: "text", soldTo: "text", make: "text", model: "text", registrationNo: "text" });
+// Partial unique index: only active vehicles must have unique registrationNo.
+// This allows re-adding a vehicle with the same reg. number after a soft-delete.
+VehicleSchema.index(
+    { registrationNo: 1 },
+    { unique: true, partialFilterExpression: { isActive: true }, name: "registrationNo_active_unique" }
+);
 
 // Pre-save hook: auto-calculations
 VehicleSchema.pre("save", function (next) {

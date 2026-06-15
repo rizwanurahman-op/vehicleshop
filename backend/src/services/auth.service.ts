@@ -32,6 +32,14 @@ const generateTokens = (userId: string, role: string): TokenPair => {
     return { accessToken, refreshToken };
 };
 
+// Pre-computed dummy hash used to prevent timing-based username enumeration.
+// When login fails because a user does not exist, we still run bcrypt.compare()
+// against this dummy hash so the response time is indistinguishable from a real
+// wrong-password failure. Without this, attackers can enumerate valid usernames
+// by measuring response latency (user-not-found ~2ms vs wrong-password ~100ms).
+// MUST be a valid bcrypt hash of cost 10 so bcrypt.compare() does real work.
+const DUMMY_HASH = "$2a$10$8AhGXgCY9XXlArtwvsJqg.kIPgthEqQc7fAKXlPnwt/vQm7hjiqdW";
+
 const register = async (data: RegisterInput): Promise<{ user: IUser; tokens: TokenPair }> => {
     // Check if any admin exists already
     const existingAdmin = await User.findOne({ role: "admin" });
@@ -46,7 +54,9 @@ const register = async (data: RegisterInput): Promise<{ user: IUser; tokens: Tok
         throw new ConflictError("Username or email already in use");
     }
 
-    const passwordHash = await bcrypt.hash(data.password, 12);
+    // Use rounds=10 (OWASP recommended minimum). Rounds=12 is ~800ms on low-power
+    // servers (free Render dyno), causing noticeable login delays. 10 rounds ~100ms.
+    const passwordHash = await bcrypt.hash(data.password, 10);
     const user = await User.create({
         username: data.username.toLowerCase(),
         email: data.email.toLowerCase(),
@@ -55,26 +65,28 @@ const register = async (data: RegisterInput): Promise<{ user: IUser; tokens: Tok
     });
 
     const tokens = generateTokens(user._id.toString(), user.role);
-    // Reload with +refreshToken since it's select:false — we need to set it
-    const userWithToken = await User.findById(user._id).select("+refreshToken");
-    userWithToken!.refreshToken = tokens.refreshToken;
-    await userWithToken!.save();
+    // Use updateOne — avoids a redundant findById round-trip and runs no validators
+    await User.updateOne({ _id: user._id }, { $set: { refreshToken: tokens.refreshToken } });
 
-    return { user: userWithToken!, tokens };
+    return { user, tokens };
 };
 
 const login = async (data: LoginInput): Promise<{ user: IUser; tokens: TokenPair }> => {
     const user = await User.findOne({
         $or: [{ username: data.usernameOrEmail.toLowerCase() }, { email: data.usernameOrEmail.toLowerCase() }],
     }).select("+passwordHash +refreshToken"); // Explicitly select sensitive fields needed for auth
-    if (!user) throw new UnauthorizedError("Invalid credentials");
 
-    const isValid = await user.comparePassword(data.password);
-    if (!isValid) throw new UnauthorizedError("Invalid credentials");
+    // SECURITY: Always run bcrypt.compare() even when user not found.
+    // This ensures response time is constant regardless of whether the username
+    // exists, preventing timing-based username enumeration attacks.
+    const passwordToCheck = user ? (user.passwordHash || DUMMY_HASH) : DUMMY_HASH;
+    const isValid = await bcrypt.compare(data.password, passwordToCheck);
+
+    if (!user || !isValid) throw new UnauthorizedError("Invalid credentials");
 
     const tokens = generateTokens(user._id.toString(), user.role);
-    user.refreshToken = tokens.refreshToken;
-    await user.save();
+    // Use updateOne instead of user.save() — avoids full validator pass and is atomic
+    await User.updateOne({ _id: user._id }, { $set: { refreshToken: tokens.refreshToken } });
 
     return { user, tokens };
 };
@@ -154,8 +166,9 @@ const changePassword = async (userId: string, data: ChangePasswordInput): Promis
     const isValid = await user.comparePassword(data.currentPassword);
     if (!isValid) throw new UnauthorizedError("Current password is incorrect");
 
-    user.passwordHash = await bcrypt.hash(data.newPassword, 12);
-    await user.save();
+    const newHash = await bcrypt.hash(data.newPassword, 10);
+    // Use updateOne — avoids running full validators on the user document
+    await User.updateOne({ _id: user._id }, { $set: { passwordHash: newHash } });
 };
 
 /**
@@ -218,7 +231,7 @@ const resetPassword = async (data: ResetPasswordInput): Promise<void> => {
         throw new ApiError(400, "Password reset token is invalid or has expired");
     }
 
-    user.passwordHash = await bcrypt.hash(data.newPassword, 12);
+    user.passwordHash = await bcrypt.hash(data.newPassword, 10);
     user.passwordResetToken = null;
     user.passwordResetExpires = null;
     // Invalidate any existing sessions

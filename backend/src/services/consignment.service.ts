@@ -74,7 +74,7 @@ export const createConsignment = async (data: Partial<IConsignmentVehicle>): Pro
     await vehicle.save();
     vehicle.activityLog.push({
         action: "created",
-        description: `${data.saleType === "park_sale" ? "Park Sale" : "Finance Sale"} registered: ${data.make} ${data.model} (${data.registrationNo}) from ${data.previousOwner}`,
+        description: `${data.saleType === "park_sale" ? "Park Sale" : "Finance Sale"} registered: ${data.make} ${data.model} (${data.registrationNo})${data.previousOwner ? ` from ${data.previousOwner}` : ""}`,
         date: new Date(),
     });
     await vehicle.save();
@@ -143,7 +143,7 @@ export const returnConsignment = async (id: string, notes?: string): Promise<ICo
     const vehicle = await ConsignmentVehicle.findOne({ _id: id, isActive: true });
     if (!vehicle) return null;
     vehicle.status = "returned";
-    vehicle.activityLog.push({ action: "returned", description: `Vehicle returned to ${vehicle.previousOwner}${notes ? `: ${notes}` : ""}`, date: new Date() });
+    vehicle.activityLog.push({ action: "returned", description: `Vehicle returned${vehicle.previousOwner ? ` to ${vehicle.previousOwner}` : ""}${notes ? `: ${notes}` : ""}`, date: new Date() });
     await vehicle.save();
     return vehicle;
 };
@@ -313,18 +313,18 @@ export const deleteCostBreakdownItem = async (id: string, itemId: string): Promi
 
 // ── Sale ──────────────────────────────────────────────────────────
 
-export const recordSale = async (id: string, data: { dateSold: string; soldPrice: number; soldTo: string; soldToPhone?: string; remarks?: string }): Promise<IConsignmentVehicle | null> => {
+export const recordSale = async (id: string, data: { dateSold: string; soldPrice: number; soldTo?: string; soldToPhone?: string; remarks?: string }): Promise<IConsignmentVehicle | null> => {
     if (!mongoose.Types.ObjectId.isValid(id)) return null;
     const vehicle = await ConsignmentVehicle.findOne({ _id: id, isActive: true });
     if (!vehicle) return null;
 
     vehicle.dateSold = new Date(data.dateSold);
     vehicle.soldPrice = data.soldPrice;
-    vehicle.soldTo = data.soldTo;
+    if (data.soldTo) vehicle.soldTo = data.soldTo;
     if (data.soldToPhone) vehicle.soldToPhone = data.soldToPhone;
     if (data.remarks) vehicle.remarks = data.remarks;
 
-    vehicle.activityLog.push({ action: "sold", description: `Sold to ${data.soldTo} for ₹${data.soldPrice.toLocaleString("en-IN")}`, amount: data.soldPrice, date: new Date() });
+    vehicle.activityLog.push({ action: "sold", description: `Sold to ${data.soldTo || "a buyer"} for ₹${data.soldPrice.toLocaleString("en-IN")}`, amount: data.soldPrice, date: new Date() });
     await vehicle.save();
     return vehicle;
 };

@@ -259,7 +259,7 @@ export const exportPurchasesPDF = async (query: PurchaseExportQuery): Promise<Bu
                     [v.vehicleType === "two_wheeler" ? "Two Wheeler" : "Four Wheeler", "6.5", "left"],
                     [`${v.make} ${v.model}`, "6.5", "left"],
                     [v.registrationNo, "6.5", "left"],
-                    [v.purchasedFrom, "6.5", "left"],
+                    [v.purchasedFrom ?? "—", "6.5", "left"],
                     [dFmt(v.datePurchased), "6", "left"],
                     [dINR(v.purchasePrice), "6.5", "right"],
                     [dINR(paid), "6.5", "right", C.green],

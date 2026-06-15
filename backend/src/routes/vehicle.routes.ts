@@ -26,6 +26,7 @@ router.post("/", isAdmin, writeLimiter, asyncHandler(vc.createVehicle));
 router.get("/lookup", asyncHandler(vc.lookupVehicles));   // must be BEFORE /:id
 router.get("/:id", asyncHandler(vc.getVehicle));
 router.patch("/:id", isAdmin, writeLimiter, asyncHandler(vc.updateVehicle));
+router.put("/:id", isAdmin, writeLimiter, asyncHandler(vc.updateVehicle));   // alias for PATCH
 router.delete("/:id", isAdmin, writeLimiter, asyncHandler(vc.deleteVehicle));
 router.get("/:id/export", exportLimiter, asyncHandler(vc.exportVehicleDetail));
 

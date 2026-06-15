@@ -14,7 +14,7 @@ export const editConsignmentSchema = z.object({
     engineNo: z.string().optional(),
     chassisNo: z.string().optional(),
     // Owner / source info
-    previousOwner: z.string().min(1, "Owner name is required"),
+    previousOwner: z.string().optional(),
     previousOwnerPhone: z.string().optional(),
     financeCompany: z.string().optional(),
     dateReceived: z.string().min(1, "Date received is required"),
@@ -36,7 +36,7 @@ export const createConsignmentSchema = z.object({
     color: z.string().optional(),
     engineNo: z.string().optional(),
     chassisNo: z.string().optional(),
-    previousOwner: z.string().min(1, "Owner name is required"),
+    previousOwner: z.string().optional(),
     previousOwnerPhone: z.string().optional(),
     sourceType: z.enum(["friend", "customer", "agent", "owner", "other"]).default("owner"),
     sourceNotes: z.string().optional(),
@@ -70,7 +70,7 @@ export const createConsignmentSchema = z.object({
 export const recordConsignmentSaleSchema = z.object({
     dateSold: z.string().min(1, "Sale date is required"),
     soldPrice: z.number().min(0, "Sold price is required"),
-    soldTo: z.string().min(1, "Buyer name is required"),
+    soldTo: z.string().optional(),
     soldToPhone: z.string().optional(),
     remarks: z.string().optional(),
 });

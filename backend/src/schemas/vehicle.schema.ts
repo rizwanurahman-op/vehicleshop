@@ -42,7 +42,7 @@ export const updateVehicleSchema = createVehicleSchema.partial();
 export const recordSaleSchema = z.object({
     dateSold: z.string().min(1, { message: "Sale date is required" }),
     soldPrice: z.number().min(0, { message: "Sold price must be ≥ 0" }),
-    soldTo: z.string().min(1, { message: "Buyer name is required" }),
+    soldTo: z.string().optional(),
     soldToPhone: z.string().optional(),
     nocStatus: z.enum(["not_applicable", "pending", "received", "submitted", "completed"]).optional(),
     remarks: z.string().optional(),
