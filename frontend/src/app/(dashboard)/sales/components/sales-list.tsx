@@ -81,8 +81,8 @@ const SaleStatusBadge = ({ status }: { status: string }) => {
 // ── Adaptive font size for stat card values ──────────────────────────────────
 const statSizeClass = (val: string): string => {
     const len = val.length;
-    if (len <= 5)  return "text-2xl";
-    if (len <= 8)  return "text-xl";
+    if (len <= 5) return "text-2xl";
+    if (len <= 8) return "text-xl";
     if (len <= 11) return "text-lg";
     if (len <= 14) return "text-base";
     return "text-sm";
@@ -466,7 +466,7 @@ const SalesList = ({ initialData }: SalesListProps) => {
                                                 </Badge>
                                             )}
                                         </div>
-                                        
+
                                         <div className="inline-flex items-center gap-2 rounded-lg bg-muted/40 px-2.5 py-1.5 border border-border/50">
                                             <div className="h-5 w-5 rounded-full bg-muted-foreground/20 flex items-center justify-center shrink-0">
                                                 <User className="h-3 w-3 text-muted-foreground" />
@@ -499,8 +499,8 @@ const SalesList = ({ initialData }: SalesListProps) => {
                                                 <span className={r.balanceAmount > 0 ? "text-red-500" : "text-emerald-500"}>Bal: {formatINR(r.balanceAmount)}</span>
                                             </div>
                                             <div className="relative h-1.5 w-full rounded-full bg-muted/80 overflow-hidden">
-                                                <div 
-                                                    className={cn("absolute top-0 left-0 h-full transition-all duration-700 ease-out", 
+                                                <div
+                                                    className={cn("absolute top-0 left-0 h-full transition-all duration-700 ease-out",
                                                         paidPct >= 100 ? "bg-emerald-500" : paidPct > 0 ? "bg-gradient-to-r from-orange-400 to-emerald-400" : "bg-red-500"
                                                     )}
                                                     style={{ width: `${Math.min(paidPct, 100)}%` }}

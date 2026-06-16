@@ -71,10 +71,13 @@ export const addSalePaymentSchema = z.object({
     financeAmount: z.number().min(0).optional(),
     exchangeDetails: z.string().optional(),
     exchangeVehicleMake: z.string().optional(),
+    exchangeVehicleModel: z.string().optional(),
+    exchangeVehicleYear: z.number().int().min(1950).max(new Date().getFullYear() + 1).nullable().optional(),
+    exchangeVehicleColor: z.string().optional(),
     exchangeVehicleRegNo: z.string().optional(),
     referenceNo: z.string().optional(),
     notes: z.string().optional(),
-    createExchangeAs: z.enum(["phase2_purchase", "phase3_park_sale", "phase3_finance_sale", "skip"]).optional().default("skip"),
+    createExchangeAs: z.enum(["phase2_purchase", "phase3_park_sale", "phase3_finance_sale", "skip"]).optional().default("phase2_purchase"),
     exchangeVehicleType: z.enum(["two_wheeler", "four_wheeler"]).optional(),
 });
 

@@ -183,14 +183,14 @@ export const exportSalesPDF = async (query: SalesExportQuery): Promise<Buffer> =
     allRows.sort((a, b) => (b.dateSold?.getTime() ?? 0) - (a.dateSold?.getTime() ?? 0));
 
     // ── Aggregate stats ──
-    const totalRevenue      = allRows.reduce((s, r) => s + r.soldPrice, 0);
-    const totalReceived     = allRows.reduce((s, r) => s + r.received, 0);
-    const totalBalance      = allRows.reduce((s, r) => s + r.balance, 0);
-    const totalProfit       = allRows.reduce((s, r) => s + r.profit, 0);
-    const pendingCount      = allRows.filter(r => r.balance > 0).length;
-    const exchangeCount     = allRows.filter(r => r.isExchange).length;
-    const purchaseSales     = allRows.filter(r => r.source === "Purchase").length;
-    const consignmentSales  = allRows.filter(r => r.source !== "Purchase").length;
+    const totalRevenue = allRows.reduce((s, r) => s + r.soldPrice, 0);
+    const totalReceived = allRows.reduce((s, r) => s + r.received, 0);
+    const totalBalance = allRows.reduce((s, r) => s + r.balance, 0);
+    const totalProfit = allRows.reduce((s, r) => s + r.profit, 0);
+    const pendingCount = allRows.filter(r => r.balance > 0).length;
+    const exchangeCount = allRows.filter(r => r.isExchange).length;
+    const purchaseSales = allRows.filter(r => r.source === "Purchase").length;
+    const consignmentSales = allRows.filter(r => r.source !== "Purchase").length;
 
     const PDFDocument = (await import("pdfkit")).default;
     return new Promise((resolve, reject) => {
@@ -241,11 +241,11 @@ export const exportSalesPDF = async (query: SalesExportQuery): Promise<Buffer> =
         const summaryY = 56;
         const mW = CW / 5;
         const summaryMetrics = [
-            { label: "TOTAL SALES",     value: allRows.length.toString(),  sub: `${purchaseSales} purchase · ${consignmentSales} consignment`, accent: C.indigo },
-            { label: "TOTAL REVENUE",   value: dINR(totalRevenue),         accent: C.amber  },
-            { label: "AMOUNT RECEIVED", value: dINR(totalReceived),        accent: C.green  },
-            { label: "OUTSTANDING",     value: dINR(totalBalance),         sub: `${pendingCount} pending`, accent: C.red },
-            { label: "TOTAL PROFIT",    value: dINR(totalProfit),          accent: totalProfit >= 0 ? C.green : C.red },
+            { label: "TOTAL SALES", value: allRows.length.toString(), sub: `${purchaseSales} purchase · ${consignmentSales} consignment`, accent: C.indigo },
+            { label: "TOTAL REVENUE", value: dINR(totalRevenue), accent: C.amber },
+            { label: "AMOUNT RECEIVED", value: dINR(totalReceived), accent: C.green },
+            { label: "OUTSTANDING", value: dINR(totalBalance), sub: `${pendingCount} pending`, accent: C.red },
+            { label: "TOTAL PROFIT", value: dINR(totalProfit), accent: totalProfit >= 0 ? C.green : C.red },
         ];
         summaryMetrics.forEach((m, i) => {
             const mx = MG + i * (mW + 1.2);
@@ -265,9 +265,9 @@ export const exportSalesPDF = async (query: SalesExportQuery): Promise<Buffer> =
         const stripY = summaryY + 40;
         const stripH = 18;
         const stripItems = [
-            { label: "Purchase Sales",      value: purchaseSales,     color: C.indigo },
-            { label: "Park / Finance Sales", value: consignmentSales,  color: C.violet },
-            { label: "Exchange Sales",       value: exchangeCount,     color: C.orange },
+            { label: "Purchase Sales", value: purchaseSales, color: C.indigo },
+            { label: "Park / Finance Sales", value: consignmentSales, color: C.violet },
+            { label: "Exchange Sales", value: exchangeCount, color: C.orange },
         ];
         const stripW = CW / 3;
         doc.rect(MG, stripY, CW, stripH).fill("#f1f5f9").strokeColor(C.border).lineWidth(0.3).stroke();
@@ -290,19 +290,19 @@ export const exportSalesPDF = async (query: SalesExportQuery): Promise<Buffer> =
         const tableY = stripY + stripH + 4;
 
         const cols: [string, number, "left" | "right" | "center"][] = [
-            ["#",            18, "center"],
-            ["Ref ID",       46, "left"  ],
-            ["Source",       52, "left"  ],
-            ["Make / Model", 96, "left"  ],
-            ["Reg No",       66, "left"  ],
-            ["Buyer",        78, "left"  ],
-            ["Date Sold",    54, "left"  ],
-            ["Days",         26, "center"],
-            ["Sold Price",   64, "right" ],
-            ["Received",     60, "right" ],
-            ["Balance",      56, "right" ],
-            ["Profit/Loss",  60, "right" ],
-            ["Status",       72, "center"],  // wider — fits "Balance Pending"
+            ["#", 18, "center"],
+            ["Ref ID", 46, "left"],
+            ["Source", 52, "left"],
+            ["Make / Model", 96, "left"],
+            ["Reg No", 66, "left"],
+            ["Buyer", 78, "left"],
+            ["Date Sold", 54, "left"],
+            ["Days", 26, "center"],
+            ["Sold Price", 64, "right"],
+            ["Received", 60, "right"],
+            ["Balance", 56, "right"],
+            ["Profit/Loss", 60, "right"],
+            ["Status", 72, "center"],  // wider — fits "Balance Pending"
         ];
 
         let y = tableY;
@@ -343,11 +343,11 @@ export const exportSalesPDF = async (query: SalesExportQuery): Promise<Buffer> =
 
                 const statusColor = r.status.toLowerCase().includes("fully") ? C.green
                     : r.balance > 0 ? C.red
-                    : C.muted;
+                        : C.muted;
                 const profitColor = r.profit >= 0 ? C.green : C.red;
                 const srcColor = r.source === "Purchase" ? C.indigo
                     : r.source.toLowerCase().includes("park") ? C.violet
-                    : C.slate;
+                        : C.slate;
 
                 // Exchange badge prefix on Ref ID
                 const refLabel = r.isExchange ? `* ${r.refId}` : r.refId;
@@ -355,23 +355,23 @@ export const exportSalesPDF = async (query: SalesExportQuery): Promise<Buffer> =
                 // Abbreviate long status labels so they fit the column
                 const shortStatus = r.status === "Fully Received" ? "Fully Paid"
                     : r.status === "Balance Pending" ? "Bal. Pending"
-                    : r.status === "Noc Pending" ? "NOC Pend."
-                    : r.status;
+                        : r.status === "Noc Pending" ? "NOC Pend."
+                            : r.status;
 
                 const cells: [string, "left" | "right" | "center", string?][] = [
-                    [`${idx + 1}`,                                    "center"],
-                    [refLabel,                                        "left", r.isExchange ? C.orange : C.text],
-                    [r.source,                                        "left",  srcColor],
-                    [`${r.make} ${r.model}`,                          "left"  ],
-                    [r.registrationNo,                                "left"  ],
-                    [r.soldTo,                                        "left"  ],
-                    [dFmt(r.dateSold),                                "left"  ],
-                    [r.daysToSell != null ? `${r.daysToSell}d` : "—","center", C.muted],
-                    [dINR(r.soldPrice),                               "right" ],
-                    [dINR(r.received),                                "right", C.green],
-                    [r.balance > 0 ? dINR(r.balance) : "—",          "right", r.balance > 0 ? C.red : C.muted],
+                    [`${idx + 1}`, "center"],
+                    [refLabel, "left", r.isExchange ? C.orange : C.text],
+                    [r.source, "left", srcColor],
+                    [`${r.make} ${r.model}`, "left"],
+                    [r.registrationNo, "left"],
+                    [r.soldTo, "left"],
+                    [dFmt(r.dateSold), "left"],
+                    [r.daysToSell != null ? `${r.daysToSell}d` : "—", "center", C.muted],
+                    [dINR(r.soldPrice), "right"],
+                    [dINR(r.received), "right", C.green],
+                    [r.balance > 0 ? dINR(r.balance) : "—", "right", r.balance > 0 ? C.red : C.muted],
                     [`${r.profit >= 0 ? "+" : ""}${dINR(r.profit)}`, "right", profitColor],
-                    [shortStatus,                                     "center", statusColor],
+                    [shortStatus, "center", statusColor],
                 ];
 
                 let rx = MG;

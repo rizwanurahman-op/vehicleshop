@@ -36,6 +36,7 @@ import CostsTab from "./costs-tab";
 import { PURCHASE_PAYMENT_MODES, SALE_PAYMENT_METHODS, NOC_STATUSES } from "@data/vehicle-constants";
 import { recordSaleSchema, addPurchasePaymentSchema, addSalePaymentSchema, editBasicInfoSchema } from "@schemas/vehicle";
 import { ExchangeVehiclePicker } from "@/components/exchange-vehicle-picker";
+import { MakeSelect } from "@/components/make-select";
 
 const fetchVehicle = async (id: string): Promise<IVehicle | null> => {
     const res = await axios.get<ApiResponse<IVehicle>>(`/vehicles/${id}`);
@@ -276,6 +277,9 @@ const AddSalePaymentDialog = ({ vehicle }: { vehicle: IVehicle }) => {
             loanRef: "",
             financeAmount: undefined as unknown as number,
             exchangeVehicleMake: "",
+            exchangeVehicleModel: "",
+            exchangeVehicleYear: null as null | number,
+            exchangeVehicleColor: "",
             exchangeVehicleRegNo: "",
             exchangeVehicleType: "two_wheeler" as const,
             exchangeDetails: "",
@@ -334,18 +338,25 @@ const AddSalePaymentDialog = ({ vehicle }: { vehicle: IVehicle }) => {
             } else {
                 payload.createExchangeAs = "skip";
             }
-            return axios.post<ApiResponse<{ vehicle: IVehicle; exchangeVehicle?: { vehicleId?: string; consignmentId?: string; make: string; registrationNo: string; collection: string; message: string } }>>(`/vehicles/${vehicle._id}/sale-payments`, payload);
+            return axios.post<{ success: boolean; statusCode: number; data: IVehicle; exchangeVehicle?: { vehicleId?: string; consignmentId?: string; make: string; registrationNo: string; collection: string; message: string } }>(`/vehicles/${vehicle._id}/sale-payments`, payload);
         },
         onSuccess: (res) => {
-            const ev = res.data?.data?.exchangeVehicle;
+            // Controller returns: { success, data: vehicle, exchangeVehicle: {...} }
+            // exchangeVehicle is a sibling of data, NOT nested inside it
+            const ev = res.data?.exchangeVehicle;
             if (ev) {
-                toast.success(`Payment recorded! Exchange vehicle: ${ev.make} (${ev.registrationNo})`, { id: tid, duration: 6000 });
+                toast.success(
+                    `Payment recorded! Exchange vehicle added to Purchased Inventory: ${ev.make} (${ev.registrationNo})`,
+                    { id: tid, duration: 8000 }
+                );
             } else {
                 toast.success("Payment recorded!", { id: tid });
             }
             queryClient.invalidateQueries({ queryKey: ["vehicle", vehicle._id] });
-            queryClient.invalidateQueries({ queryKey: ["vehicles"] });
+            queryClient.invalidateQueries({ queryKey: ["vehicles"] });  // ← refreshes Purchased Vehicles list
             queryClient.invalidateQueries({ queryKey: ["consignments"] });
+            queryClient.invalidateQueries({ queryKey: ["vehicle-stats"] });
+            queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
             form.reset();
             setPaymentMethod("Cash");
             setOpen(false);
@@ -522,17 +533,35 @@ const AddSalePaymentDialog = ({ vehicle }: { vehicle: IVehicle }) => {
                                         <ArrowLeftRight className="h-3.5 w-3.5 text-orange-400" />
                                         <p className="text-[11px] font-bold text-orange-400 uppercase tracking-widest">Exchange Vehicle Details</p>
                                     </div>
-                                    <ExchangeVehiclePicker
-                                        regNo={form.watch("exchangeVehicleRegNo") ?? ""}
-                                        make={form.watch("exchangeVehicleMake") ?? ""}
-                                        model=""
-                                        vehicleType={form.watch("exchangeVehicleType") ?? "two_wheeler"}
-                                        onChange={(v) => {
-                                            form.setValue("exchangeVehicleRegNo", v.registrationNo);
-                                            form.setValue("exchangeVehicleMake", `${v.make}${v.model ? " " + v.model : ""}`.trim());
-                                            form.setValue("exchangeVehicleType", v.vehicleType);
-                                        }}
-                                    />
+                                    <div className="rounded-lg bg-orange-500/10 border border-orange-400/20 px-3 py-2.5 text-[11px] text-orange-300 space-y-1">
+                                        <p className="font-bold text-orange-300">Buyer&apos;s Vehicle Trade-In</p>
+                                        <p className="text-orange-300/80">The buyer is trading in their own personal vehicle as part or full payment. It is auto-added to your <strong className="text-orange-300">Purchased Vehicles</strong> page with the <strong className="text-orange-300">From Exchange</strong> tag.</p>
+                                    </div>
+                                    {/* Validated form fields for exchange vehicle */}
+                                    <FormField control={form.control} name="exchangeVehicleMake" render={({ field: mField, fieldState }) => (
+                                        <FormItem>
+                                            <ExchangeVehiclePicker
+                                                regNo={form.watch("exchangeVehicleRegNo") ?? ""}
+                                                make={mField.value ?? ""}
+                                                vehicleType={form.watch("exchangeVehicleType") ?? "two_wheeler"}
+                                                onChange={(v) => {
+                                                    form.setValue("exchangeVehicleRegNo", v.registrationNo, { shouldValidate: true });
+                                                    form.setValue("exchangeVehicleMake", v.make, { shouldValidate: true });
+                                                    form.setValue("exchangeVehicleModel", v.model || "", { shouldValidate: true });
+                                                    form.setValue("exchangeVehicleYear", v.year ?? null, { shouldValidate: true });
+                                                    form.setValue("exchangeVehicleColor", v.color || "", { shouldValidate: true });
+                                                    form.setValue("exchangeVehicleType", v.vehicleType, { shouldValidate: true });
+                                                    mField.onChange(v.make);
+                                                }}
+                                            />
+                                            {fieldState.error && (
+                                                <p className="text-xs text-destructive font-medium mt-1 flex items-center gap-1">
+                                                    <span className="inline-block h-3 w-3 rounded-full bg-destructive/20 text-center leading-3">!</span>
+                                                    {fieldState.error.message}
+                                                </p>
+                                            )}
+                                        </FormItem>
+                                    )} />
                                     <FormField control={form.control} name="exchangeDetails" render={({ field }) => (
                                         <FormItem><FormLabel className="text-xs font-semibold text-foreground">Exchange Notes</FormLabel>
                                             <FormControl><Input placeholder="Condition, deal notes..." className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl></FormItem>
@@ -541,7 +570,7 @@ const AddSalePaymentDialog = ({ vehicle }: { vehicle: IVehicle }) => {
                                         <input type="checkbox" id="addToInventory" checked={addToInventory ?? true} onChange={e => form.setValue("addToInventory", e.target.checked)} className="mt-0.5 h-4 w-4 rounded accent-emerald-500" />
                                         <div>
                                             <label htmlFor="addToInventory" className="text-xs font-semibold text-foreground cursor-pointer">Auto-add to Purchased Inventory</label>
-                                            <p className="text-[11px] text-muted-foreground mt-0.5">Creates a new vehicle entry with the exchange value as purchase price</p>
+                                            <p className="text-[11px] text-muted-foreground mt-0.5">Creates a new vehicle entry tagged <strong className="text-foreground">From Exchange</strong> with the trade-in value as purchase price</p>
                                         </div>
                                     </div>
                                 </div>
@@ -659,10 +688,25 @@ const EditBasicInfoDialog = ({ vehicle }: { vehicle: IVehicle }) => {
                                                 </SelectContent>
                                             </Select><FormMessage /></FormItem>
                                     )} />
-                                    <FormField control={form.control} name="make" render={({ field }) => (
-                                        <FormItem><FormLabel className="text-xs font-semibold">Make *</FormLabel>
-                                            <FormControl><Input className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl><FormMessage /></FormItem>
-                                    )} />
+                                    <FormField control={form.control} name="make" render={({ field }) => {
+                                        const vType = form.watch("vehicleType") as "two_wheeler" | "four_wheeler";
+                                        return (
+                                            <FormItem>
+                                                <FormLabel className="text-xs font-semibold">Make *</FormLabel>
+                                                <FormControl>
+                                                    <MakeSelect
+                                                        value={field.value ?? ""}
+                                                        vehicleType={vType}
+                                                        onChange={(v) => {
+                                                            field.onChange(v);
+                                                            // if type just changed, clear model too? no — just make
+                                                        }}
+                                                    />
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        );
+                                    }} />
                                     <FormField control={form.control} name="model" render={({ field }) => (
                                         <FormItem><FormLabel className="text-xs font-semibold">Model *</FormLabel>
                                             <FormControl><Input className="h-9 bg-muted/50 border-border text-sm" {...field} /></FormControl><FormMessage /></FormItem>
@@ -1262,19 +1306,37 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                         </button>
                     </div>
                 )}
-                {vehicle.isFromExchange && vehicle.exchangeSourceRef && (
-                    <div className="mx-0 border-t border-amber-500/20 bg-amber-500/5 px-5 py-3 flex items-center gap-3">
-                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-500/15">
-                            <ArrowLeftRight className="h-3.5 w-3.5 text-amber-400" />
+                {vehicle.isFromExchange && (
+                    <div className="mx-0 border-t border-amber-500/20 bg-amber-500/5 px-5 py-3.5">
+                        <div className="flex items-start gap-3">
+                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 mt-0.5">
+                                <ArrowLeftRight className="h-3.5 w-3.5 text-amber-400" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-xs font-bold text-amber-400">🔄 Trade-In — Entered via Exchange</p>
+                                <p className="text-[11px] text-muted-foreground mt-0.5">
+                                    This vehicle was received as a <strong className="text-foreground">buyer&apos;s trade-in</strong> during a sale.
+                                    {vehicle.exchangeSourceRef && (
+                                        <> It came from a sale in your{" "}
+                                            <Link href={`/${vehicle.exchangeSourceCollection === "vehicles" ? "vehicles" : "consignments"}/${vehicle.exchangeSourceRef}`}
+                                                className="font-semibold text-amber-400 hover:underline">
+                                                {vehicle.exchangeSourceCollection === "vehicles" ? "Purchased Vehicles" : "Park / Finance Sale"}
+                                            </Link>.
+                                        </>
+                                    )}
+                                </p>
+                                <p className="text-[11px] text-amber-300/80 mt-1.5 flex items-center gap-1.5">
+                                    <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-amber-500/20 text-amber-400 font-bold text-[9px]">✎</span>
+                                    <span>You can <strong className="text-amber-300">update make, model, year, color</strong> and other details using the <strong className="text-amber-300">Edit Vehicle</strong> button at the top-right of this page.</span>
+                                </p>
+                            </div>
+                            {vehicle.exchangeSourceRef && (
+                                <Link href={`/${vehicle.exchangeSourceCollection === "vehicles" ? "vehicles" : "consignments"}/${vehicle.exchangeSourceRef}`}
+                                    className="shrink-0 text-[11px] font-semibold text-amber-400 hover:underline flex items-center gap-1 mt-0.5">
+                                    <ExternalLink className="h-3 w-3" /> Source
+                                </Link>
+                            )}
                         </div>
-                        <div className="flex-1 min-w-0">
-                            <p className="text-xs font-bold text-amber-400">Entered via Exchange</p>
-                            <p className="text-[11px] text-muted-foreground">This vehicle entered your inventory as a trade-in from a buyer. See the <strong className="text-foreground">Exchange</strong> tab for origin details.</p>
-                        </div>
-                        <Link href={`/${vehicle.exchangeSourceCollection === "vehicles" ? "vehicles" : "consignments"}/${vehicle.exchangeSourceRef}`}
-                            className="shrink-0 text-[11px] font-semibold text-amber-400 hover:underline flex items-center gap-1">
-                            <ExternalLink className="h-3 w-3" /> Source Vehicle
-                        </Link>
                     </div>
                 )}
 

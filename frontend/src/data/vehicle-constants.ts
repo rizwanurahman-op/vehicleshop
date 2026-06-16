@@ -70,16 +70,17 @@ export const SALE_PAYMENT_METHODS = [
 export type SalePaymentMethodValue = typeof SALE_PAYMENT_METHODS[number]["value"];
 
 /**
- * Buyer payment methods — cash-only (no Exchange or Finance).
+ * Buyer payment methods — cash + exchange (no Finance).
  * Used in consignment buyer payment dialogs.
  */
 export const BUYER_PAYMENT_METHODS = [
-    { value: "Cash",          label: "Cash",          icon: "💵", backendMode: "Cash" },
-    { value: "UPI",           label: "UPI",           icon: "📱", backendMode: "UPI" },
-    { value: "GPay",          label: "GPay",          icon: "📱", backendMode: "GPay" },
-    { value: "Online",        label: "Online",        icon: "💻", backendMode: "Online" },
-    { value: "Bank Transfer", label: "Bank Transfer", icon: "🏦", backendMode: "Bank Transfer" },
-    { value: "Cheque",        label: "Cheque",        icon: "✅", backendMode: "Cheque" },
+    { value: "Cash",          label: "Cash",          icon: "💵", backendMode: "Cash",   backendType: "cash" as const },
+    { value: "UPI",           label: "UPI",           icon: "📱", backendMode: "UPI",    backendType: "cash" as const },
+    { value: "GPay",          label: "GPay",          icon: "📱", backendMode: "GPay",   backendType: "cash" as const },
+    { value: "Online",        label: "Online",        icon: "💻", backendMode: "Online", backendType: "cash" as const },
+    { value: "Bank Transfer", label: "Bank Transfer", icon: "🏦", backendMode: "Bank Transfer", backendType: "cash" as const },
+    { value: "Cheque",        label: "Cheque",        icon: "✅", backendMode: "Cheque", backendType: "cash" as const },
+    { value: "Exchange",      label: "Exchange Vehicle", icon: "🔄", backendMode: "Cash", backendType: "exchange" as const },
 ] as const;
 
 export const FUNDING_SOURCES = [

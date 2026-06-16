@@ -3,10 +3,10 @@ import Cookies from "js-cookie";
 const ACCESS_TOKEN_KEY = "vb_access_token";
 const EXPIRY_KEY = "vb_token_expiry";
 
-// Must match JWT_ACCESS_EXPIRY on the backend (currently 15m).
+// Must match JWT_ACCESS_EXPIRY on the backend (currently 1d).
 // The refresh hook proactively renews 2 min before expiry, so users
 // never hit an expired token in normal usage.
-const TOKEN_TTL_MS = 15 * 60 * 1000; // 15 minutes
+const TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 1 day
 
 export const setClientSession = (accessToken: string): void => {
     const expiresAt = Date.now() + TOKEN_TTL_MS;

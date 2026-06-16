@@ -82,12 +82,21 @@ export const addBuyerPaymentSchema = z.object({
     type: z.enum(["cash", "exchange"]).default("cash"),
     exchangeDetails: z.string().optional(),
     exchangeVehicleMake: z.string().optional(),
+    exchangeVehicleModel: z.string().optional(),
+    exchangeVehicleYear: z.number().int().min(1950).max(new Date().getFullYear() + 1).nullable().optional(),
+    exchangeVehicleColor: z.string().optional(),
     exchangeVehicleRegNo: z.string().optional(),
     referenceNo: z.string().optional(),
     notes: z.string().optional(),
     createExchangeAs: z.enum(["phase2_purchase", "phase3_park_sale", "phase3_finance_sale", "skip"]).optional().default("phase2_purchase"),
     addToInventory: z.boolean().optional().default(true),
     exchangeVehicleType: z.enum(["two_wheeler", "four_wheeler"]).optional(),
+}).superRefine((data, ctx) => {
+    if (data.type === "exchange" && data.addToInventory) {
+        if (!data.exchangeVehicleMake || data.exchangeVehicleMake.trim() === "") {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Make is required", path: ["exchangeVehicleMake"] });
+        }
+    }
 });
 
 export const addPayeePaymentSchema = z.object({

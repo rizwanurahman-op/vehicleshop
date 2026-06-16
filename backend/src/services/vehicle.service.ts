@@ -377,7 +377,8 @@ export const addSalePayment = async (id: string, payment: {
     // Finance-specific
     financeCompany?: string; loanRef?: string; financeAmount?: number;
     // Exchange-specific
-    exchangeDetails?: string; exchangeVehicleMake?: string;
+    exchangeDetails?: string; exchangeVehicleMake?: string; exchangeVehicleModel?: string;
+    exchangeVehicleYear?: number | null; exchangeVehicleColor?: string;
     exchangeVehicleRegNo?: string;
     referenceNo?: string; notes?: string;
     createExchangeAs?: string; exchangeVehicleType?: string;
@@ -424,18 +425,21 @@ export const addSalePayment = async (id: string, payment: {
 
     let exchangeVehicle = null;
 
-    // Auto-create exchange vehicle in the appropriate collection
-    // Default: exchange vehicles go to purchased inventory (phase2_purchase)
+    // Auto-create exchange vehicle in purchased inventory
+    // Triggers whenever type=="exchange" and createExchangeAs !== "skip"
     const exchangeTarget = payment.createExchangeAs || (payment.type === "exchange" ? "phase2_purchase" : "skip");
-    if (payment.type === "exchange" && payment.exchangeVehicleMake &&
-        exchangeTarget !== "skip") {
+    if (payment.type === "exchange" && exchangeTarget !== "skip") {
 
         const regNo = payment.exchangeVehicleRegNo || `EXCH-${Date.now()}`;
         const vType = (payment.exchangeVehicleType || "two_wheeler") as "two_wheeler" | "four_wheeler";
-        // Split combined "Make Model" string correctly
-        const makeParts = (payment.exchangeVehicleMake || "").trim().split(/\s+/);
-        const exMake = makeParts[0] || payment.exchangeVehicleMake || "Unknown";
-        const exModel = makeParts.slice(1).join(" ") || exMake;
+        // Use explicit make/model fields; fall back to parsing combined string for backwards compat
+        const rawMake = (payment.exchangeVehicleMake || "").trim();
+        const rawModel = (payment.exchangeVehicleModel || "").trim();
+        const makeParts = rawMake.split(/\s+/).filter(Boolean);
+        const exMake = rawMake || "Unknown Make";
+        const exModel = rawModel || makeParts.slice(1).join(" ") || exMake;
+        const exYear = payment.exchangeVehicleYear ?? null;
+        const exColor = payment.exchangeVehicleColor || undefined;
 
         // ── Smart duplicate resolution ─────────────────────────────
         // Rule 1: If regNo exists in ACTIVE Purchased Vehicles → hard block (true duplicate, different vehicle)
@@ -511,7 +515,8 @@ export const addSalePayment = async (id: string, payment: {
                     vehicleType: sourceConsignment?.vehicleType || vType,
                     make: sourceConsignment?.make || exMake,
                     model: sourceConsignment?.model || exModel,
-                    year: sourceConsignment?.year,
+                    year: sourceConsignment?.year ?? exYear,
+                    color: exColor,
                     registrationNo: regNo,
                     purchasedFrom: vehicle.soldTo || "Exchange",
                     datePurchased: new Date(payment.date),
