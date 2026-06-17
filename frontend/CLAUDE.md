@@ -2,7 +2,7 @@
 
 ## 1. Project Overview
 
-VehicleBook — a vehicle shop management system for digitizing bike & car sales, purchases, investor management, and consignment tracking. Connects to the Express.js backend at `NEXT_PUBLIC_API_URL`.
+VehicleBook — a vehicle shop management system for digitizing bike & car sales, purchases, investor management, and consignment tracking. Connects to the Express.js backend at `NEXT_PUBLIC_API_URL`..
 
 ### Modules
 
