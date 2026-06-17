@@ -114,14 +114,33 @@ export const getVehicleStats = async (filter?: VehicleStatsFilter): Promise<unkn
     if (filter?.vehicleType) baseMatch.vehicleType = filter.vehicleType;
     if (filter?.status) baseMatch.status = filter.status;
     if (filter?.isFromExchange === "true") baseMatch.isFromExchange = true;
+    if (filter?.isFromExchange === "false") baseMatch.isFromExchange = { $ne: true };
     if (filter?.dateFrom || filter?.dateTo) {
         const df: Record<string, Date> = {};
-        if (filter.dateFrom) df.$gte = new Date(filter.dateFrom);
-        if (filter.dateTo) df.$lte = new Date(filter.dateTo);
-        // Date filter applies to dateSold (primary activity date)
-        baseMatch.dateSold = df;
+        if (filter?.dateFrom) df.$gte = new Date(filter.dateFrom);
+        if (filter?.dateTo) df.$lte = new Date(filter.dateTo);
+        // Date filter applies to datePurchased (consistent with the table list query)
+        baseMatch.datePurchased = df;
     }
-
+    if (filter?.search) {
+        const trimmed = filter.search.trim();
+        if (trimmed) {
+            const words = trimmed.split(/\s+/);
+            const escWord = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            if (words.length === 1) {
+                const re = new RegExp(escWord(words[0]), "i");
+                baseMatch.$or = [
+                    { make: re }, { model: re }, { registrationNo: re },
+                    { purchasedFrom: re }, { vehicleId: re },
+                ];
+            } else {
+                baseMatch.$and = words.map((w) => {
+                    const re = new RegExp(escWord(w), "i");
+                    return { $or: [{ make: re }, { model: re }] };
+                });
+            }
+        }
+    }
     const stats = await Vehicle.aggregate([
         { $match: baseMatch },
         {

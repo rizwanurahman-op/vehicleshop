@@ -36,7 +36,16 @@ const buildFilter = (query: ConsignmentListExportQuery): Record<string, unknown>
         if (dateTo) df.$lte = new Date(dateTo);
         filter.dateReceived = df;
     }
-    if (search) filter.$text = { $search: search };
+    if (search) {
+        const trimmed = search.trim();
+        if (trimmed) {
+            const re = new RegExp(trimmed.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+            filter.$or = [
+                { make: re }, { model: re }, { registrationNo: re },
+                { consignmentId: re }, { previousOwner: re }, { soldTo: re },
+            ];
+        }
+    }
     return filter;
 };
 

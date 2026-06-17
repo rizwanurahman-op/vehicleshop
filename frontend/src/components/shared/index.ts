@@ -6,6 +6,7 @@ import LoadingSkeleton, { TableSkeleton, CardSkeleton, StatCardsSkeleton } from 
 import { AdminOnly } from "./admin-only";
 import { ViewerBanner } from "./viewer-banner";
 import { ViewerGuard } from "./viewer-guard";
+import { TablePagination } from "./table-pagination";
 
 export {
     CurrencyDisplay,
@@ -19,4 +20,5 @@ export {
     AdminOnly,
     ViewerBanner,
     ViewerGuard,
+    TablePagination,
 };

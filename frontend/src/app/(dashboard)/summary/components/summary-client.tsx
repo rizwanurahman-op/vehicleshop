@@ -18,9 +18,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import { TableSkeleton, StatusBadge, CurrencyDisplay } from "@components/shared";
+import { TableSkeleton, StatusBadge, CurrencyDisplay, TablePagination } from "@components/shared";
 import { useDebounce } from "@hooks/use-debounce";
 import { cn } from "@/lib/utils";
+
+const PAGE_SIZE = 10;
 
 // ── Date Preset ────────────────────────────────────────────────────────────────
 type DatePreset = "all" | "today" | "this_week" | "this_month" | "this_year" | "last_year" | "custom";
@@ -96,6 +98,7 @@ const SummaryClient = ({ initialData }: Props) => {
     const [customFrom, setCustomFrom] = useState("");
     const [customTo, setCustomTo]     = useState("");
     const [isExporting, setIsExporting] = useState<"csv" | "pdf" | null>(null);
+    const [page, setPage]             = useState(1);
 
     const debouncedSearch = useDebounce(search, 400);
 
@@ -114,7 +117,7 @@ const SummaryClient = ({ initialData }: Props) => {
     }, [status, debouncedSearch, dateRange]);
 
     const isFilterActive = status !== "all" || !!debouncedSearch || datePreset !== "all";
-    const clearFilters = () => { setSearch(""); setStatus("all"); setDatePreset("all"); setCustomFrom(""); setCustomTo(""); };
+    const clearFilters = () => { setSearch(""); setStatus("all"); setDatePreset("all"); setCustomFrom(""); setCustomTo(""); setPage(1); };
 
     const { data, isLoading } = useQuery<ILenderSummary[]>({
         queryKey: ["lender-summary", apiParams],
@@ -132,6 +135,11 @@ const SummaryClient = ({ initialData }: Props) => {
     const overallPct    = totalBorrowed > 0 ? (totalRepaid / totalBorrowed) * 100 : 0;
     const activeCount   = rows.filter(l => l.isActive !== false).length;
     const paidOffCount  = rows.filter(l => l.balancePayable <= 0).length;
+
+    // ── Client-side pagination ────────────────────────────────────────────────────────────
+    const totalPages    = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+    const safePage      = Math.min(page, totalPages);
+    const pagedRows     = rows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
     // ── Export ─────────────────────────────────────────────────────────────
     const handleExport = async (format: "csv" | "pdf") => {
@@ -349,7 +357,7 @@ const SummaryClient = ({ initialData }: Props) => {
                         <>
                             {/* Mobile cards */}
                             <div className="grid grid-cols-1 gap-4 p-4 md:hidden bg-muted/10">
-                                {rows.map(lender => (
+                                {pagedRows.map(lender => (
                                     <div key={lender._id} className="group relative flex flex-col rounded-2xl border border-border/60 bg-gradient-to-b from-card to-muted/10 p-5 shadow-sm hover:shadow-md hover:border-primary/30 transition-all overflow-hidden">
                                         <div className="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-primary/50 to-primary" />
                                         <div className="flex items-center justify-between mb-3">
@@ -415,9 +423,9 @@ const SummaryClient = ({ initialData }: Props) => {
                                                     No lenders match the selected filters.
                                                 </TableCell>
                                             </TableRow>
-                                        ) : rows.map((lender, index) => (
+                                        ) : pagedRows.map((lender, index) => (
                                             <TableRow key={lender._id} className="border-border hover:bg-muted/50 transition-colors">
-                                                <TableCell className="text-center text-muted-foreground font-mono text-xs">{index + 1}</TableCell>
+                                                <TableCell className="text-center text-muted-foreground font-mono text-xs">{(safePage - 1) * PAGE_SIZE + index + 1}</TableCell>
                                                 <TableCell>
                                                     <div className="font-medium text-foreground">{lender.name}</div>
                                                     {lender.phone && <div className="text-xs text-muted-foreground">{lender.phone}</div>}
@@ -468,6 +476,14 @@ const SummaryClient = ({ initialData }: Props) => {
                                     </div>
                                 )}
                             </div>
+                            <TablePagination
+                                page={safePage}
+                                totalPages={totalPages}
+                                total={rows.length}
+                                limit={PAGE_SIZE}
+                                onPageChange={setPage}
+                                isLoading={isLoading}
+                            />
                         </>
                     )}
                 </div>

@@ -97,7 +97,16 @@ export const getConsignments = async (query: ConsignmentQuery): Promise<unknown>
         if (dateTo) df.$lte = new Date(dateTo);
         filter.dateReceived = df;
     }
-    if (search) filter.$text = { $search: search };
+    if (search) {
+        const trimmed = search.trim();
+        if (trimmed) {
+            const re = new RegExp(trimmed.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+            filter.$or = [
+                { make: re }, { model: re }, { registrationNo: re },
+                { consignmentId: re }, { previousOwner: re }, { soldTo: re },
+            ];
+        }
+    }
 
     const skip = (page - 1) * limit;
     const [data, total] = await Promise.all([
@@ -148,9 +157,27 @@ export const returnConsignment = async (id: string, notes?: string): Promise<ICo
     return vehicle;
 };
 
-export const getConsignmentStats = async (saleType?: string) => {
+export const getConsignmentStats = async (query: { saleType?: string; status?: string; search?: string; dateFrom?: string; dateTo?: string } = {}) => {
+    const { saleType, status, search, dateFrom, dateTo } = query;
     const match: Record<string, unknown> = { isActive: true };
     if (saleType) match.saleType = saleType;
+    if (status) match.status = status;
+    if (dateFrom || dateTo) {
+        const df: Record<string, Date> = {};
+        if (dateFrom) df.$gte = new Date(dateFrom);
+        if (dateTo) df.$lte = new Date(new Date(dateTo).setHours(23, 59, 59, 999));
+        match.dateReceived = df;
+    }
+    if (search) {
+        const trimmed = search.trim();
+        if (trimmed) {
+            const re = new RegExp(trimmed.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+            match.$or = [
+                { make: re }, { model: re }, { registrationNo: re },
+                { consignmentId: re }, { previousOwner: re }, { soldTo: re },
+            ];
+        }
+    }
 
     const stats = await ConsignmentVehicle.aggregate([
         { $match: match },

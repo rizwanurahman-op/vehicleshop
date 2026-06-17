@@ -12,7 +12,13 @@ export const createVehicleOwner = async (data: Partial<IVehicleOwner>): Promise<
 export const getVehicleOwners = async (query: { search?: string; page?: number; limit?: number }) => {
     const { search, page = 1, limit = 50 } = query;
     const filter: Record<string, unknown> = { isActive: true };
-    if (search) filter.$text = { $search: search };
+    if (search) {
+        const trimmed = search.trim();
+        if (trimmed) {
+            const re = new RegExp(trimmed.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+            filter.$or = [{ name: re }, { phone: re }, { ownerId: re }];
+        }
+    }
 
     const skip = (page - 1) * limit;
     const [data, total] = await Promise.all([

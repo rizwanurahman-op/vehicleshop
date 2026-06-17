@@ -48,8 +48,8 @@ export const getInvestmentsByLender = async (req: AuthRequest, res: Response, ne
 
 export const getInvestmentStats = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
-        const { mode, dateFrom, dateTo, lenderId } = req.query as Record<string, string>;
-        const stats = await investmentService.getStats({ mode: mode !== "all" ? mode : undefined, dateFrom, dateTo, lenderId });
+        const { mode, dateFrom, dateTo, lenderId, search } = req.query as Record<string, string>;
+        const stats = await investmentService.getStats({ mode: mode !== "all" ? mode : undefined, dateFrom, dateTo, lenderId, search });
         res.status(200).json(apiResponse(200, "Investment stats fetched", stats));
     } catch (error) { next(error); }
 };

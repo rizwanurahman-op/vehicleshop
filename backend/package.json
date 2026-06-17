@@ -9,6 +9,7 @@
         "start": "node dist/app.js",
         "seed": "tsx src/scripts/seed.ts",
         "db:clear": "tsx src/scripts/clear-db.ts",
+        "db:migrate-indexes": "tsx src/scripts/migrate-indexes.ts",
         "lint": "echo lint"
     },
     "keywords": [],

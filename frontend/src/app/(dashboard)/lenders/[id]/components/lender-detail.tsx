@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AdminOnly, CurrencyDisplay, TableSkeleton } from "@components/shared";
+import { TablePagination } from "@components/shared";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -683,6 +684,8 @@ export function LenderDetail({ id, initialData }: LenderDetailProps) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Transaction Table (shared for investments & repayments)
 // ─────────────────────────────────────────────────────────────────────────────
+const TX_PAGE_SIZE = 10;
+
 function TransactionTable({
     type, rows, isLoading, onDeleteRequest,
 }: {
@@ -693,6 +696,12 @@ function TransactionTable({
     onDeleteRequest: (t: DeleteTarget) => void;
 }) {
     const isInv = type === "investment";
+    const [txPage, setTxPage] = useState(1);
+
+    // Reset page when rows change (e.g. tab switch or data refresh)
+    const totalPages = Math.max(1, Math.ceil(rows.length / TX_PAGE_SIZE));
+    const safePage = Math.min(txPage, totalPages);
+    const pagedRows = rows.slice((safePage - 1) * TX_PAGE_SIZE, safePage * TX_PAGE_SIZE);
 
     if (isLoading) {
         return <div className="p-4"><TableSkeleton rows={4} /></div>;
@@ -712,17 +721,21 @@ function TransactionTable({
     // Mobile cards
     const MobileCards = () => (
         <div className="grid grid-cols-1 gap-3 p-4 md:hidden">
-            {rows.map(row => {
+            {pagedRows.map((row, idx) => {
                 const amount = isInv
                     ? (row as IInvestmentRow).amountReceived
                     : (row as IRepaymentRow).amountPaid;
                 const rowId = isInv ? (row as IInvestmentRow).investmentId : (row as IRepaymentRow).repaymentId;
                 const note = isInv ? (row as IInvestmentRow).notes : (row as IRepaymentRow).remarks;
                 const rType = !isInv ? ((row as IRepaymentRow).repaymentType ?? "Principal") : null;
+                const globalNum = (safePage - 1) * TX_PAGE_SIZE + idx + 1;
                 return (
                     <div key={row._id} className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-3">
                         <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest font-mono">{rowId}</span>
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-mono font-bold text-muted-foreground">#{globalNum}</span>
+                                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest font-mono">{rowId}</span>
+                            </div>
                             <div className="flex items-center gap-1.5">
                                 {rType && (
                                     <span className={cn(
@@ -803,14 +816,15 @@ function TransactionTable({
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {rows.map((row, index) => {
+                        {pagedRows.map((row, index) => {
                             const amount = isInv ? (row as IInvestmentRow).amountReceived : (row as IRepaymentRow).amountPaid;
                             const txId = isInv ? (row as IInvestmentRow).investmentId : (row as IRepaymentRow).repaymentId;
                             const note = isInv ? (row as IInvestmentRow).notes : (row as IRepaymentRow).remarks;
                             const rType = !isInv ? ((row as IRepaymentRow).repaymentType ?? "Principal") : null;
+                            const globalNum = (safePage - 1) * TX_PAGE_SIZE + index + 1;
                             return (
                                 <TableRow key={row._id} className="border-border hover:bg-muted/30 transition-colors group">
-                                    <TableCell className="text-center text-muted-foreground font-mono text-xs">{index + 1}</TableCell>
+                                    <TableCell className="text-center text-muted-foreground font-mono text-xs">{globalNum}</TableCell>
                                     <TableCell className="font-mono text-xs text-muted-foreground">{txId}</TableCell>
                                     <TableCell className="text-sm text-muted-foreground">{fmtDate(row.date)}</TableCell>
                                     {!isInv && (
@@ -857,7 +871,7 @@ function TransactionTable({
 
                 {/* Footer totals row */}
                 <div className="border-t border-border bg-muted/20 px-4 py-3 flex items-center justify-between">
-                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{rows.length} record{rows.length !== 1 ? "s" : ""}</span>
+                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{rows.length} record{rows.length !== 1 ? "s" : ""} total</span>
                     <div className="flex items-center gap-1.5 text-sm font-bold">
                         <span className="text-xs text-muted-foreground">Total:</span>
                         <CurrencyDisplay
@@ -868,6 +882,15 @@ function TransactionTable({
                     </div>
                 </div>
             </div>
+
+            {/* Pagination — shown on both mobile and desktop when needed */}
+            <TablePagination
+                page={safePage}
+                totalPages={totalPages}
+                total={rows.length}
+                limit={TX_PAGE_SIZE}
+                onPageChange={setTxPage}
+            />
         </>
     );
 }

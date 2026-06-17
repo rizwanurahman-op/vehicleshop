@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Download, Package, Eye, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, ArrowLeftRight, Calendar, X, FileText, FileSpreadsheet, Loader2, ChevronDown } from "lucide-react";
+import { Plus, Search, Download, Package, Eye, TrendingUp, TrendingDown, ArrowLeftRight, Calendar, X, FileText, FileSpreadsheet, Loader2, ChevronDown } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import VehicleStatusBadge from "./vehicle-status-badge";
 import VehicleTypeIcon from "./vehicle-type-icon";
@@ -20,7 +20,9 @@ import VehicleStatsCards from "./vehicle-stats-cards";
 import type { VehicleStatsFilters } from "./vehicle-stats-cards";
 import { VEHICLE_STATUSES } from "@data/vehicle-constants";
 import { toast } from "sonner";
-import { AdminOnly } from "@components/shared";
+import { AdminOnly, TablePagination } from "@components/shared";
+
+const PAGE_SIZE = 10;
 
 type VehicleListProps = { initialData: VehiclePaginatedData | null };
 
@@ -97,7 +99,7 @@ const VehicleList = ({ initialData }: VehicleListProps) => {
         queryKey: ["vehicles", { page, debouncedSearch, vehicleType, statusFilter, sourceFilter, dateRange }],
         queryFn: () => fetchVehicles({
             page,
-            limit: 15,
+            limit: PAGE_SIZE,
             ...(debouncedSearch && { search: debouncedSearch }),
             ...(resolvedVehicleType && { vehicleType: resolvedVehicleType }),
             ...(statusFilter !== "all" && { status: statusFilter }),
@@ -107,6 +109,7 @@ const VehicleList = ({ initialData }: VehicleListProps) => {
             ...(dateRange.dateTo && { dateTo: dateRange.dateTo }),
         }),
         initialData: vehicleType === defaultType ? initialData : undefined,
+        placeholderData: (prev) => prev,
         retry: 0,
     });
 
@@ -562,27 +565,17 @@ const VehicleList = ({ initialData }: VehicleListProps) => {
                 </div>
 
                 {/* Pagination */}
-                {meta && meta.totalPages > 1 && (
-                    <div className="flex items-center justify-between border-t border-border px-4 py-3">
-                        <p className="text-xs text-muted-foreground">Showing page {meta.page} of {meta.totalPages} ({meta.total} vehicles)</p>
-                        <div className="flex gap-2">
-                            <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="h-8 border-border">
-                                <ChevronLeft className="h-4 w-4" />
-                            </Button>
-                            <Button size="sm" variant="outline" disabled={page >= meta.totalPages} onClick={() => setPage((p) => p + 1)} className="h-8 border-border">
-                                <ChevronRight className="h-4 w-4" />
-                            </Button>
-                        </div>
-                    </div>
+                {meta && (
+                    <TablePagination
+                        page={page}
+                        totalPages={meta.totalPages}
+                        total={meta.total}
+                        limit={PAGE_SIZE}
+                        onPageChange={setPage}
+                        isLoading={isLoading}
+                    />
                 )}
             </div>
-
-            {/* Result count */}
-            {!isLoading && meta && (
-                <p className="text-xs text-muted-foreground">
-                    Showing <strong className="text-foreground">{vehicles.length}</strong> of <strong className="text-foreground">{meta.total}</strong> vehicles
-                </p>
-            )}
         </div>
     );
 };

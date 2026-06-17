@@ -29,6 +29,7 @@ interface ListRepaymentsQuery {
     lenderId?: string;
     mode?: string;
     repaymentType?: string;
+    search?: string;
     dateFrom?: string;
     dateTo?: string;
 }
@@ -50,14 +51,25 @@ const list = async (query: ListRepaymentsQuery) => {
     const { page, limit, skip } = getPagination(query);
     const filter: Record<string, unknown> = {};
 
-    if (query.lenderId) filter.lender = query.lenderId;
-    if (query.mode) filter.mode = query.mode;
+    if (query.lenderId)      filter.lender        = query.lenderId;
+    if (query.mode)          filter.mode          = query.mode;
     if (query.repaymentType) filter.repaymentType = query.repaymentType;
     if (query.dateFrom || query.dateTo) {
         const dateFilter: Record<string, Date> = {};
         if (query.dateFrom) dateFilter.$gte = new Date(query.dateFrom);
-        if (query.dateTo) dateFilter.$lte = new Date(query.dateTo);
+        if (query.dateTo)   dateFilter.$lte = new Date(new Date(query.dateTo).setHours(23, 59, 59, 999));
         filter.date = dateFilter;
+    }
+    if (query.search) {
+        const matchingLenders = await Lender.find(
+            { name: { $regex: query.search, $options: "i" } },
+            { _id: 1 }
+        ).lean();
+        const lenderIds = matchingLenders.map((l) => l._id);
+        filter.$or = [
+            { repaymentId: { $regex: query.search, $options: "i" } },
+            { lender: { $in: lenderIds } },
+        ];
     }
 
     const [repayments, total] = await Promise.all([
@@ -151,7 +163,7 @@ const exportAll = async (query: { lenderId?: string; mode?: string; repaymentTyp
     }));
 };
 
-const getStats = async (query: { lenderId?: string; mode?: string; repaymentType?: string; dateFrom?: string; dateTo?: string } = {}) => {
+const getStats = async (query: { lenderId?: string; mode?: string; repaymentType?: string; dateFrom?: string; dateTo?: string; search?: string } = {}) => {
     const data = await exportAll(query);
     const totalPaid      = data.reduce((s, r) => s + r.amountPaid, 0);
     const totalPrincipal = data.filter(r => r.repaymentType === "Principal").reduce((s, r) => s + r.amountPaid, 0);

@@ -14,6 +14,9 @@ import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { getClientSession } from "@/lib/auth";
 import { toast } from "sonner";
+import { TablePagination } from "@components/shared";
+
+const RPT_PAGE_SIZE = 10;
 
 type DatePreset = "all" | "today" | "this_week" | "this_month" | "this_year" | "last_year" | "custom";
 
@@ -83,6 +86,11 @@ const VehicleReports = () => {
     const [customTo, setCustomTo]     = useState("");
     const [isExporting, setIsExporting] = useState<"csv" | "pdf" | null>(null);
 
+    // ── Per-table pagination pages ────────────────────────────────────
+    const [duePage, setDuePage]         = useState(1);
+    const [pendingPage, setPendingPage] = useState(1);
+    const [plPage, setPlPage]           = useState(1);
+
     const dateRange = useMemo(() => {
         if (datePreset === "custom") return { dateFrom: customFrom || undefined, dateTo: customTo || undefined };
         return getPresetRange(datePreset);
@@ -94,7 +102,11 @@ const VehicleReports = () => {
     if (dateRange.dateTo)     pageParams.dateTo   = dateRange.dateTo;
 
     const isFilterActive = vehicleType !== "all" || datePreset !== "all";
-    const clearFilters = () => { setVehicleType("all"); setDatePreset("all"); setCustomFrom(""); setCustomTo(""); };
+    const clearFilters = () => {
+        setVehicleType("all"); setDatePreset("all"); setCustomFrom(""); setCustomTo("");
+        // Reset all table pages when filters clear
+        setDuePage(1); setPendingPage(1); setPlPage(1);
+    };
 
     const handleExport = async (format: "csv" | "pdf") => {
         setIsExporting(format);
@@ -131,6 +143,11 @@ const VehicleReports = () => {
     const salePending = useMemo(() => {
         return pending.filter((v) => v.saleStatus && ["balance_pending", "noc_pending", "noc_cash_pending"].includes(v.saleStatus));
     }, [pending]);
+
+    // ── Client-side pagination slices ────────────────────────────────
+    const duePaged     = purchaseDue.slice((duePage - 1) * RPT_PAGE_SIZE, duePage * RPT_PAGE_SIZE);
+    const pendingPaged = salePending.slice((pendingPage - 1) * RPT_PAGE_SIZE, pendingPage * RPT_PAGE_SIZE);
+    const plPaged      = plReport.slice((plPage - 1) * RPT_PAGE_SIZE, plPage * RPT_PAGE_SIZE);
 
     const statSizeClass = (val: string): string => {
         const len = val.length;
@@ -326,7 +343,7 @@ const VehicleReports = () => {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border">
-                                    {purchaseDue.map((v) => (
+                                    {duePaged.map((v) => (
                                         <tr key={v._id} className="hover:bg-muted/10 transition-colors">
                                             <td className="px-4 py-3">
                                                 <p className="font-semibold text-foreground whitespace-nowrap">{v.make} {v.model}</p>
@@ -348,6 +365,13 @@ const VehicleReports = () => {
                                 </tbody>
                             </table>
                         </div>
+                        <TablePagination
+                            page={duePage}
+                            totalPages={Math.max(1, Math.ceil(purchaseDue.length / RPT_PAGE_SIZE))}
+                            total={purchaseDue.length}
+                            limit={RPT_PAGE_SIZE}
+                            onPageChange={setDuePage}
+                        />
                     </div>
                 )}
             </div>
@@ -374,7 +398,7 @@ const VehicleReports = () => {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border">
-                                    {salePending.map((v) => (
+                                    {pendingPaged.map((v) => (
                                         <tr key={v._id} className="hover:bg-muted/10 transition-colors">
                                             <td className="px-4 py-3">
                                                 <p className="font-semibold text-foreground whitespace-nowrap">{v.make} {v.model}</p>
@@ -397,6 +421,13 @@ const VehicleReports = () => {
                                 </tbody>
                             </table>
                         </div>
+                        <TablePagination
+                            page={pendingPage}
+                            totalPages={Math.max(1, Math.ceil(salePending.length / RPT_PAGE_SIZE))}
+                            total={salePending.length}
+                            limit={RPT_PAGE_SIZE}
+                            onPageChange={setPendingPage}
+                        />
                     </div>
                 )}
             </div>
@@ -420,7 +451,7 @@ const VehicleReports = () => {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border">
-                                    {plReport.map((v) => {
+                                    {plPaged.map((v) => {
                                         const isProfit = v.profitLoss >= 0;
                                         return (
                                             <tr key={v._id} className="hover:bg-muted/10 transition-colors">
@@ -451,6 +482,13 @@ const VehicleReports = () => {
                                 </tbody>
                             </table>
                         </div>
+                        <TablePagination
+                            page={plPage}
+                            totalPages={Math.max(1, Math.ceil(plReport.length / RPT_PAGE_SIZE))}
+                            total={plReport.length}
+                            limit={RPT_PAGE_SIZE}
+                            onPageChange={setPlPage}
+                        />
                     </div>
                 )}
             </div>

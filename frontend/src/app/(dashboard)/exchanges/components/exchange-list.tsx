@@ -19,6 +19,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { TablePagination } from "@components/shared";
+
+const PAGE_SIZE = 10;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface ExchangeDeal {
@@ -295,8 +298,9 @@ export default function ExchangeList() {
     const listQuery = useQuery<ApiResponse<ExchangePaginatedData>>({
         queryKey: ["exchanges", apiParams, page],
         queryFn: () => axios.get<ApiResponse<ExchangePaginatedData>>("/exchanges", {
-            params: { ...apiParams, page, limit: 15 },
+            params: { ...apiParams, page, limit: PAGE_SIZE },
         }).then(r => r.data),
+        placeholderData: (prev) => prev,
         staleTime: 30_000,
     });
 
@@ -393,12 +397,6 @@ export default function ExchangeList() {
                                 <span className="text-xs text-muted-foreground">to</span>
                                 <Input type="date" value={customTo}   onChange={e => { setCustomTo(e.target.value);   setPage(1); }} className="h-9 w-40 bg-muted/50 border-border text-sm" />
                             </div>
-                        )}
-
-                        {result && (
-                            <p className="text-xs text-muted-foreground ml-auto">
-                                {result.total} exchange{result.total !== 1 ? "s" : ""} found
-                            </p>
                         )}
                     </div>
 
@@ -539,22 +537,15 @@ export default function ExchangeList() {
             )}
 
             {/* ── Pagination ── */}
-            {result && result.totalPages > 1 && (
-                <div className="flex items-center justify-between pt-2">
-                    <p className="text-xs text-muted-foreground">
-                        Page {result.page} of {result.totalPages} · {result.total} total
-                    </p>
-                    <div className="flex gap-2">
-                        <Button variant="outline" size="sm" className="border-border"
-                            onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
-                            Previous
-                        </Button>
-                        <Button variant="outline" size="sm" className="border-border"
-                            onClick={() => setPage(p => Math.min(result.totalPages, p + 1))} disabled={page === result.totalPages}>
-                            Next
-                        </Button>
-                    </div>
-                </div>
+            {result && (
+                <TablePagination
+                    page={page}
+                    totalPages={result.totalPages}
+                    total={result.total}
+                    limit={PAGE_SIZE}
+                    onPageChange={setPage}
+                    isLoading={listQuery.isLoading}
+                />
             )}
         </div>
     );

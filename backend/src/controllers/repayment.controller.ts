@@ -48,8 +48,8 @@ export const getRepaymentsByLender = async (req: AuthRequest, res: Response, nex
 
 export const getRepaymentStats = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
-        const { mode, dateFrom, dateTo, lenderId } = req.query as Record<string, string>;
-        const stats = await repaymentService.getStats({ mode: mode !== "all" ? mode : undefined, dateFrom, dateTo, lenderId });
+        const { mode, dateFrom, dateTo, lenderId, repaymentType, search } = req.query as Record<string, string>;
+        const stats = await repaymentService.getStats({ mode: mode !== "all" ? mode : undefined, dateFrom, dateTo, lenderId, repaymentType: repaymentType !== "all" ? repaymentType : undefined, search });
         res.status(200).json(apiResponse(200, "Repayment stats fetched", stats));
     } catch (error) { next(error); }
 };

@@ -26,6 +26,7 @@ interface ListInvestmentsQuery {
     limit?: string;
     lenderId?: string;
     mode?: string;
+    search?: string;
     dateFrom?: string;
     dateTo?: string;
 }
@@ -52,8 +53,19 @@ const list = async (query: ListInvestmentsQuery) => {
     if (query.dateFrom || query.dateTo) {
         const dateFilter: Record<string, Date> = {};
         if (query.dateFrom) dateFilter.$gte = new Date(query.dateFrom);
-        if (query.dateTo) dateFilter.$lte = new Date(query.dateTo);
+        if (query.dateTo)   dateFilter.$lte = new Date(new Date(query.dateTo).setHours(23, 59, 59, 999));
         filter.date = dateFilter;
+    }
+    if (query.search) {
+        const matchingLenders = await Lender.find(
+            { name: { $regex: query.search, $options: "i" } },
+            { _id: 1 }
+        ).lean();
+        const lenderIds = matchingLenders.map((l) => l._id);
+        filter.$or = [
+            { investmentId: { $regex: query.search, $options: "i" } },
+            { lender: { $in: lenderIds } },
+        ];
     }
 
     const [investments, total] = await Promise.all([
@@ -145,7 +157,7 @@ const exportAll = async (query: { lenderId?: string; mode?: string; dateFrom?: s
     }));
 };
 
-const getStats = async (query: { lenderId?: string; mode?: string; dateFrom?: string; dateTo?: string } = {}) => {
+const getStats = async (query: { lenderId?: string; mode?: string; dateFrom?: string; dateTo?: string; search?: string } = {}) => {
     const data = await exportAll(query);
     const totalReceived = data.reduce((s, i) => s + i.amountReceived, 0);
     const avgAmount = data.length > 0 ? Math.round(totalReceived / data.length) : 0;

@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import axios from "@config/axios";
 import { getClientSession } from "@/lib/auth";
-import { formatINR, formatINRCompact } from "@lib/currency";
+import { formatINR } from "@lib/currency";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -19,7 +19,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { CreateInvestmentDialog, UpdateInvestmentDialog, DeleteInvestmentDialog } from ".";
-import { EmptyState, TableSkeleton, CurrencyDisplay, DateDisplay, AdminOnly } from "@components/shared";
+import { EmptyState, TableSkeleton, CurrencyDisplay, DateDisplay, AdminOnly, TablePagination } from "@components/shared";
 import { useDebounce } from "@hooks/use-debounce";
 import { PAYMENT_MODES } from "@data";
 
@@ -82,11 +82,19 @@ const StatCard = ({ label, value, sub, icon: Icon, gradient, textColor }: {
     );
 };
 
-const fetchInvestments = async (params: Record<string, string>): Promise<IInvestment[]> => {
-    const res = await axios.get<ApiResponse<IInvestment[]>>("/investments", {
-        params: { page: 1, limit: 200, ...params },
-    });
-    return res.data.data ?? [];
+const PAGE_SIZE = 10;
+
+interface FetchInvestmentsResult {
+    data: IInvestment[];
+    meta: PaginationMeta;
+}
+
+const fetchInvestments = async (params: Record<string, string>): Promise<FetchInvestmentsResult> => {
+    const res = await axios.get<ApiResponse<IInvestment[]>>("/investments", { params });
+    return {
+        data: res.data.data ?? [],
+        meta: res.data.meta ?? { page: 1, limit: PAGE_SIZE, total: 0, totalPages: 0 },
+    };
 };
 
 type InvestmentListProps = { initialData: IInvestment[] | null };
@@ -97,6 +105,7 @@ const InvestmentList = ({ initialData }: InvestmentListProps) => {
     const [datePreset, setDatePreset]   = useState<DatePreset>("all");
     const [customFrom, setCustomFrom]   = useState("");
     const [customTo, setCustomTo]       = useState("");
+    const [page, setPage]               = useState(1);
     const [editItem, setEditItem]       = useState<IInvestment | null>(null);
     const [deleteItem, setDeleteItem]   = useState<IInvestment | null>(null);
     const [isExporting, setIsExporting] = useState<"csv" | "pdf" | null>(null);
@@ -109,6 +118,19 @@ const InvestmentList = ({ initialData }: InvestmentListProps) => {
     }, [datePreset, customFrom, customTo]);
 
     const apiParams = useMemo(() => {
+        const p: Record<string, string> = {
+            page: String(page),
+            limit: String(PAGE_SIZE),
+        };
+        if (mode !== "all")      p.mode     = mode;
+        if (debouncedSearch)     p.search   = debouncedSearch;
+        if (dateRange.dateFrom)  p.dateFrom = dateRange.dateFrom;
+        if (dateRange.dateTo)    p.dateTo   = dateRange.dateTo;
+        return p;
+    }, [page, mode, debouncedSearch, dateRange]);
+
+    // params without page (for stats)
+    const filterParams = useMemo(() => {
         const p: Record<string, string> = {};
         if (mode !== "all")      p.mode     = mode;
         if (debouncedSearch)     p.search   = debouncedSearch;
@@ -119,18 +141,29 @@ const InvestmentList = ({ initialData }: InvestmentListProps) => {
 
     const isFilterActive = mode !== "all" || datePreset !== "all" || !!debouncedSearch;
 
-    const clearFilters = () => { setSearch(""); setMode("all"); setDatePreset("all"); setCustomFrom(""); setCustomTo(""); };
+    const clearFilters = () => {
+        setSearch(""); setMode("all"); setDatePreset("all"); setCustomFrom(""); setCustomTo("");
+        setPage(1);
+    };
 
-    const { data, isLoading } = useQuery<IInvestment[]>({
+    // Reset page when filters change
+    const handleFilterChange = (fn: () => void) => { fn(); setPage(1); };
+
+    const { data: result, isLoading } = useQuery<FetchInvestmentsResult>({
         queryKey: ["investments", apiParams],
         queryFn: () => fetchInvestments(apiParams),
-        initialData: (!Object.keys(apiParams).length ? initialData : undefined) ?? undefined,
+        placeholderData: (prev) => prev,
         retry: 0,
     });
 
+    const data       = result?.data ?? (page === 1 && !Object.keys(filterParams).length ? initialData ?? [] : []);
+    const meta       = result?.meta;
+    const totalPages = meta?.totalPages ?? 1;
+    const total      = meta?.total ?? data.length;
+
     const statsQuery = useQuery<ApiResponse<InvestmentStats>>({
-        queryKey: ["investment-stats", apiParams],
-        queryFn: () => axios.get<ApiResponse<InvestmentStats>>("/investments/stats", { params: apiParams }).then(r => r.data),
+        queryKey: ["investment-stats", filterParams],
+        queryFn: () => axios.get<ApiResponse<InvestmentStats>>("/investments/stats", { params: filterParams }).then(r => r.data),
     });
     const stats = statsQuery.data?.data;
 
@@ -140,7 +173,7 @@ const InvestmentList = ({ initialData }: InvestmentListProps) => {
         setIsExporting(format);
         const tid = toast.loading(`Preparing ${format.toUpperCase()} export…`, { description: "Building investments report" });
         try {
-            const p = new URLSearchParams({ format, ...apiParams });
+            const p = new URLSearchParams({ format, ...filterParams });
             const baseURL = (axios.defaults.baseURL ?? "").replace(/\/$/, "");
             const url = `${baseURL}/investments/export?${p.toString()}`;
             const token = getClientSession();
@@ -205,11 +238,16 @@ const InvestmentList = ({ initialData }: InvestmentListProps) => {
                     {/* Search */}
                     <div className="relative w-full sm:w-52">
                         <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input placeholder="Search investments…" value={search} onChange={e => setSearch(e.target.value)} className="pl-9 bg-muted/50 h-10" />
+                        <Input
+                            placeholder="Search investments…"
+                            value={search}
+                            onChange={e => handleFilterChange(() => setSearch(e.target.value))}
+                            className="pl-9 bg-muted/50 h-10"
+                        />
                     </div>
 
                     {/* Mode */}
-                    <Select value={mode} onValueChange={setMode}>
+                    <Select value={mode} onValueChange={v => handleFilterChange(() => setMode(v))}>
                         <SelectTrigger className="w-36 bg-muted/50 h-10">
                             <SelectValue placeholder="Mode" />
                         </SelectTrigger>
@@ -223,7 +261,7 @@ const InvestmentList = ({ initialData }: InvestmentListProps) => {
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
                         <Calendar className="h-3.5 w-3.5" /><span className="font-medium">Date:</span>
                     </div>
-                    <Select value={datePreset} onValueChange={v => setDatePreset(v as DatePreset)}>
+                    <Select value={datePreset} onValueChange={v => handleFilterChange(() => setDatePreset(v as DatePreset))}>
                         <SelectTrigger className="h-10 w-44 bg-muted/50 border-border">
                             <SelectValue placeholder="All Time" />
                         </SelectTrigger>
@@ -239,10 +277,10 @@ const InvestmentList = ({ initialData }: InvestmentListProps) => {
                     </Select>
 
                     {datePreset === "custom" && (
-                        <div className="flex items-center gap-2">
-                            <Input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} className="h-10 w-40 bg-muted/50 border-border text-sm" />
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Input type="date" value={customFrom} onChange={e => handleFilterChange(() => setCustomFrom(e.target.value))} className="h-10 w-40 bg-muted/50 border-border text-sm" />
                             <span className="text-xs text-muted-foreground">to</span>
-                            <Input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} className="h-10 w-40 bg-muted/50 border-border text-sm" />
+                            <Input type="date" value={customTo} onChange={e => handleFilterChange(() => setCustomTo(e.target.value))} className="h-10 w-40 bg-muted/50 border-border text-sm" />
                         </div>
                     )}
 
@@ -287,8 +325,8 @@ const InvestmentList = ({ initialData }: InvestmentListProps) => {
 
             {/* Table */}
             <div className="rounded-xl border border-border bg-card overflow-hidden">
-                {isLoading && !data ? (
-                    <div className="p-4"><TableSkeleton rows={5} /></div>
+                {isLoading && !data.length ? (
+                    <div className="p-4"><TableSkeleton rows={PAGE_SIZE} /></div>
                 ) : !data || data.length === 0 ? (
                     <EmptyState icon={ArrowDownLeft} title="No investments found"
                         description={isFilterActive ? "Try adjusting your filters." : "Record the first investment from a lender."}
@@ -297,16 +335,19 @@ const InvestmentList = ({ initialData }: InvestmentListProps) => {
                     <>
                         {/* Mobile Cards */}
                         <div className="grid grid-cols-1 gap-4 p-4 md:hidden bg-muted/10">
-                            {data.map((inv) => {
+                            {data.map((inv, index) => {
                                 const lender = inv.lender as ILender;
+                                const rowNum = (page - 1) * PAGE_SIZE + index + 1;
                                 return (
                                     <div key={inv._id} className="group relative flex flex-col rounded-2xl border border-border/60 bg-gradient-to-b from-card to-muted/10 p-5 shadow-sm hover:shadow-md hover:border-primary/30 transition-all overflow-hidden">
                                         <div className="absolute top-0 right-0 -mt-4 -mr-4 h-24 w-24 rounded-full bg-primary/10 blur-2xl opacity-50 group-hover:opacity-100 transition-opacity pointer-events-none" />
                                         <div className="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-violet-400 to-purple-600" />
                                         <div className="flex items-center justify-between mb-4">
                                             <div className="flex items-center gap-2">
-                                                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 shrink-0"><ArrowDownLeft className="h-4 w-4 text-primary" /></div>
-                                                <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Investment</p>
+                                                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 shrink-0">
+                                                    <ArrowDownLeft className="h-4 w-4 text-primary" />
+                                                </div>
+                                                <span className="text-[10px] font-mono font-bold text-muted-foreground">#{rowNum}</span>
                                             </div>
                                             <DateDisplay date={inv.date} className="text-xs font-semibold text-foreground" />
                                         </div>
@@ -354,9 +395,10 @@ const InvestmentList = ({ initialData }: InvestmentListProps) => {
                                 <TableBody>
                                     {data.map((inv, index) => {
                                         const lender = inv.lender as ILender;
+                                        const rowNum = (page - 1) * PAGE_SIZE + index + 1;
                                         return (
-                                            <TableRow key={inv._id} className="border-border hover:bg-muted/50 transition-colors group">
-                                                <TableCell className="text-center text-muted-foreground font-mono text-xs">{index + 1}</TableCell>
+                                            <TableRow key={inv._id} className={cn("border-border hover:bg-muted/50 transition-colors group", isLoading && "opacity-60")}>
+                                                <TableCell className="text-center text-muted-foreground font-mono text-xs">{rowNum}</TableCell>
                                                 <TableCell><DateDisplay date={inv.date} className="text-muted-foreground" /></TableCell>
                                                 <TableCell><div className="font-medium">{lender?.name || "—"}</div></TableCell>
                                                 <TableCell className="text-right"><CurrencyDisplay amount={inv.amountReceived} /></TableCell>
@@ -376,6 +418,16 @@ const InvestmentList = ({ initialData }: InvestmentListProps) => {
                                 </TableBody>
                             </Table>
                         </div>
+
+                        {/* Pagination */}
+                        <TablePagination
+                            page={page}
+                            totalPages={totalPages}
+                            total={total}
+                            limit={PAGE_SIZE}
+                            onPageChange={setPage}
+                            isLoading={isLoading}
+                        />
                     </>
                 )}
             </div>

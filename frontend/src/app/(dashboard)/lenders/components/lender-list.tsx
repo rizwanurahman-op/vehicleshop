@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import axios from "@config/axios";
 import { useRouter } from "next/navigation";
 import { getClientSession } from "@/lib/auth";
-import { formatINR, formatINRCompact } from "@lib/currency";
+import { formatINR } from "@lib/currency";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -19,7 +19,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { CreateLenderDialog, DeleteLenderDialog, UpdateLenderDialog } from ".";
-import { EmptyState, TableSkeleton, StatusBadge, CurrencyDisplay, AdminOnly } from "@components/shared";
+import { EmptyState, TableSkeleton, StatusBadge, CurrencyDisplay, AdminOnly, TablePagination } from "@components/shared";
 import { useDebounce } from "@hooks/use-debounce";
 
 // ── Adaptive font size for stat card values ──────────────────────────────────
@@ -72,18 +72,26 @@ const getPresetRange = (preset: DatePreset): { dateFrom?: string; dateTo?: strin
     return {};
 };
 
-const fetchLenders = async (search: string, status: string): Promise<ILenderWithSummary[]> => {
-    const res = await axios.get<ApiResponse<ILenderWithSummary[]>>("/lenders", {
-        params: { page: 1, limit: 100, search: search || undefined, status },
-    });
-    return res.data.data ?? [];
-};
-
 interface LenderStats {
     totalLenders: number; totalBorrowed: number; totalRepaid: number;
     totalProfit: number;
     balancePayable: number; activeCount: number; inactiveCount: number; paidOffCount: number;
 }
+
+const PAGE_SIZE = 10;
+
+interface FetchLendersResult {
+    data: ILenderWithSummary[];
+    meta: PaginationMeta;
+}
+
+const fetchLenders = async (params: Record<string, string>): Promise<FetchLendersResult> => {
+    const res = await axios.get<ApiResponse<ILenderWithSummary[]>>("/lenders", { params });
+    return {
+        data: res.data.data ?? [],
+        meta: res.data.meta ?? { page: 1, limit: PAGE_SIZE, total: 0, totalPages: 0 },
+    };
+};
 
 type LenderListProps = { initialData: ILenderWithSummary[] | null };
 
@@ -94,6 +102,7 @@ const LenderList = ({ initialData }: LenderListProps) => {
     const [datePreset, setDatePreset]     = useState<DatePreset>("all");
     const [customFrom, setCustomFrom]     = useState("");
     const [customTo, setCustomTo]         = useState("");
+    const [page, setPage]                 = useState(1);
     const [editLender, setEditLender]     = useState<ILenderWithSummary | null>(null);
     const [deleteLender, setDeleteLender] = useState<ILenderWithSummary | null>(null);
     const [isExporting, setIsExporting]   = useState<"csv" | "pdf" | null>(null);
@@ -117,26 +126,47 @@ const LenderList = ({ initialData }: LenderListProps) => {
     const isFilterActive  = status !== "all" || !!debouncedSearch || datePreset !== "all";
 
     const apiParams = useMemo(() => {
+        const p: Record<string, string> = {
+            page: String(page),
+            limit: String(PAGE_SIZE),
+        };
+        if (status !== "all")   p.status = status;
+        if (debouncedSearch)    p.search = debouncedSearch;
+        if (dateRange.dateFrom) p.dateFrom = dateRange.dateFrom;
+        if (dateRange.dateTo)   p.dateTo   = dateRange.dateTo;
+        return p;
+    }, [page, status, debouncedSearch, dateRange]);
+
+    // Filter params without page (for stats and export)
+    const filterParams = useMemo(() => {
         const p: Record<string, string> = {};
-        if (status !== "all")  p.status = status;
-        if (debouncedSearch)   p.search = debouncedSearch;
+        if (status !== "all")   p.status = status;
+        if (debouncedSearch)    p.search = debouncedSearch;
         if (dateRange.dateFrom) p.dateFrom = dateRange.dateFrom;
         if (dateRange.dateTo)   p.dateTo   = dateRange.dateTo;
         return p;
     }, [status, debouncedSearch, dateRange]);
 
-    const clearFilters = () => { setSearch(""); setStatus("all"); setDatePreset("all"); setCustomFrom(""); setCustomTo(""); };
+    const clearFilters = () => { setSearch(""); setStatus("all"); setDatePreset("all"); setCustomFrom(""); setCustomTo(""); setPage(1); };
 
-    const { data, isLoading } = useQuery<ILenderWithSummary[]>({
-        queryKey: ["lenders", debouncedSearch, status],
-        queryFn: () => fetchLenders(debouncedSearch, status),
-        initialData: initialData ?? undefined,
+    // Reset page when filters change
+    const handleFilterChange = (fn: () => void) => { fn(); setPage(1); };
+
+    const { data: result, isLoading } = useQuery<FetchLendersResult>({
+        queryKey: ["lenders", apiParams],
+        queryFn: () => fetchLenders(apiParams),
+        placeholderData: (prev) => prev,
         retry: 0,
     });
 
+    const data       = result?.data ?? (page === 1 && !Object.keys(filterParams).length ? initialData ?? [] : []);
+    const meta       = result?.meta;
+    const totalPages = meta?.totalPages ?? 1;
+    const total      = meta?.total ?? data.length;
+
     const statsQuery = useQuery<ApiResponse<LenderStats>>({
-        queryKey: ["lender-stats", apiParams],
-        queryFn: () => axios.get<ApiResponse<LenderStats>>("/lenders/stats", { params: apiParams }).then(r => r.data),
+        queryKey: ["lender-stats", filterParams],
+        queryFn: () => axios.get<ApiResponse<LenderStats>>("/lenders/stats", { params: filterParams }).then(r => r.data),
     });
     const stats = statsQuery.data?.data;
 
@@ -144,7 +174,7 @@ const LenderList = ({ initialData }: LenderListProps) => {
         setIsExporting(format);
         const tid = toast.loading(`Preparing ${format.toUpperCase()} export…`, { description: "Building lenders report" });
         try {
-            const p = new URLSearchParams({ format, ...apiParams });
+            const p = new URLSearchParams({ format, ...filterParams });
             const baseURL = (axios.defaults.baseURL ?? "").replace(/\/$/, "");
             const url = `${baseURL}/lenders/export?${p.toString()}`;
             const token = getClientSession();
@@ -233,11 +263,16 @@ const LenderList = ({ initialData }: LenderListProps) => {
                     {/* Search */}
                     <div className="relative w-full sm:w-52">
                         <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input placeholder="Search by name or phone…" value={search} onChange={e => setSearch(e.target.value)} className="pl-9 bg-muted/50 border-border h-10" />
+                        <Input
+                            placeholder="Search by name or phone…"
+                            value={search}
+                            onChange={e => handleFilterChange(() => setSearch(e.target.value))}
+                            className="pl-9 bg-muted/50 border-border h-10"
+                        />
                     </div>
 
                     {/* Status */}
-                    <Select value={status} onValueChange={setStatus}>
+                    <Select value={status} onValueChange={v => handleFilterChange(() => setStatus(v))}>
                         <SelectTrigger className="w-36 bg-muted/50 border-border h-10">
                             <SelectValue placeholder="Status" />
                         </SelectTrigger>
@@ -252,7 +287,7 @@ const LenderList = ({ initialData }: LenderListProps) => {
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
                         <Calendar className="h-3.5 w-3.5" /><span className="font-medium">Date:</span>
                     </div>
-                    <Select value={datePreset} onValueChange={v => setDatePreset(v as DatePreset)}>
+                    <Select value={datePreset} onValueChange={v => handleFilterChange(() => setDatePreset(v as DatePreset))}>
                         <SelectTrigger className="h-10 w-44 bg-muted/50 border-border">
                             <SelectValue placeholder="All Time" />
                         </SelectTrigger>
@@ -268,10 +303,10 @@ const LenderList = ({ initialData }: LenderListProps) => {
                     </Select>
 
                     {datePreset === "custom" && (
-                        <div className="flex items-center gap-2">
-                            <Input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} className="h-10 w-40 bg-muted/50 border-border text-sm" />
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Input type="date" value={customFrom} onChange={e => handleFilterChange(() => setCustomFrom(e.target.value))} className="h-10 w-40 bg-muted/50 border-border text-sm" />
                             <span className="text-xs text-muted-foreground">to</span>
-                            <Input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} className="h-10 w-40 bg-muted/50 border-border text-sm" />
+                            <Input type="date" value={customTo} onChange={e => handleFilterChange(() => setCustomTo(e.target.value))} className="h-10 w-40 bg-muted/50 border-border text-sm" />
                         </div>
                     )}
 
@@ -317,8 +352,8 @@ const LenderList = ({ initialData }: LenderListProps) => {
 
             {/* Table */}
             <div className="rounded-xl border border-border bg-card overflow-hidden">
-                {isLoading && !data ? (
-                    <div className="p-4"><TableSkeleton rows={5} /></div>
+                {isLoading && !data.length ? (
+                    <div className="p-4"><TableSkeleton rows={PAGE_SIZE} /></div>
                 ) : !data || data.length === 0 ? (
                     <EmptyState icon={Users} title="No lenders yet" description="Add your first investor to start tracking capital and repayments." action={<AdminOnly><CreateLenderDialog /></AdminOnly>} />
                 ) : (
@@ -401,8 +436,8 @@ const LenderList = ({ initialData }: LenderListProps) => {
                                 </TableHeader>
                                 <TableBody>
                                     {data.map((lender, index) => (
-                                        <TableRow key={lender._id} className="border-border hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => navigateTo(`/lenders/${lender._id}`)}>
-                                            <TableCell className="text-center text-muted-foreground font-mono text-xs">{index + 1}</TableCell>
+                                        <TableRow key={lender._id} className={cn("border-border hover:bg-muted/50 cursor-pointer transition-colors", isLoading && "opacity-60")} onClick={() => navigateTo(`/lenders/${lender._id}`)}>
+                                            <TableCell className="text-center text-muted-foreground font-mono text-xs">{(page - 1) * PAGE_SIZE + index + 1}</TableCell>
                                             <TableCell>
                                                 <div className="font-medium text-foreground">{lender.name}</div>
                                                 {lender.phone && <div className="text-xs text-muted-foreground">{lender.phone}</div>}
@@ -434,6 +469,16 @@ const LenderList = ({ initialData }: LenderListProps) => {
                                 </TableBody>
                             </Table>
                         </div>
+
+                        {/* Pagination */}
+                        <TablePagination
+                            page={page}
+                            totalPages={totalPages}
+                            total={total}
+                            limit={PAGE_SIZE}
+                            onPageChange={setPage}
+                            isLoading={isLoading}
+                        />
                     </>
                 )}
             </div>

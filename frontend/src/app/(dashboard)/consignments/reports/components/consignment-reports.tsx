@@ -18,6 +18,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { TablePagination } from "@components/shared";
+
+const RPT_PAGE_SIZE = 10;
 
 interface ReportData {
     profitLoss: IConsignmentVehicle[];
@@ -75,6 +78,11 @@ export const ConsignmentReports = () => {
     const [customTo, setCustomTo]       = useState("");
     const [isExporting, setIsExporting] = useState<"csv" | "pdf" | null>(null);
 
+    // ── Per-table pagination pages ────────────────────────────────────
+    const [settlePage, setSettlePage] = useState(1);
+    const [plPage,     setPlPage]     = useState(1);
+    const [agingPage,  setAgingPage]  = useState(1);
+
     const dateRange = useMemo(() => {
         if (datePreset === "custom") return { dateFrom: customFrom || undefined, dateTo: customTo || undefined };
         return getPresetRange(datePreset);
@@ -86,7 +94,10 @@ export const ConsignmentReports = () => {
     if (dateRange.dateTo)          pageParams.dateTo    = dateRange.dateTo;
 
     const isFilterActive = saleType !== "all" || datePreset !== "all";
-    const clearFilters = () => { setSaleType("all"); setDatePreset("all"); setCustomFrom(""); setCustomTo(""); };
+    const clearFilters = () => {
+        setSaleType("all"); setDatePreset("all"); setCustomFrom(""); setCustomTo("");
+        setSettlePage(1); setPlPage(1); setAgingPage(1);
+    };
 
     // Export handler (mirrors vehicle reports page)
     const handleExport = async (format: "csv" | "pdf") => {
@@ -133,6 +144,11 @@ export const ConsignmentReports = () => {
         : 0;
     const buyerBalance    = report?.openSettlements.reduce((s, v) => s + (v.buyerBalance || 0), 0) ?? 0;
     const payeeBalance    = report?.openSettlements.reduce((s, v) => s + (v.payeeBalance || 0), 0) ?? 0;
+
+    // ── Client-side pagination slices ────────────────────────────────
+    const settlePaged = (report?.openSettlements ?? []).slice((settlePage - 1) * RPT_PAGE_SIZE, settlePage * RPT_PAGE_SIZE);
+    const plPaged     = (report?.profitLoss ?? []).slice((plPage - 1) * RPT_PAGE_SIZE, plPage * RPT_PAGE_SIZE);
+    const agingPaged  = (report?.agingReport ?? []).slice((agingPage - 1) * RPT_PAGE_SIZE, agingPage * RPT_PAGE_SIZE);
 
     return (
         <div className="flex w-full flex-col gap-6 pb-10">
@@ -321,7 +337,7 @@ export const ConsignmentReports = () => {
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-orange-500/10">
-                                            {report.openSettlements.map(v => (
+                                            {settlePaged.map(v => (
                                                 <tr key={v._id} className="hover:bg-orange-500/5 transition-colors">
                                                     <td className="px-4 py-3">
                                                         <p className="font-semibold text-foreground whitespace-nowrap">{v.make} {v.model}</p>
@@ -350,6 +366,13 @@ export const ConsignmentReports = () => {
                                         </tbody>
                                     </table>
                                 </div>
+                                <TablePagination
+                                    page={settlePage}
+                                    totalPages={Math.max(1, Math.ceil((report?.openSettlements.length ?? 0) / RPT_PAGE_SIZE))}
+                                    total={report?.openSettlements.length ?? 0}
+                                    limit={RPT_PAGE_SIZE}
+                                    onPageChange={setSettlePage}
+                                />
                             </div>
                         </div>
                     )}
@@ -371,7 +394,7 @@ export const ConsignmentReports = () => {
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-border">
-                                            {report.profitLoss.map(v => {
+                                            {plPaged.map(v => {
                                                 const isProfit = v.netProfit >= 0;
                                                 return (
                                                     <tr key={v._id} className="hover:bg-muted/10 transition-colors">
@@ -419,6 +442,13 @@ export const ConsignmentReports = () => {
                                         </tfoot>
                                     </table>
                                 </div>
+                                <TablePagination
+                                    page={plPage}
+                                    totalPages={Math.max(1, Math.ceil((report?.profitLoss.length ?? 0) / RPT_PAGE_SIZE))}
+                                    total={report?.profitLoss.length ?? 0}
+                                    limit={RPT_PAGE_SIZE}
+                                    onPageChange={setPlPage}
+                                />
                             </div>
                         )}
                     </div>
@@ -442,7 +472,7 @@ export const ConsignmentReports = () => {
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-border">
-                                            {report.agingReport.map(v => {
+                                            {agingPaged.map(v => {
                                                 const isOld = (v.daysInShop ?? 0) > 30;
                                                 return (
                                                     <tr key={v._id} className="hover:bg-muted/10 transition-colors">
@@ -472,6 +502,13 @@ export const ConsignmentReports = () => {
                                         </tbody>
                                     </table>
                                 </div>
+                                <TablePagination
+                                    page={agingPage}
+                                    totalPages={Math.max(1, Math.ceil((report?.agingReport.length ?? 0) / RPT_PAGE_SIZE))}
+                                    total={report?.agingReport.length ?? 0}
+                                    limit={RPT_PAGE_SIZE}
+                                    onPageChange={setAgingPage}
+                                />
                             </div>
                         </div>
                     )}

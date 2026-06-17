@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import {
-    ShoppingCart, Search, ChevronLeft, ChevronRight, Eye,
+    ShoppingCart, Search, Eye,
     CheckCircle2, Clock, AlertTriangle, IndianRupee, Wallet, Ban,
     TrendingUp, User, Calendar, X,
     Download, FileText, FileSpreadsheet, Loader2, ChevronDown
@@ -22,6 +22,9 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { getClientSession } from "@/lib/auth";
 import { toast } from "sonner";
 import VehicleTypeIcon from "../../vehicles/components/vehicle-type-icon";
+import { TablePagination } from "@components/shared";
+
+const PAGE_SIZE = 10;
 
 type DatePreset = "all" | "today" | "yesterday" | "this_week" | "this_month" | "this_year" | "last_year" | "custom";
 
@@ -157,7 +160,7 @@ const PurchasesList = () => {
         setPage(1);
     };
 
-    const params: Record<string, string | number> = { page, limit: 20 };
+    const params: Record<string, string | number> = { page, limit: PAGE_SIZE };
     if (debouncedSearch) params.search = debouncedSearch;
     if (vehicleType !== "all") params.vehicleType = vehicleType;
     if (paymentStatus !== "all") params.paymentStatus = paymentStatus;
@@ -215,6 +218,7 @@ const PurchasesList = () => {
     const { data, isLoading } = useQuery<PurchaseRegisterData | null>({
         queryKey: ["purchases", { page, debouncedSearch, vehicleType, paymentStatus, dateRange }],
         queryFn: () => fetchPurchases(params),
+        placeholderData: (prev) => prev,
         retry: 0,
     });
 
@@ -633,20 +637,15 @@ const PurchasesList = () => {
                 </div>
 
                 {/* Pagination */}
-                {meta && meta.totalPages > 1 && (
-                    <div className="flex items-center justify-between border-t border-border px-4 py-3">
-                        <p className="text-xs text-muted-foreground">
-                            Page {meta.page} of {meta.totalPages} &nbsp;·&nbsp; {meta.total} total vehicles
-                        </p>
-                        <div className="flex gap-2">
-                            <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="h-8 border-border">
-                                <ChevronLeft className="h-4 w-4" />
-                            </Button>
-                            <Button size="sm" variant="outline" disabled={page >= meta.totalPages} onClick={() => setPage((p) => p + 1)} className="h-8 border-border">
-                                <ChevronRight className="h-4 w-4" />
-                            </Button>
-                        </div>
-                    </div>
+                {meta && (
+                    <TablePagination
+                        page={page}
+                        totalPages={meta.totalPages}
+                        total={meta.total}
+                        limit={PAGE_SIZE}
+                        onPageChange={setPage}
+                        isLoading={isLoading}
+                    />
                 )}
             </div>
 

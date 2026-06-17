@@ -37,7 +37,16 @@ const buildFilter = (query: VehicleListExportQuery): Record<string, unknown> => 
         if (dateTo) df.$lte = new Date(dateTo);
         filter.datePurchased = df;
     }
-    if (search) filter.$text = { $search: search };
+    if (search) {
+        const trimmed = search.trim();
+        if (trimmed) {
+            const re = new RegExp(trimmed.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+            filter.$or = [
+                { make: re }, { model: re }, { registrationNo: re },
+                { vehicleId: re }, { purchasedFrom: re },
+            ];
+        }
+    }
     return filter;
 };
 

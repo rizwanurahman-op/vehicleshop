@@ -16,14 +16,16 @@ import {
     TrendingUp, TrendingDown, Package, AlertCircle,
     CheckCircle2, Clock, Filter, ArrowLeftRight,
     Download, FileText, FileSpreadsheet, ChevronDown, Calendar, X,
-    ChevronLeft, ChevronRight, ArrowDownLeft, ArrowUpRight,
+    ArrowDownLeft, ArrowUpRight,
     Wrench,
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import Link from "next/link";
 import { getClientSession } from "@/lib/auth";
 import { toast } from "sonner";
-import { AdminOnly } from "@components/shared";
+import { AdminOnly, TablePagination } from "@components/shared";
+
+const PAGE_SIZE = 10;
 
 type DatePreset = "all" | "today" | "yesterday" | "this_week" | "this_month" | "this_year" | "last_year" | "custom";
 
@@ -109,7 +111,7 @@ export const ConsignmentList = ({ initialData }: { initialData: ConsignmentPagin
         setDatePreset("all"); setCustomFrom(""); setCustomTo(""); setPage(1);
     };
 
-    const params: Record<string, string | number> = { page, limit: 20 };
+    const params: Record<string, string | number> = { page, limit: PAGE_SIZE };
     if (saleType !== "all") params.saleType = saleType;
     if (status !== "all") params.status = status;
     if (debouncedSearch) params.search = debouncedSearch;
@@ -120,6 +122,7 @@ export const ConsignmentList = ({ initialData }: { initialData: ConsignmentPagin
         queryKey: ["consignments", params],
         queryFn: () => fetchConsignments(params),
         initialData: saleType === "all" && status === "all" && !debouncedSearch && datePreset === "all" && page === 1 ? initialData : undefined,
+        placeholderData: (prev) => prev,
     });
 
     const handleExport = async (format: "csv" | "pdf") => {
@@ -156,12 +159,21 @@ export const ConsignmentList = ({ initialData }: { initialData: ConsignmentPagin
     const meta = data ? { total: data.total, page: data.page, totalPages: data.totalPages } : null;
 
     // Fetch backend stats for accurate totals (not page-limited)
+    // Build filter params for stats query (same as table filters minus page/limit)
+    const statsParams = useMemo(() => {
+        const p: Record<string, string> = {};
+        if (saleType !== "all") p.saleType = saleType;
+        if (status !== "all") p.status = status;
+        if (debouncedSearch) p.search = debouncedSearch;
+        if (dateRange.dateFrom) p.dateFrom = dateRange.dateFrom;
+        if (dateRange.dateTo) p.dateTo = dateRange.dateTo;
+        return p;
+    }, [saleType, status, debouncedSearch, dateRange]);
+
     const { data: stats } = useQuery<IConsignmentDashboardStats | null>({
-        queryKey: ["consignment-stats", saleType !== "all" ? saleType : undefined],
+        queryKey: ["consignment-stats", statsParams],
         queryFn: async () => {
-            const p: Record<string, string> = {};
-            if (saleType !== "all") p.saleType = saleType;
-            const res = await axios.get<ApiResponse<IConsignmentDashboardStats>>("/consignments/stats", { params: p });
+            const res = await axios.get<ApiResponse<IConsignmentDashboardStats>>("/consignments/stats", { params: statsParams });
             return res.data.data ?? null;
         },
     });
@@ -662,14 +674,15 @@ export const ConsignmentList = ({ initialData }: { initialData: ConsignmentPagin
                         </div>
 
                         {/* Pagination */}
-                        {meta && meta.totalPages > 1 && (
-                            <div className="flex items-center justify-between border-t border-border px-5 py-3">
-                                <p className="text-xs text-muted-foreground">Page {meta.page} of {meta.totalPages} ({meta.total} consignments)</p>
-                                <div className="flex gap-2">
-                                    <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(p => p - 1)} className="h-8 border-border"><ChevronLeft className="h-4 w-4" /></Button>
-                                    <Button size="sm" variant="outline" disabled={page >= meta.totalPages} onClick={() => setPage(p => p + 1)} className="h-8 border-border"><ChevronRight className="h-4 w-4" /></Button>
-                                </div>
-                            </div>
+                        {meta && (
+                            <TablePagination
+                                page={page}
+                                totalPages={meta.totalPages}
+                                total={meta.total}
+                                limit={PAGE_SIZE}
+                                onPageChange={setPage}
+                                isLoading={isLoading}
+                            />
                         )}
                     </>
                 )}
