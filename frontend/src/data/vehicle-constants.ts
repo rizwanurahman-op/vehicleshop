@@ -24,7 +24,7 @@ export const SALE_STATUSES = [
     { value: "fully_received", label: "Fully Received ✅", color: "green" },
     { value: "balance_pending", label: "Balance Pending ⚠️", color: "yellow" },
     { value: "noc_pending", label: "NOC Pending 📄", color: "orange" },
-    { value: "noc_cash_pending", label: "NOC + Cash Pending ⚠️", color: "red" },
+    { value: "noc_cash_pending", label: "NOC & Balance Pending ⚠️", color: "red" },
 ] as const;
 
 export const NOC_STATUSES = [

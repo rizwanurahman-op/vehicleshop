@@ -224,7 +224,7 @@ export const exportVehicleDetailPDF = async (id: string): Promise<Buffer | null>
         y += 54;
 
         // VEHICLE + PURCHASE INFO (2-column)
-        need(160);
+        need(175);
         const colW = (CW - 10) / 2;
         const rx = MG + colW + 10;
 
@@ -238,6 +238,9 @@ export const exportVehicleDetailPDF = async (id: string): Promise<Buffer | null>
             ["Engine No", (v as any).engineNo ?? "—"],
             ["Chassis No", (v as any).chassisNo ?? "—"],
         ];
+        if (v.vehicleType === "four_wheeler") {
+            vRows.push(["NOC Status", dSl(v.nocStatus), true]);
+        }
         vRows.forEach(([l, val, bold], i) => {
             doc.rect(MG, leftY, colW, 17).fill(i % 2 === 0 ? "#f1f5f9" : C.white);
             doc.moveTo(MG, leftY + 17).lineTo(MG + colW, leftY + 17).strokeColor(C.border).lineWidth(0.2).stroke();

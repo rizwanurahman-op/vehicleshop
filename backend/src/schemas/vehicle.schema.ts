@@ -12,7 +12,7 @@ export const createVehicleSchema = z.object({
     purchasedFrom: z.string().optional(),
     purchasedFromPhone: z.string().optional(),
     datePurchased: z.string().min(1, { message: "Date purchased is required" }),
-    purchasePrice: z.number().min(0, { message: "Purchase price must be ≥ 0" }),
+    purchasePrice: z.number({ required_error: "Purchase price is required", invalid_type_error: "Purchase price is required" }).min(1, { message: "Purchase price must be greater than 0" }),
     fundingSource: z.enum(["own", "investor", "mixed"]).default("own"),
     fundingDetails: z.array(z.object({
         source: z.string(),

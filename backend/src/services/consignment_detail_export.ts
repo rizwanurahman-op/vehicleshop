@@ -65,6 +65,7 @@ export const exportConsignmentDetailCSV = async (id: string): Promise<string | n
         row("Status", dSl(v.status)),
         row("Settlement Status", dSl(v.settlementStatus)),
         row("Days in Shop", v.daysInShop ?? ""),
+        ...(v.vehicleType === "four_wheeler" ? [row("NOC Status", dSl(v.nocStatus))] : []),
         "",
         ...(isSold ? [
             row("Date Sold", dFmt((v as any).dateSold)),
@@ -233,7 +234,7 @@ export const exportConsignmentDetailPDF = async (id: string): Promise<Buffer | n
             y += 54;
 
             // â”€â”€ VEHICLE + OWNER INFO (2-column) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-            need(170);
+            need(185);
             const colW = (CW - 10) / 2;
             const rx = MG + colW + 10;
 
@@ -249,6 +250,9 @@ export const exportConsignmentDetailPDF = async (id: string): Promise<Buffer | n
                 ["Chassis No", safe((v as any).chassisNo ?? "-")],
                 ["Vehicle Type", v.vehicleType === "two_wheeler" ? "Two Wheeler" : "Four Wheeler"],
             ];
+            if (v.vehicleType === "four_wheeler") {
+                vRows.push(["NOC Status", dSl(v.nocStatus), true]);
+            }
             vRows.forEach(([l, val, bold], i) => {
                 doc.rect(MG, leftY, colW, 17).fill(i % 2 === 0 ? "#f1f5f9" : C.white);
                 doc.moveTo(MG, leftY + 17).lineTo(MG + colW, leftY + 17).strokeColor(C.border).lineWidth(0.2).stroke();

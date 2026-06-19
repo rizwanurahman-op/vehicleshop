@@ -78,6 +78,9 @@ const SaleStatusBadge = ({ status }: { status: string }) => {
     if (status === "noc_pending") {
         return <Badge className="bg-yellow-500/10 text-yellow-400 border-yellow-500/20 text-[10px]"><Clock className="h-2.5 w-2.5 mr-1" />NOC Pending</Badge>;
     }
+    if (status === "noc_cash_pending") {
+        return <Badge className="bg-red-500/10 text-red-400 border-red-500/20 text-[10px]"><AlertTriangle className="h-2.5 w-2.5 mr-1" />NOC & Balance Pending</Badge>;
+    }
     return <Badge className="bg-muted/50 text-muted-foreground text-[10px]">{status.replace(/_/g, " ")}</Badge>;
 };
 

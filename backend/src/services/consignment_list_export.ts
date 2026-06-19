@@ -33,7 +33,7 @@ const buildFilter = (query: ConsignmentListExportQuery): Record<string, unknown>
     if (dateFrom || dateTo) {
         const df: Record<string, Date> = {};
         if (dateFrom) df.$gte = new Date(dateFrom);
-        if (dateTo) df.$lte = new Date(dateTo);
+        if (dateTo) df.$lte = new Date(new Date(dateTo).setHours(23, 59, 59, 999));
         filter.dateReceived = df;
     }
     if (search) {

@@ -15,6 +15,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { getClientSession } from "@/lib/auth";
 import { toast } from "sonner";
 import { TablePagination } from "@components/shared";
+import VehicleStatusBadge from "../../components/vehicle-status-badge";
 
 const RPT_PAGE_SIZE = 10;
 
@@ -408,14 +409,17 @@ const VehicleReports = () => {
                                             <td className="px-4 py-3 text-sm text-foreground whitespace-nowrap">{v.soldTo || "—"}</td>
                                             <td className="px-4 py-3 whitespace-nowrap">
                                                 {v.saleStatus ? (
-                                                    <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full",
-                                                        v.saleStatus === "fully_received" ? "bg-emerald-500/15 text-emerald-400" : "bg-orange-500/15 text-orange-400")}>
-                                                        {v.saleStatus.replace(/_/g, " ")}
-                                                    </span>
+                                                    <VehicleStatusBadge saleStatus={v.saleStatus as SaleStatus} />
                                                 ) : "—"}
                                             </td>
                                             <td className="px-4 py-3 text-sm font-bold text-red-400 whitespace-nowrap font-mono">{formatINR(v.balanceAmount)}</td>
-                                            <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{v.nocStatus.replace(/_/g, " ")}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap">
+                                                {v.nocStatus === "not_applicable" ? (
+                                                    <span className="text-xs text-muted-foreground">Not Applicable</span>
+                                                ) : (
+                                                    <VehicleStatusBadge nocStatus={v.nocStatus as NOCStatus} />
+                                                )}
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>

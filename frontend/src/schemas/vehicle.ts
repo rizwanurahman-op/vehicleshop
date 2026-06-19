@@ -12,7 +12,10 @@ export const createVehicleSchema = z.object({
     purchasedFrom: z.string().optional(),
     purchasedFromPhone: z.string().optional(),
     datePurchased: z.string().min(1, "Purchase date is required"),
-    purchasePrice: z.number().min(0, "Purchase price is required"),
+    purchasePrice: z.preprocess(
+        (v) => { const n = Number(v); return (v === "" || v === null || v === undefined || isNaN(n)) ? 0 : n; },
+        z.number().refine((v) => v > 0, { message: "Purchase price is required" })
+    ),
     fundingSource: z.enum(["own", "investor", "mixed"]).default("own"),
     travelCost: z.number().min(0).default(0),
     workshopRepairCost: z.number().min(0).default(0),
@@ -44,7 +47,10 @@ export const editBasicInfoSchema = z.object({
     purchasedFrom: z.string().optional(),
     purchasedFromPhone: z.string().optional(),
     datePurchased: z.string().min(1, "Purchase date is required"),
-    purchasePrice: z.number().min(0, "Purchase price must be ≥ 0"),
+    purchasePrice: z.preprocess(
+        (v) => { const n = Number(v); return (v === "" || v === null || v === undefined || isNaN(n)) ? 0 : n; },
+        z.number().refine((v) => v > 0, { message: "Purchase price is required" })
+    ),
     fundingSource: z.enum(["own", "investor", "mixed"]),
     status: z.enum(["in_stock", "reconditioning", "ready_for_sale"]).optional(),
     remarks: z.string().optional(),

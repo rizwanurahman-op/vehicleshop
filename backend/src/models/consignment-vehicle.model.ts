@@ -66,6 +66,8 @@ export interface IConsignmentVehicle extends Omit<Document, 'model'> {
     // Vehicle Status
     status: "received" | "reconditioning" | "ready_for_sale" | "sold" | "sold_pending" | "returned";
 
+    nocStatus: "not_applicable" | "pending" | "received" | "submitted" | "completed";
+
     // Sale Details
     dateSold?: Date;
     soldPrice?: number;
@@ -246,6 +248,7 @@ const ConsignmentVehicleSchema = new Schema<IConsignmentVehicle>({
         default: "received",
         index: true,
     },
+    nocStatus: { type: String, enum: ["not_applicable", "pending", "received", "submitted", "completed"], default: "not_applicable" },
 
     dateSold: Date,
     soldPrice: Number,
@@ -286,6 +289,7 @@ const ConsignmentVehicleSchema = new Schema<IConsignmentVehicle>({
 // ── Indexes ───────────────────────────────────────────────────────
 ConsignmentVehicleSchema.index({ vehicleType: 1 });
 ConsignmentVehicleSchema.index({ status: 1 });
+ConsignmentVehicleSchema.index({ nocStatus: 1 });
 ConsignmentVehicleSchema.index({ settlementStatus: 1 });
 ConsignmentVehicleSchema.index({ dateReceived: -1 });
 ConsignmentVehicleSchema.index({ dateSold: -1 });
@@ -376,6 +380,15 @@ ConsignmentVehicleSchema.pre("save", function (next) {
         }
     } else {
         this.settlementStatus = "open";
+    }
+
+    // 7. NOC default logic
+    if (this.isNew) {
+        if (this.vehicleType === "two_wheeler") {
+            this.nocStatus = "not_applicable";
+        } else if (this.vehicleType === "four_wheeler" && (!this.nocStatus || this.nocStatus === "not_applicable")) {
+            this.nocStatus = "pending";
+        }
     }
 
     next();

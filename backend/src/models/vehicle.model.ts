@@ -276,7 +276,7 @@ VehicleSchema.pre("save", function (next) {
 
     // 5. Sale Status
     if (this.dateSold && this.soldPrice) {
-        const nocPending = this.nocStatus === "pending";
+        const nocPending = this.nocStatus === "pending" || this.nocStatus === "submitted";
         const balPending = this.balanceAmount > 0;
         if (!nocPending && !balPending) {
             this.saleStatus = "fully_received";

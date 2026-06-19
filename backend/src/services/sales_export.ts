@@ -18,8 +18,13 @@ const dFmt = (d: Date | string | null | undefined) => {
     return new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 };
 
-const dSl = (s: string | null | undefined) =>
-    s ? s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "—";
+const dSl = (s: string | null | undefined) => {
+    if (!s) return "—";
+    if (s === "noc_cash_pending") return "NOC & Balance Pending";
+    if (s === "noc_pending") return "NOC Pending";
+    if (s === "not_applicable") return "Not Applicable";
+    return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()).replace(/Noc/g, "NOC");
+};
 
 const escWord = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -355,8 +360,9 @@ export const exportSalesPDF = async (query: SalesExportQuery): Promise<Buffer> =
                 // Abbreviate long status labels so they fit the column
                 const shortStatus = r.status === "Fully Received" ? "Fully Paid"
                     : r.status === "Balance Pending" ? "Bal. Pending"
-                        : r.status === "Noc Pending" ? "NOC Pend."
-                            : r.status;
+                    : r.status === "NOC Pending" ? "NOC Pend."
+                    : r.status === "NOC & Balance Pending" ? "NOC+Cash"
+                    : r.status;
 
                 const cells: [string, "left" | "right" | "center", string?][] = [
                     [`${idx + 1}`, "center"],

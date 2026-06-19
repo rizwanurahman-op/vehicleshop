@@ -89,7 +89,14 @@ export const getVehicleById = async (id: string): Promise<IVehicle | null> => {
 
 export const updateVehicle = async (id: string, data: Partial<IVehicle>): Promise<IVehicle | null> => {
     if (!mongoose.Types.ObjectId.isValid(id)) return null;
-    const vehicle = await Vehicle.findOneAndUpdate({ _id: id, isActive: true }, { $set: data }, { new: true, runValidators: true });
+    // Use findOne + save() so the pre-save hook fires and recalculates all
+    // derived fields (purchasePendingAmount, purchasePaymentStatus,
+    // totalInvestment, profitLoss, etc.) whenever purchasePrice or other
+    // fields change via "Edit Basic Information".
+    const vehicle = await Vehicle.findOne({ _id: id, isActive: true });
+    if (!vehicle) return null;
+    Object.assign(vehicle, data);
+    await vehicle.save();
     return vehicle;
 };
 
@@ -191,7 +198,7 @@ export const getVehicleStats = async (filter?: VehicleStatsFilter): Promise<unkn
                     { $project: { vehicleId: 1, vehicleType: 1, make: 1, model: 1, registrationNo: 1, amount: "$balanceAmount" } },
                 ],
                 nocPending: [
-                    { $match: { nocStatus: "pending" } },
+                    { $match: { nocStatus: { $in: ["pending", "submitted"] } } },
                     { $project: { vehicleId: 1, vehicleType: 1, make: 1, model: 1, registrationNo: 1 } },
                 ],
                 purchasePaymentsDue: [
@@ -357,6 +364,23 @@ export const undoSale = async (id: string) => {
 };
 
 // ── Purchase Payments ────────────────────────────────────────────
+export const updateNocStatus = async (id: string, nocStatus: string) => {
+    if (!mongoose.Types.ObjectId.isValid(id)) return null;
+    const vehicle = await Vehicle.findOne({ _id: id, isActive: true });
+    if (!vehicle) return null;
+    const prev = vehicle.nocStatus;
+    vehicle.nocStatus = nocStatus as IVehicle["nocStatus"];
+
+    const formatNoc = (s: string) => s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    vehicle.activityLog.push({
+        action: "noc_status_updated",
+        description: `NOC status updated: ${formatNoc(prev)} -> ${formatNoc(nocStatus)}`,
+        date: new Date(),
+    });
+    await vehicle.save();
+    return vehicle;
+};
+
 export const addPurchasePayment = async (id: string, payment: { date: string; amount: number; mode: string; bankAccount?: string; notes?: string }) => {
     if (!mongoose.Types.ObjectId.isValid(id)) return null;
     const vehicle = await Vehicle.findOne({ _id: id, isActive: true });

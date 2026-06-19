@@ -13,13 +13,13 @@ import { formatApiErrors } from "@lib/formatApiErrors";
 import { formatCurrency } from "@lib/currency";
 import { cn } from "@/lib/utils";
 import { createConsignmentSchema } from "@schemas/consignment";
-import { COST_CATEGORIES, VEHICLE_MAKES_2W, VEHICLE_MAKES_4W } from "@data/vehicle-constants";
+import { COST_CATEGORIES, VEHICLE_MAKES_2W, VEHICLE_MAKES_4W, NOC_STATUSES } from "@data/vehicle-constants";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
     Store, CreditCard, Bike, Car, ArrowLeft, ArrowRight, Check,
     IndianRupee, User, FileText, Plus, Trash2, Wrench, ChevronDown, ChevronUp, ChevronsUpDown
@@ -81,27 +81,58 @@ const TypeSelector = ({ onSelect }: { onSelect: (type: SaleType) => void }) => (
 );
 
 // ── Progress Stepper ──────────────────────────────────────────────
-const STEPS = ["Vehicle & Source", "Reconditioning Costs", "Review & Submit"];
-
-const Stepper = ({ step, saleType }: { step: number; saleType: SaleType }) => (
-    <div className="flex items-center gap-2 mb-6">
-        <div className={cn("flex h-8 w-8 items-center justify-center rounded-xl text-xs font-bold shrink-0", saleType === "park_sale" ? "bg-violet-500/20 text-violet-400" : "bg-blue-500/20 text-blue-400")}>
-            {saleType === "park_sale" ? <Store className="h-4 w-4" /> : <CreditCard className="h-4 w-4" />}
-        </div>
-        <span className="text-sm font-semibold text-foreground">{saleType === "park_sale" ? "Park Sale" : "Finance Sale"}</span>
-        <div className="ml-4 flex items-center gap-2">
-            {STEPS.map((label, i) => (
-                <div key={label} className="flex items-center gap-2">
-                    <div className={cn("flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold transition-all", i < step ? "bg-primary text-primary-foreground" : i === step ? "bg-primary/20 text-primary border-2 border-primary" : "bg-muted text-muted-foreground")}>
-                        {i < step ? <Check className="h-3 w-3" /> : i + 1}
+const Stepper = ({ step, setStep }: { step: number; setStep: (s: number) => void }) => {
+    const CONSIGNMENT_STEPS = [
+        { id: 0, label: "Vehicle & Source", icon: Car },
+        { id: 1, label: "Reconditioning Costs", icon: FileText },
+        { id: 2, label: "Review & Submit", icon: Check },
+    ];
+    return (
+        <div className="mb-8 flex items-center justify-between gap-1 sm:gap-2 md:gap-4">
+            {CONSIGNMENT_STEPS.map((s, i) => {
+                const Icon = s.icon;
+                const isActive = step === s.id;
+                const isCompleted = step > s.id;
+                return (
+                    <div key={s.id} className="flex flex-1 items-center last:flex-initial min-w-0">
+                        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                            <button
+                                type="button"
+                                onClick={() => isCompleted && setStep(s.id)}
+                                disabled={!isCompleted}
+                                className={cn(
+                                    "flex h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-xl transition-all duration-200",
+                                    isActive ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-105 border-2 border-primary" :
+                                    isCompleted ? "bg-emerald-500 text-white cursor-pointer" :
+                                    "bg-muted/60 text-muted-foreground cursor-not-allowed border border-border"
+                                )}
+                            >
+                                {isCompleted ? <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5" /> : <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5" />}
+                            </button>
+                            <div className="hidden sm:flex flex-col text-left min-w-0">
+                                <span className={cn("text-[9px] font-bold uppercase tracking-wider leading-none", 
+                                    isActive ? "text-primary" : isCompleted ? "text-emerald-500" : "text-muted-foreground/60"
+                                )}>
+                                    Step {s.id + 1}
+                                </span>
+                                <span className={cn("text-[10px] sm:text-xs font-semibold mt-0.5 whitespace-nowrap truncate", 
+                                    isActive ? "text-foreground font-bold" : "text-muted-foreground"
+                                )}>
+                                    {s.label}
+                                </span>
+                            </div>
+                        </div>
+                        {i < CONSIGNMENT_STEPS.length - 1 && (
+                            <div className={cn("h-0.5 flex-1 mx-1 sm:mx-2 md:mx-4 min-w-[8px] transition-colors duration-300", 
+                                step > s.id ? "bg-emerald-500" : "bg-muted/60"
+                            )} />
+                        )}
                     </div>
-                    <span className={cn("text-xs hidden sm:block", i === step ? "text-foreground font-medium" : "text-muted-foreground")}>{label}</span>
-                    {i < STEPS.length - 1 && <div className="w-4 h-px bg-border" />}
-                </div>
-            ))}
+                );
+            })}
         </div>
-    </div>
-);
+    );
+};
 
 
 
@@ -141,6 +172,7 @@ export const ConsignmentForm = () => {
             expectedPrice: undefined,
             agreedDuration: undefined,
             agreementNotes: "",
+            nocStatus: "not_applicable",
             purchasePrice: 0,
             travelCost: 0, workshopRepairCost: 0, sparePartsAccessories: 0,
             alignmentWork: 0, paintingPolishingCost: 0, washingDetailingCost: 0,
@@ -172,6 +204,7 @@ export const ConsignmentForm = () => {
             router.push(`/consignments/${consignmentId}`);
         },
         onError: (err: unknown) => {
+            setIsSubmitting(false);
             const e = (err as AxiosError)?.response?.data as ErrorData;
             toast.error("Error!", { id: tid, description: formatApiErrors(e?.errors) || e?.message });
         },
@@ -208,7 +241,7 @@ export const ConsignmentForm = () => {
     const accentColor = saleType === "park_sale" ? "violet" : "blue";
 
     return (
-        <div className="flex flex-col gap-5 pb-10 max-w-2xl">
+        <div className="flex flex-col gap-5 pb-10 max-w-3xl mx-auto">
             <Link href="/consignments" className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors w-fit">
                 <ArrowLeft className="h-4 w-4" /> Back to Consignments
             </Link>
@@ -217,14 +250,14 @@ export const ConsignmentForm = () => {
                 <h1 className="text-2xl font-bold text-foreground">Register Consignment</h1>
             </div>
 
-            <Stepper step={step} saleType={saleType} />
+            <Stepper step={step} setStep={setStep} />
 
             <Form {...form}>
                 <form onSubmit={(e) => e.preventDefault()} className="space-y-5">
 
                     {/* ── Step 0: Vehicle & Source ── */}
                     {step === 0 && (
-                        <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
+                        <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-md transition-all duration-300 hover:shadow-lg">
                             <div className={cn("px-5 py-4 border-b border-border", accentColor === "violet" ? "bg-violet-500/5" : "bg-blue-500/5")}>
                                 <div className="flex items-center gap-2">
                                     <Car className="h-4 w-4 text-muted-foreground" />
@@ -234,15 +267,22 @@ export const ConsignmentForm = () => {
                             <div className="p-5 space-y-4">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <FormField control={form.control} name="vehicleType" render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel className="text-xs font-semibold">Vehicle Type *</FormLabel>
-                                            <Select onValueChange={field.onChange} value={field.value}>
-                                                <FormControl><SelectTrigger className="h-9 bg-muted/50 border-border text-sm"><SelectValue /></SelectTrigger></FormControl>
-                                                <SelectContent>
-                                                    <SelectItem value="two_wheeler"><span className="flex items-center gap-2"><Bike className="h-3.5 w-3.5" />Two Wheeler</span></SelectItem>
-                                                    <SelectItem value="four_wheeler"><span className="flex items-center gap-2"><Car className="h-3.5 w-3.5" />Four Wheeler</span></SelectItem>
-                                                </SelectContent>
-                                            </Select>
+                                        <FormItem className="sm:col-span-2">
+                                            <FormLabel className="text-sm font-semibold text-foreground">Vehicle Type <span className="text-destructive">*</span></FormLabel>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
+                                                {[{ v: "two_wheeler", label: "Two Wheeler", Icon: Bike }, { v: "four_wheeler", label: "Four Wheeler", Icon: Car }].map(({ v, label, Icon }) => (
+                                                    <button key={v} type="button" onClick={() => {
+                                                        field.onChange(v);
+                                                        form.setValue("nocStatus", v === "four_wheeler" ? "pending" : "not_applicable");
+                                                    }}
+                                                        className={cn("flex items-center gap-3 rounded-xl border-2 p-3 transition-all text-left cursor-pointer", field.value === v ? "border-primary bg-primary/10" : "border-border bg-muted/20 hover:border-primary/40")}>
+                                                        <div className={cn("flex h-9 w-9 items-center justify-center rounded-xl", field.value === v ? "bg-gradient-brand" : "bg-muted/60")}>
+                                                            <Icon className={cn("h-4.5 w-4.5", field.value === v ? "text-white" : "text-muted-foreground")} />
+                                                        </div>
+                                                        <span className={cn("font-semibold text-sm", field.value === v ? "text-primary" : "text-muted-foreground")}>{label}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
                                             <FormMessage />
                                         </FormItem>
                                     )} />
@@ -385,6 +425,17 @@ export const ConsignmentForm = () => {
                                         </FormItem>
                                     )} />
                                 </div>
+                                {watchedValues.vehicleType === "four_wheeler" && (
+                                    <FormField control={form.control} name="nocStatus" render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel className="text-xs font-semibold text-foreground">NOC Status</FormLabel>
+                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                <FormControl><SelectTrigger className="h-9 bg-muted/50 border-border text-sm mt-1.5"><SelectValue /></SelectTrigger></FormControl>
+                                                <SelectContent>{NOC_STATUSES.map((n) => <SelectItem key={n.value} value={n.value}>{n.label}</SelectItem>)}</SelectContent>
+                                            </Select>
+                                        </FormItem>
+                                    )} />
+                                )}
                             </div>
 
                             {/* Source section */}
@@ -479,7 +530,7 @@ export const ConsignmentForm = () => {
 
                     {/* ── Step 1: Costs ── */}
                     {step === 1 && (
-                        <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
+                        <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-md transition-all duration-300 hover:shadow-lg">
                             {/* Summary bar */}
                             <div className="grid grid-cols-3 divide-x divide-border border-b border-border">
                                 <div className="p-4 text-center">
@@ -514,17 +565,17 @@ export const ConsignmentForm = () => {
                                     const catAmount = (watchedValues[cat.key as keyof FormData] as number) || 0;
                                     return (
                                         <div key={cat.key}>
-                                            <div className={cn("group flex items-center gap-2 px-5 py-3 hover:bg-muted/20 transition-colors", catAmount === 0 && !hasItems ? "opacity-60" : "")}>
-                                                <button type="button" onClick={() => hasItems && setExpandedCats(e => ({ ...e, [cat.key]: !isExpanded }))} className="flex items-center gap-2 flex-1 min-w-0 text-left">
-                                                    <span className="text-sm font-medium text-foreground flex items-center gap-1.5">
-                                                        <span className="text-base">{cat.icon}</span>
+                                            <div className={cn("group flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-3 hover:bg-muted/20 transition-colors", catAmount === 0 && !hasItems ? "opacity-60" : "")}>
+                                                <button type="button" onClick={() => hasItems && setExpandedCats(e => ({ ...e, [cat.key]: !isExpanded }))} className="flex items-center gap-1.5 flex-1 min-w-0 text-left">
+                                                    <span className="text-sm font-medium text-foreground flex items-center gap-1.5 min-w-0">
+                                                        <span className="text-base shrink-0">{cat.icon}</span>
                                                         <span className="truncate">{cat.label}</span>
                                                     </span>
-                                                    {hasItems && <span className="ml-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">{items.length}</span>}
-                                                    {hasItems && (isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronUp className="h-3.5 w-3.5 text-muted-foreground rotate-180" />)}
+                                                    {hasItems && <span className="ml-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">{items.length}</span>}
+                                                    {hasItems && (isExpanded ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /> : <ChevronUp className="h-3.5 w-3.5 shrink-0 text-muted-foreground rotate-180" />)}
                                                 </button>
                                                 {hasItems ? (
-                                                    <span className="font-bold text-sm text-primary mr-1">{formatCurrency(catAmount)}</span>
+                                                    <span className="font-bold text-sm text-primary mr-1 shrink-0">{formatCurrency(catAmount)}</span>
                                                 ) : (
                                                     <Controller
                                                         key={cat.key}
@@ -532,14 +583,14 @@ export const ConsignmentForm = () => {
                                                         control={form.control as any}
                                                         name={cat.key as keyof FormData}
                                                         render={({ field }) => (
-                                                            <div className="relative w-32">
-                                                                <IndianRupee className="absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
-                                                                <input type="number" min="0" className="h-8 w-full bg-muted/50 border border-border rounded-md pl-7 pr-2 text-sm text-right" value={Number(field.value) || ""} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} />
+                                                            <div className="relative w-20 sm:w-28 shrink-0">
+                                                                <IndianRupee className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+                                                                <input type="number" min="0" className="h-8 w-full bg-muted/50 border border-border rounded-md pl-6 pr-2 text-xs sm:text-sm text-right" value={Number(field.value) || ""} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} />
                                                             </div>
                                                         )}
                                                     />
                                                 )}
-                                                <button type="button" onClick={() => openDialog(cat)} className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 flex h-7 w-7 items-center justify-center rounded bg-muted hover:bg-primary/10 hover:text-primary text-muted-foreground transition-all" title={`Add ${cat.label} item`}>
+                                                <button type="button" onClick={() => openDialog(cat)} className="shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 flex h-7 w-7 items-center justify-center rounded bg-muted hover:bg-primary/10 hover:text-primary text-muted-foreground transition-all" title={`Add ${cat.label} item`}>
                                                     <Plus className="h-4 w-4" />
                                                 </button>
                                             </div>
@@ -617,43 +668,141 @@ export const ConsignmentForm = () => {
 
                     {/* ── Step 2: Review ── */}
                     {step === 2 && (
-                        <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
-                            <div className={cn("px-5 py-4 border-b border-border", accentColor === "violet" ? "bg-violet-500/5" : "bg-blue-500/5")}>
-                                <div className="flex items-center gap-2">
-                                    <FileText className="h-4 w-4 text-muted-foreground" />
-                                    <p className="text-sm font-bold text-foreground">Review & Submit</p>
-                                </div>
-                            </div>
-                            <div className="p-5 space-y-4">
-                                {[
-                                    { label: "Sale Type", value: saleType === "park_sale" ? "🏪 Park Sale" : "💳 Finance Sale" },
-                                    { label: "Vehicle Type", value: watchedValues.vehicleType === "two_wheeler" ? "🏍️ Two Wheeler" : "🚗 Four Wheeler" },
-                                    { label: "Make & Model", value: `${watchedValues.make} ${watchedValues.model}` + (watchedValues.year ? ` ${watchedValues.year}` : "") },
-                                    { label: "Registration No", value: watchedValues.registrationNo },
-                                    { label: saleType === "park_sale" ? "Owner" : "Previous Owner", value: watchedValues.previousOwner },
-                                    { label: "Date Received", value: watchedValues.dateReceived },
-                                    { label: "Purchase Price", value: formatCurrency(watchedValues.purchasePrice || 0) },
-                                    { label: "Reconditioning", value: formatCurrency(totalRecon) },
-                                    { label: "Total Investment", value: formatCurrency(totalInvestment), highlight: true },
-                                ].map(r => (
-                                    <div key={r.label} className={cn("flex justify-between text-sm border-b border-border/50 pb-3 last:border-0 last:pb-0", r.highlight ? "font-bold text-foreground" : "")}>
-                                        <span className="text-muted-foreground">{r.label}</span>
-                                        <span className={r.highlight ? "text-foreground" : "text-foreground"}>{r.value}</span>
+                        <div className="space-y-6">
+                            <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-md transition-all duration-300 hover:shadow-lg">
+                                <div className={cn("px-5 py-4 border-b border-border", accentColor === "violet" ? "bg-violet-500/5" : "bg-blue-500/5")}>
+                                    <div className="flex items-center gap-2">
+                                        <FileText className="h-4 w-4 text-muted-foreground" />
+                                        <p className="text-sm font-bold text-foreground">Review Consignment Details</p>
                                     </div>
-                                ))}
+                                </div>
+                                
+                                <div className="p-5 space-y-6">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                                        {/* Group 1: Vehicle Specifications */}
+                                        <div className="rounded-xl border border-border bg-muted/15 p-5 space-y-3.5 card-hover-glow">
+                                            <h3 className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-2">
+                                                <Car className="h-4 w-4" /> Vehicle Specification
+                                            </h3>
+                                            <div className="space-y-2.5">
+                                                <div className="flex justify-between text-sm border-b border-border/40 pb-2">
+                                                    <span className="text-muted-foreground">Type & Model</span>
+                                                    <span className="font-semibold text-foreground text-right">{watchedValues.vehicleType === "two_wheeler" ? "🏍️ Two Wheeler" : "🚗 Four Wheeler"} • {watchedValues.make} {watchedValues.model}</span>
+                                                </div>
+                                                {watchedValues.year && (
+                                                    <div className="flex justify-between text-sm border-b border-border/40 pb-2">
+                                                        <span className="text-muted-foreground">Year</span>
+                                                        <span className="font-semibold text-foreground">{watchedValues.year}</span>
+                                                    </div>
+                                                )}
+                                                {watchedValues.color && (
+                                                    <div className="flex justify-between text-sm border-b border-border/40 pb-2">
+                                                        <span className="text-muted-foreground">Color</span>
+                                                        <span className="font-semibold text-foreground">{watchedValues.color}</span>
+                                                    </div>
+                                                )}
+                                                <div className={cn("flex justify-between text-sm pb-1", watchedValues.vehicleType === "four_wheeler" && "border-b border-border/40 pb-2")}>
+                                                    <span className="text-muted-foreground">Registration No</span>
+                                                    <span className="font-semibold text-foreground uppercase">{watchedValues.registrationNo}</span>
+                                                </div>
+                                                {watchedValues.vehicleType === "four_wheeler" && watchedValues.nocStatus && (
+                                                    <div className="flex justify-between text-sm pb-1">
+                                                        <span className="text-muted-foreground">NOC Status</span>
+                                                        <span className="font-semibold text-foreground capitalize">{watchedValues.nocStatus.replace("_", " ")}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Group 2: Consignment & Source Details */}
+                                        <div className="rounded-xl border border-border bg-muted/15 p-5 space-y-3.5 card-hover-glow">
+                                            <h3 className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-2">
+                                                <User className="h-4 w-4" /> Owner & Agreement
+                                            </h3>
+                                            <div className="space-y-2.5">
+                                                <div className="flex justify-between text-sm border-b border-border/40 pb-2">
+                                                    <span className="text-muted-foreground">Sale Type</span>
+                                                    <span className="font-semibold text-foreground">{saleType === "park_sale" ? "🏪 Park Sale" : "💳 Finance Sale"}</span>
+                                                </div>
+                                                <div className="flex justify-between text-sm border-b border-border/40 pb-2">
+                                                    <span className="text-muted-foreground">{saleType === "park_sale" ? "Owner Name" : "Previous Owner"}</span>
+                                                    <span className="font-semibold text-foreground truncate max-w-[150px]" title={watchedValues.previousOwner}>{watchedValues.previousOwner || "—"}</span>
+                                                </div>
+                                                {watchedValues.previousOwnerPhone && (
+                                                    <div className="flex justify-between text-sm border-b border-border/40 pb-2">
+                                                        <span className="text-muted-foreground">Phone</span>
+                                                        <span className="font-semibold text-foreground">{watchedValues.previousOwnerPhone}</span>
+                                                    </div>
+                                                )}
+                                                <div className="flex justify-between text-sm pb-1">
+                                                    <span className="text-muted-foreground">Date Received</span>
+                                                    <span className="font-semibold text-foreground">{watchedValues.dateReceived}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Agreement details (if present for park sale) */}
+                                    {saleType === "park_sale" && (watchedValues.expectedPrice || watchedValues.agreedDuration || watchedValues.agreementNotes) && (
+                                        <div className="rounded-xl border border-border bg-muted/10 p-5 space-y-3">
+                                            <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Owner Agreement Specs</h4>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                {watchedValues.expectedPrice && (
+                                                    <div className="flex justify-between text-sm border-b border-border/30 pb-1.5">
+                                                        <span className="text-muted-foreground">Expected Price</span>
+                                                        <span className="font-semibold text-foreground">{formatCurrency(watchedValues.expectedPrice)}</span>
+                                                    </div>
+                                                )}
+                                                {watchedValues.agreedDuration && (
+                                                    <div className="flex justify-between text-sm border-b border-border/30 pb-1.5">
+                                                        <span className="text-muted-foreground">Duration</span>
+                                                        <span className="font-semibold text-foreground">{watchedValues.agreedDuration} Days</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            {watchedValues.agreementNotes && (
+                                                <div className="pt-1.5">
+                                                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Agreement Notes</span>
+                                                    <p className="text-xs text-foreground italic bg-background/50 p-2 rounded border border-border/30">{watchedValues.agreementNotes}</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Financials Summary */}
+                                    <div className="rounded-xl border border-primary/20 bg-primary/5 p-5 space-y-4">
+                                        <h3 className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-2">
+                                            <IndianRupee className="h-4 w-4" /> Cost & Investment Summary
+                                        </h3>
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 pt-1">
+                                            <div className="flex flex-col">
+                                                <span className="text-xs text-muted-foreground">Acquisition Price</span>
+                                                <span className="text-base font-bold text-foreground mt-0.5">{formatCurrency(watchedValues.purchasePrice || 0)}</span>
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <span className="text-xs text-muted-foreground">Reconditioning</span>
+                                                <span className="text-base font-bold text-orange-400 mt-0.5">+{formatCurrency(totalRecon)}</span>
+                                            </div>
+                                            <div className="flex flex-col border-t sm:border-t-0 sm:border-l border-primary/20 sm:pl-5 pt-3 sm:pt-0">
+                                                <span className="text-xs text-primary font-semibold">Total Investment</span>
+                                                <span className="text-xl font-bold text-primary mt-0.5">{formatCurrency(totalInvestment)}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     )}
 
                     {/* Navigation buttons */}
-                    <div className="flex justify-between gap-3">
-                        <Button type="button" variant="outline" className="border-border"
+                    <div className="flex items-center justify-between gap-3">
+                        <Button type="button" variant="outline" className="border-border flex-1 sm:flex-none"
                             onClick={() => step === 0 ? setSaleType(null) : setStep(s => s - 1)}>
                             <ArrowLeft className="mr-2 h-4 w-4" /> Previous
                         </Button>
                         {step < 2 ? (
                             <Button key="next-btn" type="button"
-                                className={cn("text-white", accentColor === "violet" ? "bg-violet-600 hover:bg-violet-700" : "bg-blue-600 hover:bg-blue-700")}
+                                className={cn("text-white flex-1 sm:flex-none", accentColor === "violet" ? "bg-violet-600 hover:bg-violet-700" : "bg-blue-600 hover:bg-blue-700")}
                                 onClick={async () => {
                                     // Validate step 0 fields before moving to step 1
                                     if (step === 0) {
@@ -673,7 +822,7 @@ export const ConsignmentForm = () => {
                                         () => setIsSubmitting(false)   // re-enable if validation fails
                                     )();
                                 }}
-                                className={cn("text-white", accentColor === "violet" ? "bg-violet-600 hover:bg-violet-700" : "bg-blue-600 hover:bg-blue-700")}>
+                                className={cn("text-white flex-1 sm:flex-none", accentColor === "violet" ? "bg-violet-600 hover:bg-violet-700" : "bg-blue-600 hover:bg-blue-700")}>
                                 {isSubmitting ? "Registering..." : "Register Consignment"}
                                 {!isSubmitting && <Check className="ml-2 h-4 w-4" />}
                             </Button>

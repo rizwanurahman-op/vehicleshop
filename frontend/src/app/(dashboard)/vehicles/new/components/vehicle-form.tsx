@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Bike, Car, ChevronRight, ChevronLeft, ChevronDown, Check, Loader2, IndianRupee, Calendar, FileText, Plus, Trash2, Wrench, ChevronsUpDown } from "lucide-react";
+import { Bike, Car, ChevronRight, ChevronLeft, ChevronDown, Check, Loader2, IndianRupee, Calendar, FileText, Plus, Trash2, Wrench, ChevronsUpDown, User } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { VEHICLE_MAKES_2W, VEHICLE_MAKES_4W, COST_CATEGORIES, NOC_STATUSES } from "@data/vehicle-constants";
@@ -66,7 +66,7 @@ const VehicleForm = () => {
             purchasedFrom: "",
             purchasedFromPhone: "",
             datePurchased: new Date().toISOString().split("T")[0],
-            purchasePrice: 0,
+            purchasePrice: undefined as unknown as number,
             fundingSource: "own",
             travelCost: 0, workshopRepairCost: 0, sparePartsAccessories: 0,
             alignmentWork: 0, paintingPolishingCost: 0, washingDetailingCost: 0,
@@ -128,7 +128,7 @@ const VehicleForm = () => {
             toast.success("Vehicle added!", { id: tid, description: `${values.make} ${values.model} successfully registered` });
             queryClient.invalidateQueries({ queryKey: ["vehicles"] });
             queryClient.invalidateQueries({ queryKey: ["vehicle-stats"] });
-            router.push("/vehicles");
+            router.push(vehicleId ? `/vehicles/${vehicleId}` : "/vehicles");
         } catch (error: unknown) {
             const errorData = (error as AxiosError)?.response?.data as ErrorData;
             toast.error("Error!", { id: tid, description: formatApiErrors(errorData?.errors) || errorData?.message || "Failed to create vehicle" });
@@ -169,32 +169,53 @@ const VehicleForm = () => {
             </div>
 
             {/* Step Indicator */}
-            <div className="mb-8 flex items-center gap-1">
-                {STEPS.map((s, i) => (
-                    <div key={s.id} className="flex flex-1 items-center">
-                        {/* MUST be type="button" — default is type="submit" which would submit the form */}
-                        <button
-                            type="button"
-                            onClick={() => step > s.id && setStep(s.id)}
-                            className={cn(
-                                "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-all",
-                                step === s.id ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" :
-                                    step > s.id ? "bg-emerald-500 text-white cursor-pointer" :
-                                        "bg-muted/60 text-muted-foreground cursor-not-allowed"
+            <div className="mb-8 flex items-center justify-between gap-1 sm:gap-2 md:gap-4">
+                {STEPS.map((s, i) => {
+                    const Icon = s.icon;
+                    const isActive = step === s.id;
+                    const isCompleted = step > s.id;
+                    return (
+                        <div key={s.id} className="flex flex-1 items-center last:flex-initial min-w-0">
+                            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                                <button
+                                    type="button"
+                                    onClick={() => isCompleted && setStep(s.id)}
+                                    disabled={!isCompleted}
+                                    className={cn(
+                                        "flex h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-xl transition-all duration-200",
+                                        isActive ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-105 border-2 border-primary" :
+                                        isCompleted ? "bg-emerald-500 text-white cursor-pointer" :
+                                        "bg-muted/60 text-muted-foreground cursor-not-allowed border border-border"
+                                    )}
+                                >
+                                    {isCompleted ? <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5" /> : <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5" />}
+                                </button>
+                                <div className="hidden sm:flex flex-col text-left min-w-0">
+                                    <span className={cn("text-[9px] font-bold uppercase tracking-wider leading-none", 
+                                        isActive ? "text-primary" : isCompleted ? "text-emerald-500" : "text-muted-foreground/60"
+                                    )}>
+                                        Step {s.id}
+                                    </span>
+                                    <span className={cn("text-[10px] sm:text-xs font-semibold mt-0.5 whitespace-nowrap truncate", 
+                                        isActive ? "text-foreground font-bold" : "text-muted-foreground"
+                                    )}>
+                                        {s.label}
+                                    </span>
+                                </div>
+                            </div>
+                            {i < STEPS.length - 1 && (
+                                <div className={cn("h-0.5 flex-1 mx-1 sm:mx-2 md:mx-4 min-w-[8px] transition-colors duration-300", 
+                                    step > s.id ? "bg-emerald-500" : "bg-muted/60"
+                                )} />
                             )}
-                        >
-                            {step > s.id ? <Check className="h-4 w-4" /> : s.id}
-                        </button>
-                        {i < STEPS.length - 1 && (
-                            <div className={cn("h-0.5 flex-1 transition-colors", step > s.id ? "bg-emerald-500" : "bg-muted/60")} />
-                        )}
-                    </div>
-                ))}
+                        </div>
+                    );
+                })}
             </div>
 
             <Form {...form}>
                 <form onSubmit={(e) => e.preventDefault()}>
-                    <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
+                    <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-md transition-all duration-300 hover:shadow-lg">
 
                         {/* ───── STEP 1: Vehicle Details ───── */}
                         {step === 1 && (
@@ -399,7 +420,7 @@ const VehicleForm = () => {
                                             <FormControl>
                                                 <div className="relative">
                                                     <IndianRupee className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                                                    <Input type="number" min="0" step="1" className="h-10 bg-muted/50 border-border pl-9" value={field.value || ""} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} />
+                                                    <Input type="number" min="1" step="1" className="h-10 bg-muted/50 border-border pl-9" value={field.value ?? ""} onChange={(e) => { const v = parseFloat(e.target.value); field.onChange(isNaN(v) ? undefined : v); }} />
                                                 </div>
                                             </FormControl>
                                             <FormMessage />
@@ -458,31 +479,31 @@ const VehicleForm = () => {
                                             const catAmount = (watched[cat.key as keyof FormData] as number) || 0;
                                             return (
                                                 <div key={cat.key}>
-                                                    <div className={cn("group flex items-center gap-2 px-5 py-3 hover:bg-muted/20 transition-colors", catAmount === 0 && !hasItems ? "opacity-60" : "")}>
-                                                        <button type="button" onClick={() => hasItems && setExpandedCats(e => ({ ...e, [cat.key]: !isExpanded }))} className="flex items-center gap-2 flex-1 min-w-0 text-left">
-                                                            <span className="text-sm font-medium text-foreground flex items-center gap-1.5">
-                                                                <span className="text-base">{cat.icon}</span>
+                                                    <div className={cn("group flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-3 hover:bg-muted/20 transition-colors", catAmount === 0 && !hasItems ? "opacity-60" : "")}>
+                                                        <button type="button" onClick={() => hasItems && setExpandedCats(e => ({ ...e, [cat.key]: !isExpanded }))} className="flex items-center gap-1.5 flex-1 min-w-0 text-left">
+                                                            <span className="text-sm font-medium text-foreground flex items-center gap-1.5 min-w-0">
+                                                                <span className="text-base shrink-0">{cat.icon}</span>
                                                                 <span className="truncate">{cat.label}</span>
                                                             </span>
-                                                            {hasItems && <span className="ml-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">{items.length}</span>}
-                                                            {hasItems && (isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />)}
+                                                            {hasItems && <span className="ml-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">{items.length}</span>}
+                                                            {hasItems && (isExpanded ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />)}
                                                         </button>
                                                         {hasItems ? (
-                                                            <span className="font-bold text-sm text-primary mr-1">{formatCurrency(catAmount)}</span>
+                                                            <span className="font-bold text-sm text-primary mr-1 shrink-0">{formatCurrency(catAmount)}</span>
                                                         ) : (
                                                             <Controller
                                                                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                                                 control={form.control as any}
                                                                 name={cat.key}
                                                                 render={({ field }) => (
-                                                                    <div className="relative w-32">
-                                                                        <IndianRupee className="absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
-                                                                        <Input type="number" min="0" step="1" className="h-8 bg-muted/50 border-border pl-7 text-sm text-right" value={(field.value as number) || ""} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} />
+                                                                    <div className="relative w-20 sm:w-28 shrink-0">
+                                                                        <IndianRupee className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+                                                                        <Input type="number" min="0" step="1" className="h-8 bg-muted/50 border-border pl-6 text-xs sm:text-sm text-right" value={(field.value as number) || ""} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} />
                                                                     </div>
                                                                 )}
                                                             />
                                                         )}
-                                                        <button type="button" onClick={() => openDialog(cat)} className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 flex h-7 w-7 items-center justify-center rounded bg-muted hover:bg-primary/10 hover:text-primary text-muted-foreground transition-all" title={`Add ${cat.label} item`}>
+                                                        <button type="button" onClick={() => openDialog(cat)} className="shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 flex h-7 w-7 items-center justify-center rounded bg-muted hover:bg-primary/10 hover:text-primary text-muted-foreground transition-all" title={`Add ${cat.label} item`}>
                                                             <Plus className="h-4 w-4" />
                                                         </button>
                                                     </div>
@@ -560,53 +581,130 @@ const VehicleForm = () => {
 
                         {/* ───── STEP 4: Review & Submit ───── */}
                         {step === 4 && (
-                            <div className="p-6 space-y-4">
-                                <div className="glass-header -mx-6 -mt-6 mb-6 px-6 py-4">
+                            <div className="p-6 space-y-6">
+                                <div className="glass-header -mx-6 -mt-6 mb-2 px-6 py-4">
                                     <h2 className="font-bold text-foreground text-lg">Review & Confirm</h2>
                                     <p className="text-xs text-muted-foreground mt-0.5">Double-check everything before saving</p>
                                 </div>
-                                {/* Use watched values (reactive) — NOT form.getValues() which is a one-time snapshot */}
-                                {[
-                                    { label: "Vehicle", value: `${watched.vehicleType === "two_wheeler" ? "🏍️" : "🚗"} ${watched.make} ${watched.model}${watched.year ? ` (${watched.year})` : ""}` },
-                                    { label: "Registration No", value: watched.registrationNo },
-                                    { label: "Purchased From", value: watched.purchasedFrom + (watched.purchasedFromPhone ? ` • ${watched.purchasedFromPhone}` : "") },
-                                    { label: "Date Purchased", value: watched.datePurchased },
-                                    { label: "Purchase Price", value: `₹${formatINR(purchasePrice)}` },
-                                    { label: "Total Investment", value: `₹${formatINR(totalInvestment)}` },
-                                    ...(watched.color ? [{ label: "Color", value: watched.color }] : []),
-                                    ...(watched.nocStatus && watched.nocStatus !== "not_applicable" ? [{ label: "NOC Status", value: watched.nocStatus }] : []),
-                                    ...(watched.remarks ? [{ label: "Remarks", value: watched.remarks }] : []),
-                                ].map((row) => (
-                                    <div key={row.label} className="flex items-center justify-between rounded-lg bg-muted/20 px-4 py-2.5 text-sm">
-                                        <span className="text-muted-foreground">{row.label}</span>
-                                        <span className="font-semibold text-foreground text-right max-w-[60%]">{row.value}</span>
-                                    </div>
-                                ))}
-                                {totalCosts > 0 && (
-                                    <div className="rounded-xl border border-border bg-muted/10 p-4">
-                                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-2">Reconditioning Costs</p>
-                                        {COST_CATEGORIES.filter((c) => ((watched[c.key as keyof FormData] as number) || 0) > 0).map((cat) => (
-                                            <div key={cat.key} className="flex justify-between text-sm py-0.5">
-                                                <span className="text-muted-foreground">{cat.icon} {cat.label}</span>
-                                                <span className="font-medium text-foreground">₹{formatINR((watched[cat.key as keyof FormData] as number) || 0)}</span>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                    {/* Card 1: Vehicle Specifications */}
+                                    <div className="rounded-xl border border-border bg-muted/15 p-5 space-y-4 card-hover-glow">
+                                        <h3 className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-2">
+                                            <Car className="h-4 w-4" /> Vehicle Specification
+                                        </h3>
+                                        <div className="space-y-3">
+                                            <div className="flex justify-between text-sm border-b border-border/40 pb-2">
+                                                <span className="text-muted-foreground">Type & Model</span>
+                                                <span className="font-semibold text-foreground text-right">{watched.vehicleType === "two_wheeler" ? "🏍️ Two Wheeler" : "🚗 Four Wheeler"} • {watched.make} {watched.model}</span>
                                             </div>
-                                        ))}
+                                            {watched.year && (
+                                                <div className="flex justify-between text-sm border-b border-border/40 pb-2">
+                                                    <span className="text-muted-foreground">Year</span>
+                                                    <span className="font-semibold text-foreground">{watched.year}</span>
+                                                </div>
+                                            )}
+                                            {watched.color && (
+                                                <div className="flex justify-between text-sm border-b border-border/40 pb-2">
+                                                    <span className="text-muted-foreground">Color</span>
+                                                    <span className="font-semibold text-foreground">{watched.color}</span>
+                                                </div>
+                                            )}
+                                            <div className="flex justify-between text-sm pb-1">
+                                                <span className="text-muted-foreground">Registration No</span>
+                                                <span className="font-semibold text-foreground uppercase">{watched.registrationNo}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Card 2: Acquisition Details */}
+                                    <div className="rounded-xl border border-border bg-muted/15 p-5 space-y-4 card-hover-glow">
+                                        <h3 className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-2">
+                                            <User className="h-4 w-4" /> Seller & Acquisition
+                                        </h3>
+                                        <div className="space-y-3">
+                                            <div className="flex justify-between text-sm border-b border-border/40 pb-2">
+                                                <span className="text-muted-foreground">Purchased From</span>
+                                                <span className="font-semibold text-foreground truncate max-w-[160px]" title={watched.purchasedFrom}>{watched.purchasedFrom || "—"}</span>
+                                            </div>
+                                            {watched.purchasedFromPhone && (
+                                                <div className="flex justify-between text-sm border-b border-border/40 pb-2">
+                                                    <span className="text-muted-foreground">Seller Phone</span>
+                                                    <span className="font-semibold text-foreground">{watched.purchasedFromPhone}</span>
+                                                </div>
+                                            )}
+                                            <div className="flex justify-between text-sm border-b border-border/40 pb-2">
+                                                <span className="text-muted-foreground">Purchase Date</span>
+                                                <span className="font-semibold text-foreground">{watched.datePurchased}</span>
+                                            </div>
+                                            {watched.nocStatus && watched.nocStatus !== "not_applicable" && (
+                                                <div className="flex justify-between text-sm pb-1">
+                                                    <span className="text-muted-foreground">NOC Status</span>
+                                                    <span className="font-semibold text-foreground capitalize">{watched.nocStatus.replace("_", " ")}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Cost & Investment Summary Card */}
+                                <div className="rounded-xl border border-primary/20 bg-primary/5 p-5 space-y-4">
+                                    <h3 className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-2">
+                                        <IndianRupee className="h-4 w-4" /> Cost & Investment Summary
+                                    </h3>
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 pt-1">
+                                        <div className="flex flex-col">
+                                            <span className="text-xs text-muted-foreground">Purchase Price</span>
+                                            <span className="text-base font-bold text-foreground mt-0.5">₹{formatINR(purchasePrice)}</span>
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span className="text-xs text-muted-foreground">Reconditioning</span>
+                                            <span className="text-base font-bold text-orange-400 mt-0.5">+₹{formatINR(totalCosts)}</span>
+                                        </div>
+                                        <div className="flex flex-col border-t sm:border-t-0 sm:border-l border-primary/20 sm:pl-5 pt-3 sm:pt-0">
+                                            <span className="text-xs text-primary font-semibold">Total Investment</span>
+                                            <span className="text-xl font-bold text-primary mt-0.5">₹{formatINR(totalInvestment)}</span>
+                                        </div>
+                                    </div>
+                                    {watched.remarks && (
+                                        <div className="border-t border-primary/10 pt-3 mt-1">
+                                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1">Remarks</span>
+                                            <p className="text-xs text-foreground italic bg-background/50 p-2.5 rounded-lg border border-border/40">{watched.remarks}</p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {totalCosts > 0 && (
+                                    <div className="rounded-xl border border-border bg-muted/10 p-5 space-y-3">
+                                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
+                                            <Wrench className="h-3.5 w-3.5" /> Reconditioning Cost Details
+                                        </p>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+                                            {COST_CATEGORIES.filter((c) => ((watched[c.key as keyof FormData] as number) || 0) > 0).map((cat) => (
+                                                <div key={cat.key} className="flex justify-between text-sm py-1 border-b border-border/30 last:border-0 sm:last:border-b">
+                                                    <span className="text-muted-foreground flex items-center gap-1.5">
+                                                        <span>{cat.icon}</span> <span>{cat.label}</span>
+                                                    </span>
+                                                    <span className="font-semibold text-foreground">₹{formatINR((watched[cat.key as keyof FormData] as number) || 0)}</span>
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
                                 )}
                             </div>
                         )}
 
                         {/* Navigation Footer */}
-                        <div className="border-t border-border bg-muted/20 px-6 py-4 flex justify-between">
-                            <Button type="button" variant="outline" onClick={() => step > 1 ? setStep((s) => s - 1) : router.push("/vehicles")} className="border-border">
+                        <div className="border-t border-border bg-muted/20 px-4 sm:px-6 py-4 flex items-center justify-between gap-3">
+                            <Button type="button" variant="outline" onClick={() => step > 1 ? setStep((s) => s - 1) : router.push("/vehicles")} className="border-border flex-1 sm:flex-none">
                                 <ChevronLeft className="mr-1.5 h-4 w-4" /> {step === 1 ? "Cancel" : "Back"}
                             </Button>
                             {step < 4 ? (
-                                <Button key="next-btn" type="button" onClick={nextStep} className="bg-gradient-brand text-white hover:opacity-90">
+                                <Button key="next-btn" type="button" onClick={nextStep} className="bg-gradient-brand text-white hover:opacity-90 flex-1 sm:flex-none">
                                     Next <ChevronRight className="ml-1.5 h-4 w-4" />
                                 </Button>
                             ) : (
-                                <Button key="submit-btn" type="button" disabled={isPending} onClick={() => form.handleSubmit(onSubmit)()} className="bg-gradient-brand text-white hover:opacity-90">
+                                <Button key="submit-btn" type="button" disabled={isPending} onClick={() => form.handleSubmit(onSubmit)()} className="bg-gradient-brand text-white hover:opacity-90 flex-1 sm:flex-none">
                                     {isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</> : <><Check className="mr-2 h-4 w-4" /> Add Vehicle</>}
                                 </Button>
                             )}

@@ -43,6 +43,7 @@ export const createConsignmentSchema = z.object({
 
     remarks: z.string().optional(),
     notes: z.string().optional(),
+    nocStatus: z.enum(["not_applicable", "pending", "received", "submitted", "completed"]).optional(),
 });
 
 export const updateConsignmentSchema = createConsignmentSchema.partial();
@@ -114,3 +115,7 @@ export const createVehicleOwnerSchema = z.object({
 });
 
 export const updateVehicleOwnerSchema = createVehicleOwnerSchema.partial();
+
+export const updateConsignmentNocStatusSchema = z.object({
+    nocStatus: z.enum(["pending", "received", "submitted", "completed"]),
+});

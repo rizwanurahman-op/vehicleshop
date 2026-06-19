@@ -90,6 +90,7 @@ interface IConsignmentVehicle {
     totalInvestment: number;
 
     status: ConsignmentStatus;
+    nocStatus: NOCStatus;
 
     dateSold?: string;
     soldPrice?: number;

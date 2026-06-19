@@ -94,7 +94,7 @@ export const getConsignments = async (query: ConsignmentQuery): Promise<unknown>
     if (dateFrom || dateTo) {
         const df: Record<string, Date> = {};
         if (dateFrom) df.$gte = new Date(dateFrom);
-        if (dateTo) df.$lte = new Date(dateTo);
+        if (dateTo) df.$lte = new Date(new Date(dateTo).setHours(23, 59, 59, 999));
         filter.dateReceived = df;
     }
     if (search) {
@@ -191,15 +191,17 @@ export const getConsignmentStats = async (query: { saleType?: string; status?: s
                 totalInvested: { $sum: "$totalInvestment" },
                 totalReconCost: { $sum: { $ifNull: ["$totalReconCost", 0] } },
                 totalRevenue: { $sum: { $ifNull: ["$soldPrice", 0] } },
-                totalNetProfit: { $sum: { $cond: [{ $ne: ["$dateSold", null] }, "$netProfit", 0] } },
+                totalNetProfit: { $sum: { $cond: [{ $in: ["$status", ["sold", "sold_pending"]] }, "$netProfit", 0] } },
                 // Buyer payment tracking
                 totalReceivedFromBuyers: { $sum: { $ifNull: ["$receivedAmount", 0] } },
                 totalBuyerBalance: { $sum: { $ifNull: ["$buyerBalance", 0] } },
                 pendingBuyerCount: { $sum: { $cond: [{ $gt: ["$buyerBalance", 0] }, 1, 0] } },
                 // Payee payment tracking (Owner for park_sale, Finance for finance_sale)
                 totalPaidToPayee: { $sum: { $ifNull: ["$paidToPayee", 0] } },
-                totalPayeeBalance: { $sum: { $ifNull: ["$payeeBalance", 0] } },
-                pendingPayeeCount: { $sum: { $cond: [{ $in: ["$payeePaymentStatus", ["not_started", "partial"]] }, 1, 0] } },
+                // Only sum payee balance from sold vehicles (unsold vehicles don't have an outstanding owner liability yet)
+                totalPayeeBalance: { $sum: { $cond: [{ $in: ["$status", ["sold", "sold_pending"]] }, { $ifNull: ["$payeeBalance", 0] }, 0] } },
+                // Only count sold vehicles with unpaid payee balance as "pending"
+                pendingPayeeCount: { $sum: { $cond: [{ $and: [{ $in: ["$status", ["sold", "sold_pending"]] }, { $in: ["$payeePaymentStatus", ["not_started", "partial"]] }] }, 1, 0] } },
                 // Settlement
                 fullyClosed: { $sum: { $cond: [{ $eq: ["$settlementStatus", "fully_closed"] }, 1, 0] } },
             },
@@ -615,6 +617,24 @@ export const closePayeeSettlement = async (id: string): Promise<IConsignmentVehi
     return vehicle;
 };
 
+export const updateNocStatus = async (id: string, nocStatus: string): Promise<IConsignmentVehicle | null> => {
+    if (!mongoose.Types.ObjectId.isValid(id)) return null;
+    const vehicle = await ConsignmentVehicle.findOne({ _id: id, isActive: true });
+    if (!vehicle) return null;
+    const prev = vehicle.nocStatus;
+    vehicle.nocStatus = nocStatus as IConsignmentVehicle["nocStatus"];
+    await vehicle.save();
+
+    const formatNoc = (s: string) => s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    vehicle.activityLog.push({
+        action: "NOC_UPDATE",
+        description: `NOC status updated: ${formatNoc(prev)} -> ${formatNoc(nocStatus)}`,
+        date: new Date(),
+    });
+    await vehicle.save();
+    return vehicle;
+};
+
 // ── Reports ───────────────────────────────────────────────────────
 
 export const getConsignmentReports = async (saleType?: string, dateFrom?: string, dateTo?: string): Promise<unknown> => {
@@ -625,7 +645,7 @@ export const getConsignmentReports = async (saleType?: string, dateFrom?: string
     if (dateFrom || dateTo) {
         const df: Record<string, Date> = {};
         if (dateFrom) df.$gte = new Date(dateFrom);
-        if (dateTo) df.$lte = new Date(dateTo);
+        if (dateTo) df.$lte = new Date(new Date(dateTo).setHours(23, 59, 59, 999));
         soldMatch.dateSold = df;
     }
 

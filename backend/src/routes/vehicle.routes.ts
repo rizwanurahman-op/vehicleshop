@@ -41,6 +41,7 @@ router.delete("/:id/costs/breakdown/:itemId", isAdmin, writeLimiter, asyncHandle
 router.post("/:id/sale", isAdmin, writeLimiter, asyncHandler(vc.recordSale));
 router.patch("/:id/sale", isAdmin, writeLimiter, asyncHandler(vc.updateSale));
 router.delete("/:id/sale", isAdmin, writeLimiter, asyncHandler(vc.undoSale));
+router.patch("/:id/noc-status", isAdmin, writeLimiter, asyncHandler(vc.updateNocStatus));
 
 // ── Purchase Payments ─────────────────────────────────────────────
 router.post("/:id/purchase-payments", isAdmin, writeLimiter, asyncHandler(vc.addPurchasePayment));

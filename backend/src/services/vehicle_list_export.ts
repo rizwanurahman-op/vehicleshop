@@ -20,8 +20,13 @@ const dFmt = (d: Date | string | null | undefined) => {
     return new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 };
 
-const dSl = (s: string | null | undefined) =>
-    s ? s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "—";
+const dSl = (s: string | null | undefined) => {
+    if (!s) return "—";
+    if (s === "noc_cash_pending") return "NOC & Balance Pending";
+    if (s === "noc_pending") return "NOC Pending";
+    if (s === "not_applicable") return "Not Applicable";
+    return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()).replace(/Noc/g, "NOC");
+};
 
 // ── Build MongoDB filter from query ─────────────────────────────────────────
 const buildFilter = (query: VehicleListExportQuery): Record<string, unknown> => {
@@ -259,6 +264,7 @@ export const exportVehiclesPDF = async (query: VehicleListExportQuery): Promise<
                 if (saleStatus === "balance_pending")     flagParts.push({ label: "Bal. Pending",    color: C.amber });
                 else if (saleStatus === "noc_pending")    flagParts.push({ label: "NOC Pending",     color: "#ca8a04" });
                 else if (saleStatus === "fully_received") flagParts.push({ label: "Fully Received",  color: C.green });
+                else if (saleStatus === "noc_cash_pending") flagParts.push({ label: "NOC + Cash Pending", color: C.red });
                 if ((v as any).isFromExchange)            flagParts.push({ label: "From Exchange",   color: C.cyan });
                 if ((v as any).isExchange)                flagParts.push({ label: "Sold via Exch.",  color: C.purple });
 

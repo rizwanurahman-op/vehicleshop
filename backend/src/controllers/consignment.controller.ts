@@ -7,6 +7,7 @@ import {
     createConsignmentSchema, updateConsignmentSchema, updateConsignmentStatusSchema,
     updateConsignmentCostsSchema, addCostBreakdownItemSchema,
     recordConsignmentSaleSchema, addBuyerPaymentSchema, addPayeePaymentSchema,
+    updateConsignmentNocStatusSchema,
 } from "../schemas/consignment.schema";
 
 const validationError = (res: Response, errors: unknown[]) =>
@@ -59,6 +60,14 @@ export const updateConsignmentStatus = async (req: Request, res: Response): Prom
     const vehicle = await cs.updateConsignmentStatus(req.params.id as string, parsed.data.status, parsed.data.notes);
     if (!vehicle) { res.status(404).json({ success: false, statusCode: 404, message: "Consignment not found" }); return; }
     res.json({ success: true, statusCode: 200, message: "Status updated", data: vehicle });
+};
+
+export const updateConsignmentNocStatus = async (req: Request, res: Response): Promise<void> => {
+    const parsed = updateConsignmentNocStatusSchema.safeParse(req.body);
+    if (!parsed.success) { validationError(res, parsed.error.errors); return; }
+    const vehicle = await cs.updateNocStatus(req.params.id as string, parsed.data.nocStatus);
+    if (!vehicle) { res.status(404).json({ success: false, statusCode: 404, message: "Consignment not found" }); return; }
+    res.json({ success: true, statusCode: 200, message: "NOC status updated", data: vehicle });
 };
 
 export const returnConsignment = async (req: Request, res: Response): Promise<void> => {

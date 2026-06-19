@@ -84,6 +84,21 @@ export const undoSale = async (req: Request, res: Response): Promise<void> => {
     res.json({ success: true, statusCode: 200, message: "Sale undone", data: vehicle });
 };
 
+export const updateNocStatus = async (req: Request, res: Response): Promise<void> => {
+    const { z } = await import("zod");
+    const schema = z.object({
+        nocStatus: z.enum(["pending", "received", "submitted", "completed"]),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+        res.status(400).json({ success: false, statusCode: 400, message: "Validation failed", errors: parsed.error.errors.map((e) => ({ field: e.path.join("."), message: e.message })) });
+        return;
+    }
+    const vehicle = await vs.updateNocStatus(req.params.id as string, parsed.data.nocStatus);
+    if (!vehicle) { res.status(404).json({ success: false, statusCode: 404, message: "Vehicle not found" }); return; }
+    res.json({ success: true, statusCode: 200, message: "NOC status updated", data: vehicle });
+};
+
 // ── Purchase Payments ─────────────────────────────────────────────
 export const addPurchasePayment = async (req: Request, res: Response): Promise<void> => {
     const parsed = addPurchasePaymentSchema.safeParse(req.body);
@@ -172,6 +187,23 @@ export const exportProfitLoss = async (req: Request, res: Response): Promise<voi
         const esc = (x: unknown) => { const s = String(x ?? ""); return s.includes(",") || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s; };
         const dFmt = (d: unknown) => d ? new Date(d as string).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
         const dINR = (n: unknown) => n == null ? "—" : `Rs. ${Math.abs(n as number).toLocaleString("en-IN")}`;
+        const getSaleStatusLabel = (s: string | null | undefined) => {
+            if (!s) return "—";
+            if (s === "fully_received") return "Fully Received";
+            if (s === "balance_pending") return "Balance Pending";
+            if (s === "noc_pending") return "NOC Pending";
+            if (s === "noc_cash_pending") return "NOC & Balance Pending";
+            return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+        };
+        const getNocStatusLabel = (s: string | null | undefined) => {
+            if (!s) return "—";
+            if (s === "not_applicable") return "Not Applicable";
+            if (s === "pending") return "Pending";
+            if (s === "received") return "Received";
+            if (s === "submitted") return "Submitted";
+            if (s === "completed") return "Completed";
+            return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+        };
         const headers = ["Vehicle ID", "Type", "Make", "Model", "Reg No", "Date Purchased", "Date Sold", "Total Invested", "Sold Price", "Profit/Loss", "P/L %", "Days to Sell", "Sale Status", "NOC Status"];
         const rows = (vehicles as any[]).map(v => [
             v.vehicleId, v.vehicleType === "two_wheeler" ? "Two Wheeler" : "Four Wheeler",
@@ -180,7 +212,7 @@ export const exportProfitLoss = async (req: Request, res: Response): Promise<voi
             dINR(v.totalInvestment), dINR(v.soldPrice),
             dINR(v.profitLoss), `${(v.profitLossPercentage ?? 0).toFixed(1)}%`,
             v.daysToSell != null ? v.daysToSell : "—",
-            (v.saleStatus ?? "").replace(/_/g, " "), (v.nocStatus ?? "").replace(/_/g, " "),
+            getSaleStatusLabel(v.saleStatus), getNocStatusLabel(v.nocStatus),
         ].map(esc).join(","));
         const csv = [headers.map(esc).join(","), ...rows].join("\r\n");
         res.setHeader("Content-Type", "text/csv; charset=utf-8");

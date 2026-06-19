@@ -15,9 +15,10 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { recordConsignmentSaleSchema, addBuyerPaymentSchema, addPayeePaymentSchema, addConsignmentCostBreakdownItemSchema, editConsignmentSchema } from "@schemas/consignment";
-import { BUYER_PAYMENT_METHODS } from "@data/vehicle-constants";
+import { BUYER_PAYMENT_METHODS, NOC_STATUSES } from "@data/vehicle-constants";
 import { ExchangeVehiclePicker } from "@/components/exchange-vehicle-picker";
 import { MakeSelect } from "@/components/make-select";
+import VehicleStatusBadge from "../../../vehicles/components/vehicle-status-badge";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,7 +34,7 @@ import {
     IndianRupee, Plus, Trash2, Loader2, Activity, FileText,
     DollarSign, Sparkles, RotateCcw, CheckCircle2, Package,
     User, ArrowUpRight, ArrowDownLeft, ArrowLeftRight, ExternalLink,
-    Download, FileSpreadsheet, ChevronDown, Pencil
+    Download, FileSpreadsheet, ChevronDown, Pencil, FileCheck2
 } from "lucide-react";
 import Link from "next/link";
 import { AdminOnly } from "@components/shared";
@@ -96,10 +97,12 @@ const EditConsignmentDialog = ({ vehicle }: { vehicle: IConsignmentVehicle }) =>
             : undefined,
         remarks: vehicle.remarks ?? "",
         notes: vehicle.notes ?? "",
+        nocStatus: vehicle.nocStatus || "not_applicable",
     });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const form = useForm({ resolver: zodResolver(editConsignmentSchema) as any, defaultValues: defaultVals() });
+    const watchedVehicleType = form.watch("vehicleType");
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => { if (open) form.reset(defaultVals()); }, [open]);
@@ -150,7 +153,10 @@ const EditConsignmentDialog = ({ vehicle }: { vehicle: IConsignmentVehicle }) =>
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                     <FormField control={form.control} name="vehicleType" render={({ field }) => (
                                         <FormItem><FormLabel className="text-xs font-semibold">Type *</FormLabel>
-                                            <Select onValueChange={field.onChange} value={field.value}>
+                                            <Select onValueChange={(val) => {
+                                                field.onChange(val);
+                                                form.setValue("nocStatus", val === "four_wheeler" ? "pending" : "not_applicable");
+                                            }} value={field.value}>
                                                 <FormControl><SelectTrigger className="h-9 bg-muted/50 border-border text-sm"><SelectValue /></SelectTrigger></FormControl>
                                                 <SelectContent>
                                                     <SelectItem value="two_wheeler">Two Wheeler</SelectItem>
@@ -204,6 +210,19 @@ const EditConsignmentDialog = ({ vehicle }: { vehicle: IConsignmentVehicle }) =>
                                                         <SelectItem value="received">Received</SelectItem>
                                                         <SelectItem value="reconditioning">Reconditioning</SelectItem>
                                                         <SelectItem value="ready_for_sale">Ready for Sale</SelectItem>
+                                                    </SelectContent>
+                                                </Select></FormItem>
+                                        )} />
+                                    )}
+                                    {watchedVehicleType === "four_wheeler" && (
+                                        <FormField control={form.control} name="nocStatus" render={({ field }) => (
+                                            <FormItem><FormLabel className="text-xs font-semibold">NOC Status</FormLabel>
+                                                <Select onValueChange={field.onChange} value={field.value}>
+                                                    <FormControl><SelectTrigger className="h-9 bg-muted/50 border-border text-sm"><SelectValue /></SelectTrigger></FormControl>
+                                                    <SelectContent>
+                                                        {NOC_STATUSES.map(n => (
+                                                            <SelectItem key={n.value} value={n.value}>{n.label}</SelectItem>
+                                                        ))}
                                                     </SelectContent>
                                                 </Select></FormItem>
                                         )} />
@@ -282,6 +301,95 @@ const EditConsignmentDialog = ({ vehicle }: { vehicle: IConsignmentVehicle }) =>
                         </div>
                     </form>
                 </Form>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
+// ── Update Consignment NOC Status Dialog ─────────────────────────────────────
+const UpdateConsignmentNocStatusDialog = ({ vehicle }: { vehicle: IConsignmentVehicle }) => {
+    const [open, setOpen] = useState(false);
+    const [tid, setTid] = useState<string | number | undefined>();
+    const queryClient = useQueryClient();
+
+    const form = useForm({
+        defaultValues: { nocStatus: vehicle.nocStatus as string },
+    });
+
+    const { mutate, isPending } = useMutation({
+        mutationFn: async (values: { nocStatus: string }) => {
+            setTid(toast.loading("Updating NOC status..."));
+            return axios.patch(`/consignments/${vehicle._id}/noc-status`, values);
+        },
+        onSuccess: () => {
+            toast.success("NOC status updated!", { id: tid });
+            queryClient.invalidateQueries({ queryKey: ["consignment", vehicle._id] });
+            queryClient.invalidateQueries({ queryKey: ["consignments"] });
+            setOpen(false);
+        },
+        onError: (err: unknown) => {
+            const e = (err as AxiosError)?.response?.data as ErrorData;
+            toast.error("Error!", { id: tid, description: formatApiErrors(e?.errors) || e?.message });
+        },
+    });
+
+    const currentNoc = NOC_STATUSES.find(n => n.value === vehicle.nocStatus);
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button size="sm" variant="outline" className="h-7 gap-1.5 text-xs border-blue-500/30 text-blue-400 hover:bg-blue-500/10 hover:text-blue-300">
+                    <FileCheck2 className="h-3 w-3" /> Update NOC
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="w-[96vw] max-w-sm p-0 overflow-hidden flex flex-col rounded-2xl bg-card border-border sm:w-full">
+                <div className="glass-header relative p-5">
+                    <div className="absolute -top-16 -right-16 h-32 w-32 rounded-full bg-blue-500/10 blur-3xl" />
+                    <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/15 border border-blue-500/20 shadow-inner">
+                            <FileCheck2 className="h-4 w-4 text-blue-400" />
+                        </div>
+                        <div>
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                                <span className="text-[10px] font-bold tracking-widest text-blue-400 uppercase">NOC</span>
+                            </div>
+                            <DialogTitle className="text-base font-bold text-foreground">Update NOC Status</DialogTitle>
+                            <DialogDescription className="text-xs text-muted-foreground">
+                                {vehicle.make} {vehicle.model} &mdash; {vehicle.registrationNo}
+                            </DialogDescription>
+                        </div>
+                    </div>
+                </div>
+                <form onSubmit={form.handleSubmit((v) => mutate(v))} className="p-5 space-y-4">
+                    {/* Current status pill */}
+                    <div className="flex items-center gap-2 rounded-lg bg-muted/30 border border-border px-3 py-2.5">
+                        <span className="text-xs text-muted-foreground">Current:</span>
+                        <VehicleStatusBadge nocStatus={vehicle.nocStatus as NOCStatus} size="md" />
+                        <span className="text-xs text-muted-foreground ml-auto">{currentNoc?.label || vehicle.nocStatus}</span>
+                    </div>
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-foreground">New NOC Status</label>
+                        <Select
+                            value={form.watch("nocStatus")}
+                            onValueChange={(v) => form.setValue("nocStatus", v)}
+                        >
+                            <SelectTrigger className="h-9 bg-muted/50 border-border text-sm">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {NOC_STATUSES.filter(n => n.value !== "not_applicable").map((n) => (
+                                    <SelectItem key={n.value} value={n.value}>{n.label}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                        <Button type="button" variant="outline" onClick={() => setOpen(false)} className="border-border hover:bg-muted">Cancel</Button>
+                        <Button type="submit" disabled={isPending} className="bg-blue-500 hover:bg-blue-600 text-white">
+                            {isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : "Update NOC Status"}
+                        </Button>
+                    </div>
+                </form>
             </DialogContent>
         </Dialog>
     );
@@ -575,6 +683,8 @@ const AddBuyerPaymentDialog = ({ vehicle }: { vehicle: IConsignmentVehicle }) =>
 // ── Add Payee Payment Dialog ──────────────────────────────────────
 const AddPayeePaymentDialog = ({ vehicle }: { vehicle: IConsignmentVehicle }) => {
     const [open, setOpen] = useState(false);
+    const [showConfirmClose, setShowConfirmClose] = useState(false);
+    const showConfirmCloseRef = useRef(false);
     const [tid, setTid] = useState<string | number | undefined>();
     const qc = useQueryClient();
     const form = useForm({ resolver: zodResolver(addPayeePaymentSchema), defaultValues: { date: new Date().toISOString().split("T")[0], amount: 0, mode: "Cash" as const, notes: "", markClosed: false } });
@@ -587,7 +697,9 @@ const AddPayeePaymentDialog = ({ vehicle }: { vehicle: IConsignmentVehicle }) =>
     });
 
     return (
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={(val) => {
+            if (!showConfirmCloseRef.current) setOpen(val);
+        }}>
             <DialogTrigger asChild>
                 <Button size="sm" variant="outline" className="border-border"><Plus className="mr-1.5 h-3.5 w-3.5" />Pay {label}</Button>
             </DialogTrigger>
@@ -632,7 +744,20 @@ const AddPayeePaymentDialog = ({ vehicle }: { vehicle: IConsignmentVehicle }) =>
                             )} />
                             <FormField control={form.control} name="markClosed" render={({ field }) => (
                                 <FormItem className="flex items-start gap-3 rounded-lg border border-dashed border-border p-3">
-                                    <input type="checkbox" id="markClosed" checked={field.value} onChange={e => field.onChange(e.target.checked)} className="mt-0.5 h-4 w-4 rounded accent-primary" />
+                                    <input
+                                        type="checkbox"
+                                        id="markClosed"
+                                        checked={field.value}
+                                        onChange={e => {
+                                            if (e.target.checked) {
+                                                showConfirmCloseRef.current = true;
+                                                setShowConfirmClose(true);
+                                            } else {
+                                                field.onChange(false);
+                                            }
+                                        }}
+                                        className="mt-0.5 h-4 w-4 rounded accent-primary cursor-pointer"
+                                    />
                                     <div>
                                         <FormLabel htmlFor="markClosed" className="text-xs font-semibold text-foreground cursor-pointer">Mark as Closed (final payment, fully settled)</FormLabel>
                                     </div>
@@ -649,6 +774,43 @@ const AddPayeePaymentDialog = ({ vehicle }: { vehicle: IConsignmentVehicle }) =>
                         </div>
                     </form>
                 </Form>
+
+                <AlertDialog open={showConfirmClose} onOpenChange={(val) => {
+                    if (!val) {
+                        showConfirmCloseRef.current = false;
+                        setShowConfirmClose(false);
+                    }
+                }}>
+                    <AlertDialogContent className="w-[96vw] max-w-md rounded-3xl bg-card border-border p-0 overflow-hidden gap-0 sm:w-full shadow-2xl">
+                        <div className="relative overflow-hidden bg-amber-500/5 border-b border-amber-500/10 px-6 pt-6 pb-5">
+                            <div className="absolute -top-12 -right-12 h-32 w-32 rounded-full bg-amber-500/20 blur-[40px] pointer-events-none" />
+                            <div className="relative flex items-center gap-4">
+                                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-500/10 border border-amber-500/20">
+                                    <Activity className="h-5 w-5 text-amber-500" />
+                                </div>
+                                <AlertDialogTitle className="text-foreground text-base font-bold">Mark Consignment as Closed?</AlertDialogTitle>
+                            </div>
+                        </div>
+                        <div className="px-6 py-5">
+                            <AlertDialogDescription className="text-sm text-muted-foreground leading-relaxed">
+                                Marking this consignment as <strong>Closed</strong> indicates that the {label.toLowerCase()} has been fully settled and no further payments are expected.
+                                <br /><br />
+                                Once closed, you will not be able to record any more payee payments for this consignment. Are you sure you want to proceed?
+                            </AlertDialogDescription>
+                        </div>
+                        <AlertDialogFooter className="px-6 pb-6 pt-0 flex-col sm:flex-row gap-3">
+                            <AlertDialogCancel onClick={() => {
+                                showConfirmCloseRef.current = false;
+                                setShowConfirmClose(false);
+                            }} className="w-full sm:w-1/2 border-border hover:bg-muted m-0">No, Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => {
+                                form.setValue("markClosed", true);
+                                showConfirmCloseRef.current = false;
+                                setShowConfirmClose(false);
+                            }} className="w-full sm:w-1/2 bg-amber-500 hover:bg-amber-600 text-white shadow-md shadow-amber-500/20 m-0">Yes, Confirm</AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
             </DialogContent>
         </Dialog>
     );
@@ -896,6 +1058,7 @@ const DeleteConsignmentDialog = ({ vehicle }: { vehicle: IConsignmentVehicle }) 
 const ConsignmentDetail = ({ id, initialData }: { id: string; initialData: IConsignmentVehicle | null }) => {
     const [activeTab, setActiveTab] = useState("overview");
     const [animateProgress, setAnimateProgress] = useState(false);
+    const [showCloseConfirmDialog, setShowCloseConfirmDialog] = useState(false);
     const qc = useQueryClient();
 
     useEffect(() => {
@@ -1273,9 +1436,29 @@ const ConsignmentDetail = ({ id, initialData }: { id: string; initialData: ICons
                             </div>
                         )}
                     </div>
+                    
+                    {/* NOC Status Card (shown only if NOT sold and is a four-wheeler) */}
+                    {!isSold && vehicle.vehicleType === "four_wheeler" && (
+                        <div className="rounded-xl border border-border bg-card p-5 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">NOC Details</p>
+                                <AdminOnly><UpdateConsignmentNocStatusDialog vehicle={vehicle} /></AdminOnly>
+                            </div>
+                            <div className="flex justify-between text-sm items-center">
+                                <span className="text-muted-foreground">NOC Status</span>
+                                <VehicleStatusBadge nocStatus={vehicle.nocStatus as NOCStatus} size="md" />
+                            </div>
+                        </div>
+                    )}
+
                     {isSold && (
                         <div className="rounded-xl border border-border bg-card p-5 space-y-3">
-                            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Sale Details</p>
+                            <div className="flex items-center justify-between">
+                                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Sale Details</p>
+                                {vehicle.vehicleType === "four_wheeler" && (
+                                    <AdminOnly><UpdateConsignmentNocStatusDialog vehicle={vehicle} /></AdminOnly>
+                                )}
+                            </div>
                             {[
                                 { label: "Date Sold", value: vehicle.dateSold ? formatDate(vehicle.dateSold) : "—" },
                                 { label: "Sold To", value: vehicle.soldTo || "—" },
@@ -1284,11 +1467,18 @@ const ConsignmentDetail = ({ id, initialData }: { id: string; initialData: ICons
                                 { label: "Payment Method", value: vehicle.isExchange ? "Exchange + Cash" : "Cash" },
                                 { label: "Days in Shop", value: vehicle.daysInShop != null ? `${vehicle.daysInShop} days` : "—" },
                             ].map(r => (
-                                <div key={r.label} className="flex justify-between text-sm border-b border-border/50 pb-2 last:border-0 last:pb-0">
+                                <div key={r.label} className="flex justify-between text-sm border-b border-border/50 pb-2">
                                     <span className="text-muted-foreground">{r.label}</span>
                                     <span className={`font-medium text-right ${r.label === "Payment Method" && vehicle.isExchange ? "text-orange-400" : "text-foreground"}`}>{r.value}</span>
                                 </div>
                             ))}
+                            {/* NOC Status — badge with color coding */}
+                            {vehicle.vehicleType === "four_wheeler" && (
+                                <div className="flex justify-between text-sm items-center border-b border-border/50 pb-2">
+                                    <span className="text-muted-foreground">NOC Status</span>
+                                    <VehicleStatusBadge nocStatus={vehicle.nocStatus as NOCStatus} size="md" />
+                                </div>
+                            )}
                             {/* Settlement — color-coded badge */}
                             <div className="flex justify-between text-sm items-center">
                                 <span className="text-muted-foreground">Settlement</span>
@@ -1517,7 +1707,7 @@ const ConsignmentDetail = ({ id, initialData }: { id: string; initialData: ICons
                         <AdminOnly>
                             <div className="flex gap-2">
                                 {isSold && vehicle.payeePaymentStatus !== "closed" && (
-                                    <Button size="sm" variant="outline" className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10" onClick={() => closeSale()}>
+                                    <Button size="sm" variant="outline" className="border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10" onClick={() => setShowCloseConfirmDialog(true)}>
                                         <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />Mark Closed
                                     </Button>
                                 )}
@@ -1756,6 +1946,34 @@ const ConsignmentDetail = ({ id, initialData }: { id: string; initialData: ICons
                     )}
                 </div>
             )}
+
+            <AlertDialog open={showCloseConfirmDialog} onOpenChange={setShowCloseConfirmDialog}>
+                <AlertDialogContent className="w-[96vw] max-w-md rounded-3xl bg-card border-border p-0 overflow-hidden gap-0 sm:w-full shadow-2xl">
+                    <div className="relative overflow-hidden bg-amber-500/5 border-b border-amber-500/10 px-6 pt-6 pb-5">
+                        <div className="absolute -top-12 -right-12 h-32 w-32 rounded-full bg-amber-500/20 blur-[40px] pointer-events-none" />
+                        <div className="relative flex items-center gap-4">
+                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-500/10 border border-amber-500/20">
+                                <Activity className="h-5 w-5 text-amber-500" />
+                            </div>
+                            <AlertDialogTitle className="text-foreground text-base font-bold">Mark Consignment as Closed?</AlertDialogTitle>
+                        </div>
+                    </div>
+                    <div className="px-6 py-5">
+                        <AlertDialogDescription className="text-sm text-muted-foreground leading-relaxed">
+                            Marking this consignment as <strong>Closed</strong> indicates that the {label.toLowerCase()} has been fully settled and no further payments are expected.
+                            <br /><br />
+                            Once closed, you will not be able to record any more payee payments for this consignment. Are you sure you want to proceed?
+                        </AlertDialogDescription>
+                    </div>
+                    <AlertDialogFooter className="px-6 pb-6 pt-0 flex-col sm:flex-row gap-3">
+                        <AlertDialogCancel onClick={() => setShowCloseConfirmDialog(false)} className="w-full sm:w-1/2 border-border hover:bg-muted m-0">No, Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => {
+                            closeSale();
+                            setShowCloseConfirmDialog(false);
+                        }} className="w-full sm:w-1/2 bg-amber-500 hover:bg-amber-600 text-white shadow-md shadow-amber-500/20 m-0">Yes, Confirm</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 };

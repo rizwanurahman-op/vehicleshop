@@ -27,7 +27,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import {
     ArrowLeft, Bike, Car, TrendingUp, TrendingDown, IndianRupee, ArrowLeftRight,
     DollarSign, Plus, Trash2, Loader2, FileText, Activity, Sparkles, ShoppingCart,
-    Package, ExternalLink, Pencil, RotateCcw, Download, FileSpreadsheet, ChevronDown
+    Package, ExternalLink, Pencil, RotateCcw, Download, FileSpreadsheet, ChevronDown,
+    FileCheck2
 } from "lucide-react";
 import { AdminOnly } from "@components/shared";
 import Link from "next/link";
@@ -775,8 +776,8 @@ const EditBasicInfoDialog = ({ vehicle }: { vehicle: IVehicle }) => {
                                             <FormControl>
                                                 <div className="relative">
                                                     <IndianRupee className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
-                                                    <Input type="number" min="0" className="h-9 bg-muted/50 border-border pl-7 text-sm"
-                                                        value={field.value || ""} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} />
+                                                    <Input type="number" min="1" className="h-9 bg-muted/50 border-border pl-7 text-sm"
+                                                        value={field.value || ""} onChange={(e) => { const v = parseFloat(e.target.value); field.onChange(isNaN(v) ? undefined : v); }} />
                                                 </div>
                                             </FormControl><FormMessage /></FormItem>
                                     )} />
@@ -1138,6 +1139,95 @@ const RevertSaleButton = ({ vehicle, size = "default" }: { vehicle: IVehicle; si
                 </AlertDialogFooter>
             </AlertDialogContent>
         </AlertDialog>
+    );
+};
+
+// ── Update NOC Status Dialog ─────────────────────────────────────
+const UpdateNocStatusDialog = ({ vehicle }: { vehicle: IVehicle }) => {
+    const [open, setOpen] = useState(false);
+    const [tid, setTid] = useState<string | number | undefined>();
+    const queryClient = useQueryClient();
+
+    const form = useForm({
+        defaultValues: { nocStatus: vehicle.nocStatus as string },
+    });
+
+    const { mutate, isPending } = useMutation({
+        mutationFn: async (values: { nocStatus: string }) => {
+            setTid(toast.loading("Updating NOC status..."));
+            return axios.patch(`/vehicles/${vehicle._id}/noc-status`, values);
+        },
+        onSuccess: () => {
+            toast.success("NOC status updated!", { id: tid });
+            queryClient.invalidateQueries({ queryKey: ["vehicle", vehicle._id] });
+            queryClient.invalidateQueries({ queryKey: ["vehicles"] });
+            setOpen(false);
+        },
+        onError: (err: unknown) => {
+            const e = (err as AxiosError)?.response?.data as ErrorData;
+            toast.error("Error!", { id: tid, description: formatApiErrors(e?.errors) || e?.message });
+        },
+    });
+
+    const currentNoc = NOC_STATUSES.find(n => n.value === vehicle.nocStatus);
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button size="sm" variant="outline" className="h-7 gap-1.5 text-xs border-blue-500/30 text-blue-400 hover:bg-blue-500/10 hover:text-blue-300">
+                    <FileCheck2 className="h-3 w-3" /> Update NOC
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="w-[96vw] max-w-sm p-0 overflow-hidden flex flex-col rounded-2xl bg-card border-border sm:w-full">
+                <div className="glass-header relative p-5">
+                    <div className="absolute -top-16 -right-16 h-32 w-32 rounded-full bg-blue-500/10 blur-3xl" />
+                    <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/15 border border-blue-500/20 shadow-inner">
+                            <FileCheck2 className="h-4 w-4 text-blue-400" />
+                        </div>
+                        <div>
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                                <span className="text-[10px] font-bold tracking-widest text-blue-400 uppercase">NOC</span>
+                            </div>
+                            <DialogTitle className="text-base font-bold text-foreground">Update NOC Status</DialogTitle>
+                            <DialogDescription className="text-xs text-muted-foreground">
+                                {vehicle.make} {vehicle.model} &mdash; {vehicle.registrationNo}
+                            </DialogDescription>
+                        </div>
+                    </div>
+                </div>
+                <form onSubmit={form.handleSubmit((v) => mutate(v))} className="p-5 space-y-4">
+                    {/* Current status pill */}
+                    <div className="flex items-center gap-2 rounded-lg bg-muted/30 border border-border px-3 py-2.5">
+                        <span className="text-xs text-muted-foreground">Current:</span>
+                        <VehicleStatusBadge nocStatus={vehicle.nocStatus as NOCStatus} size="md" />
+                        <span className="text-xs text-muted-foreground ml-auto">{currentNoc?.label || vehicle.nocStatus}</span>
+                    </div>
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-foreground">New NOC Status</label>
+                        <Select
+                            value={form.watch("nocStatus")}
+                            onValueChange={(v) => form.setValue("nocStatus", v)}
+                        >
+                            <SelectTrigger className="h-9 bg-muted/50 border-border text-sm">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {NOC_STATUSES.filter(n => n.value !== "not_applicable").map((n) => (
+                                    <SelectItem key={n.value} value={n.value}>{n.label}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                        <Button type="button" variant="outline" onClick={() => setOpen(false)} className="border-border hover:bg-muted">Cancel</Button>
+                        <Button type="submit" disabled={isPending} className="bg-blue-500 hover:bg-blue-600 text-white">
+                            {isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : "Update NOC Status"}
+                        </Button>
+                    </div>
+                </form>
+            </DialogContent>
+        </Dialog>
     );
 };
 
@@ -1546,23 +1636,54 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                         </div>
                     )}
 
+                    {/* NOC Status Card (shown only if NOT sold and is a four-wheeler) */}
+                    {!isSold && vehicle.vehicleType === "four_wheeler" && (
+                        <div className="rounded-xl border border-border bg-card p-5 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">NOC Details</p>
+                                <AdminOnly><UpdateNocStatusDialog vehicle={vehicle} /></AdminOnly>
+                            </div>
+                            <div className="flex justify-between text-sm items-center">
+                                <span className="text-muted-foreground">NOC Status</span>
+                                <VehicleStatusBadge nocStatus={vehicle.nocStatus as NOCStatus} size="md" />
+                            </div>
+                        </div>
+                    )}
+
                     {isSold && (
                         <div className="rounded-xl border border-border bg-card p-5 space-y-3">
-                            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Sale Details</p>
+                            <div className="flex items-center justify-between">
+                                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Sale Details</p>
+                                {vehicle.vehicleType === "four_wheeler" && (
+                                    <AdminOnly><UpdateNocStatusDialog vehicle={vehicle} /></AdminOnly>
+                                )}
+                            </div>
                             {[
                                 { label: "Date Sold", value: vehicle.dateSold ? formatDate(vehicle.dateSold) : "—" },
                                 { label: "Sold To", value: vehicle.soldTo || "—" },
                                 { label: "Buyer Phone", value: vehicle.soldToPhone || "—" },
                                 { label: "Sold Price", value: formatCurrency(vehicle.soldPrice!) },
                                 { label: "Days to Sell", value: vehicle.daysToSell != null ? `${vehicle.daysToSell} days` : "—" },
-                                { label: "NOC Status", value: vehicle.nocStatus.replace("_", " ") },
-                                { label: "Sale Status", value: vehicle.saleStatus?.replace("_", " ") || "—" },
                             ].map((r) => (
-                                <div key={r.label} className="flex justify-between text-sm border-b border-border/50 pb-2 last:border-0 last:pb-0">
+                                <div key={r.label} className="flex justify-between text-sm border-b border-border/50 pb-2">
                                     <span className="text-muted-foreground">{r.label}</span>
                                     <span className="font-medium text-foreground text-right">{r.value}</span>
                                 </div>
                             ))}
+                            {/* NOC Status — badge with color coding */}
+                            {vehicle.vehicleType === "four_wheeler" && (
+                                <div className="flex justify-between text-sm items-center border-b border-border/50 pb-2">
+                                    <span className="text-muted-foreground">NOC Status</span>
+                                    <VehicleStatusBadge nocStatus={vehicle.nocStatus as NOCStatus} size="md" />
+                                </div>
+                            )}
+                            {/* Sale Status — professional colored badge */}
+                            {vehicle.saleStatus && (
+                                <div className="flex justify-between text-sm items-center">
+                                    <span className="text-muted-foreground">Sale Status</span>
+                                    <VehicleStatusBadge saleStatus={vehicle.saleStatus as SaleStatus} size="md" />
+                                </div>
+                            )}
                             {/* Exchange vehicle created from this sale — FIXED link */}
                             {vehicle.isExchange && vehicle.exchangeVehicleRef && (() => {
                                 const epWithRef = vehicle.salePayments.find(p => p.exchangeCreatedRef);
@@ -1647,14 +1768,19 @@ const VehicleDetail = ({ id, initialData }: { id: string; initialData: IVehicle 
                         </div>
                     ) : (
                         <>
-                            {/* Revert Sale action bar — admin only */}
+                            {/* Revert Sale + NOC update action bar — admin only */}
                             <AdminOnly>
                                 <div className="flex items-center justify-between rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3">
                                     <div>
                                         <p className="text-xs font-bold text-red-400">Sale Recorded</p>
                                         <p className="text-[11px] text-muted-foreground mt-0.5">Made a mistake? You can revert this sale and restore the vehicle to stock.</p>
                                     </div>
-                                    <RevertSaleButton vehicle={vehicle} size="sm" />
+                                    <div className="flex items-center gap-2">
+                                        {vehicle.vehicleType === "four_wheeler" && (
+                                            <UpdateNocStatusDialog vehicle={vehicle} />
+                                        )}
+                                        <RevertSaleButton vehicle={vehicle} size="sm" />
+                                    </div>
                                 </div>
                             </AdminOnly>
                             {/* Sale Summary */}

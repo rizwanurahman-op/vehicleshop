@@ -24,6 +24,7 @@ router.delete("/:id", isAdmin, writeLimiter, asyncHandler(cc.deleteConsignment))
 
 // ── Status Management ─────────────────────────────────────────────
 router.patch("/:id/status", isAdmin, writeLimiter, asyncHandler(cc.updateConsignmentStatus));
+router.patch("/:id/noc-status", isAdmin, writeLimiter, asyncHandler(cc.updateConsignmentNocStatus));
 router.patch("/:id/return", isAdmin, writeLimiter, asyncHandler(cc.returnConsignment));
 
 // ── Costs ─────────────────────────────────────────────────────────
