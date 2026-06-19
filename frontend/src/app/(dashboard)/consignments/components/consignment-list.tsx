@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import axios from "@config/axios";
 import { useState, useMemo, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@lib/currency";
 import { formatDate } from "@lib/date";
@@ -84,10 +84,14 @@ const StatusBadge = ({ status, settlement }: { status: ConsignmentStatus; settle
 
 export const ConsignmentList = ({ initialData }: { initialData: ConsignmentPaginatedData | null }) => {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const defaultType = searchParams.get("type") || "";
+
     const [page, setPage] = useState(1);
     const [search, setSearch] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
     const [saleType, setSaleType] = useState<string>("all");
+    const [vehicleType, setVehicleType] = useState<string>(defaultType || "all");
     const [status, setStatus] = useState<string>("all");
     const [datePreset, setDatePreset] = useState<DatePreset>("all");
     const [customFrom, setCustomFrom] = useState("");
@@ -104,15 +108,18 @@ export const ConsignmentList = ({ initialData }: { initialData: ConsignmentPagin
         return getPresetRange(datePreset);
     }, [datePreset, customFrom, customTo]);
 
-    const isAnyFilterActive = debouncedSearch !== "" || saleType !== "all" || status !== "all" || datePreset !== "all";
+    const isAnyFilterActive = debouncedSearch !== "" || saleType !== "all" || vehicleType !== "all" || status !== "all" || datePreset !== "all";
 
     const clearFilters = () => {
-        setSearch(""); setDebouncedSearch(""); setSaleType("all"); setStatus("all");
+        setSearch(""); setDebouncedSearch(""); setSaleType("all"); setVehicleType("all"); setStatus("all");
         setDatePreset("all"); setCustomFrom(""); setCustomTo(""); setPage(1);
     };
 
+    const resolvedVehicleType = vehicleType !== "all" ? vehicleType : undefined;
+
     const params: Record<string, string | number> = { page, limit: PAGE_SIZE };
     if (saleType !== "all") params.saleType = saleType;
+    if (resolvedVehicleType) params.vehicleType = resolvedVehicleType;
     if (status !== "all") params.status = status;
     if (debouncedSearch) params.search = debouncedSearch;
     if (dateRange.dateFrom) params.dateFrom = dateRange.dateFrom;
@@ -121,7 +128,7 @@ export const ConsignmentList = ({ initialData }: { initialData: ConsignmentPagin
     const { data, isLoading } = useQuery<ConsignmentPaginatedData | null>({
         queryKey: ["consignments", params],
         queryFn: () => fetchConsignments(params),
-        initialData: saleType === "all" && status === "all" && !debouncedSearch && datePreset === "all" && page === 1 ? initialData : undefined,
+        initialData: saleType === "all" && vehicleType === "all" && status === "all" && !debouncedSearch && datePreset === "all" && page === 1 ? initialData : undefined,
         placeholderData: (prev) => prev,
     });
 
@@ -132,6 +139,7 @@ export const ConsignmentList = ({ initialData }: { initialData: ConsignmentPagin
             const p = new URLSearchParams({ format });
             if (debouncedSearch) p.set("search", debouncedSearch);
             if (saleType !== "all") p.set("saleType", saleType);
+            if (resolvedVehicleType) p.set("vehicleType", resolvedVehicleType);
             if (status !== "all") p.set("status", status);
             if (dateRange.dateFrom) p.set("dateFrom", dateRange.dateFrom);
             if (dateRange.dateTo) p.set("dateTo", dateRange.dateTo);
@@ -163,12 +171,13 @@ export const ConsignmentList = ({ initialData }: { initialData: ConsignmentPagin
     const statsParams = useMemo(() => {
         const p: Record<string, string> = {};
         if (saleType !== "all") p.saleType = saleType;
+        if (resolvedVehicleType) p.vehicleType = resolvedVehicleType;
         if (status !== "all") p.status = status;
         if (debouncedSearch) p.search = debouncedSearch;
         if (dateRange.dateFrom) p.dateFrom = dateRange.dateFrom;
         if (dateRange.dateTo) p.dateTo = dateRange.dateTo;
         return p;
-    }, [saleType, status, debouncedSearch, dateRange]);
+    }, [saleType, resolvedVehicleType, status, debouncedSearch, dateRange]);
 
     const { data: stats } = useQuery<IConsignmentDashboardStats | null>({
         queryKey: ["consignment-stats", statsParams],
@@ -444,6 +453,17 @@ export const ConsignmentList = ({ initialData }: { initialData: ConsignmentPagin
                         <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                         <Input placeholder="Search consignments..." className="pl-8 h-10 bg-muted/50 border-border text-sm" value={search} onChange={e => setSearch(e.target.value)} />
                     </div>
+
+                    <Select value={vehicleType} onValueChange={(v) => { setVehicleType(v); setPage(1); }}>
+                        <SelectTrigger className="h-10 w-full sm:w-44 bg-muted/50 border-border text-sm">
+                            <SelectValue placeholder="All Vehicles" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Vehicles</SelectItem>
+                            <SelectItem value="two_wheeler">🏍️ Two Wheelers</SelectItem>
+                            <SelectItem value="four_wheeler">🚗 Four Wheelers</SelectItem>
+                        </SelectContent>
+                    </Select>
 
                     <Select value={status} onValueChange={(v) => { setStatus(v); setPage(1); }}>
                         <SelectTrigger className="h-10 w-44 bg-muted/50 border-border text-sm">

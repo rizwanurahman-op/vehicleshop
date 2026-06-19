@@ -49,8 +49,8 @@ export const deleteConsignment = async (req: Request, res: Response): Promise<vo
 };
 
 export const getConsignmentStats = async (req: Request, res: Response): Promise<void> => {
-    const { saleType, status, search, dateFrom, dateTo } = req.query as Record<string, string>;
-    const stats = await cs.getConsignmentStats({ saleType, status, search, dateFrom, dateTo });
+    const { saleType, vehicleType, status, search, dateFrom, dateTo } = req.query as Record<string, string>;
+    const stats = await cs.getConsignmentStats({ saleType, vehicleType, status, search, dateFrom, dateTo });
     res.json({ success: true, statusCode: 200, message: "Stats fetched", data: stats });
 };
 

@@ -157,10 +157,11 @@ export const returnConsignment = async (id: string, notes?: string): Promise<ICo
     return vehicle;
 };
 
-export const getConsignmentStats = async (query: { saleType?: string; status?: string; search?: string; dateFrom?: string; dateTo?: string } = {}) => {
-    const { saleType, status, search, dateFrom, dateTo } = query;
+export const getConsignmentStats = async (query: { saleType?: string; vehicleType?: string; status?: string; search?: string; dateFrom?: string; dateTo?: string } = {}) => {
+    const { saleType, vehicleType, status, search, dateFrom, dateTo } = query;
     const match: Record<string, unknown> = { isActive: true };
     if (saleType) match.saleType = saleType;
+    if (vehicleType) match.vehicleType = vehicleType;
     if (status) match.status = status;
     if (dateFrom || dateTo) {
         const df: Record<string, Date> = {};
