@@ -3,7 +3,7 @@ import { APP_NAME } from "@data";
 import { serverFetch } from "@/lib/serverFetch";
 import { Car, IndianRupee, Clock } from "lucide-react";
 import {
-    DashboardStats, RecentTransactions, OutstandingChart, TrendChart, QuickActions, VehicleOverview,
+    DashboardStats, RecentTransactions, OutstandingChart, TrendChart, VehicleOverview,
 } from "./components";
 
 export const metadata: Metadata = {
@@ -44,8 +44,7 @@ export default async function DashboardPage() {
                 </p>
             </div>
 
-            {/* Quick Actions */}
-            <QuickActions />
+
 
             {/* ── Vehicle Business ─────────────────────────────────────── */}
             <div className="flex flex-col gap-4">

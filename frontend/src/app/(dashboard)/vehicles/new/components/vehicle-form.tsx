@@ -184,19 +184,19 @@ const VehicleForm = () => {
                                     className={cn(
                                         "flex h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-xl transition-all duration-200",
                                         isActive ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-105 border-2 border-primary" :
-                                        isCompleted ? "bg-emerald-500 text-white cursor-pointer" :
-                                        "bg-muted/60 text-muted-foreground cursor-not-allowed border border-border"
+                                            isCompleted ? "bg-emerald-500 text-white cursor-pointer" :
+                                                "bg-muted/60 text-muted-foreground cursor-not-allowed border border-border"
                                     )}
                                 >
                                     {isCompleted ? <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5" /> : <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5" />}
                                 </button>
                                 <div className="hidden sm:flex flex-col text-left min-w-0">
-                                    <span className={cn("text-[9px] font-bold uppercase tracking-wider leading-none", 
+                                    <span className={cn("text-[9px] font-bold uppercase tracking-wider leading-none",
                                         isActive ? "text-primary" : isCompleted ? "text-emerald-500" : "text-muted-foreground/60"
                                     )}>
                                         Step {s.id}
                                     </span>
-                                    <span className={cn("text-[10px] sm:text-xs font-semibold mt-0.5 whitespace-nowrap truncate", 
+                                    <span className={cn("text-[10px] sm:text-xs font-semibold mt-0.5 whitespace-nowrap truncate",
                                         isActive ? "text-foreground font-bold" : "text-muted-foreground"
                                     )}>
                                         {s.label}
@@ -204,7 +204,7 @@ const VehicleForm = () => {
                                 </div>
                             </div>
                             {i < STEPS.length - 1 && (
-                                <div className={cn("h-0.5 flex-1 mx-1 sm:mx-2 md:mx-4 min-w-[8px] transition-colors duration-300", 
+                                <div className={cn("h-0.5 flex-1 mx-1 sm:mx-2 md:mx-4 min-w-[8px] transition-colors duration-300",
                                     step > s.id ? "bg-emerald-500" : "bg-muted/60"
                                 )} />
                             )}
@@ -271,8 +271,8 @@ const VehicleForm = () => {
                                                 </PopoverTrigger>
                                                 <PopoverContent className="w-80 p-0 bg-card border-border shadow-2xl" align="start">
                                                     <Command className="bg-card">
-                                                        <CommandInput 
-                                                            placeholder="Search brand (e.g. Honda, Suzuki)..." 
+                                                        <CommandInput
+                                                            placeholder="Search brand (e.g. Honda, Suzuki)..."
                                                             className="h-10 text-foreground"
                                                             onValueChange={(val) => setMakeSearchValue(val)}
                                                         />
@@ -586,7 +586,7 @@ const VehicleForm = () => {
                                     <h2 className="font-bold text-foreground text-lg">Review & Confirm</h2>
                                     <p className="text-xs text-muted-foreground mt-0.5">Double-check everything before saving</p>
                                 </div>
-                                
+
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                     {/* Card 1: Vehicle Specifications */}
                                     <div className="rounded-xl border border-border bg-muted/15 p-5 space-y-4 card-hover-glow">
