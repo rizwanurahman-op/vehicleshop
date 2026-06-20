@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import apiClient from "@config/axios";
 import { getErrorMessage } from "@/lib/formatApiErrors";
 import {
-    UserPlus, Trash2, Eye, EyeOff, Loader2, Shield,
+    UserPlus, Trash2, Eye, EyeOff, Loader2,
     ShieldCheck, ShieldAlert, Mail, User, Lock,
     AlertCircle, Users, Calendar, MoreHorizontal,
     RefreshCw, Search, X, Check,
@@ -26,7 +26,12 @@ import {
     DropdownMenu, DropdownMenuContent,
     DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { AdminOnly, ViewerGuard } from "@components/shared";
+import { useSessionStore } from "@stores/session";
+
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface AppUser {
@@ -238,6 +243,261 @@ const CreateViewerDialog = ({
     );
 };
 
+// ── View User Dialog ──────────────────────────────────────────────────────────
+const ViewUserDialog = ({
+    user,
+    open,
+    onOpenChange,
+}: {
+    user: AppUser | null;
+    open: boolean;
+    onOpenChange: (v: boolean) => void;
+}) => {
+    const fmtDate = (d?: string) =>
+        d ? new Date(d).toLocaleDateString("en-IN", {
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+        }) : "";
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                            <User className="h-4 w-4 text-primary" />
+                        </div>
+                        User Details
+                    </DialogTitle>
+                    <DialogDescription>
+                        View access credentials and metadata for this account.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4 pt-4">
+                    {/* Visual Card Header */}
+                    <div className="flex items-center gap-4 rounded-xl border border-border bg-muted/30 p-4">
+                        <Avatar name={user?.username ?? ""} role={user?.role ?? "viewer"} />
+                        <div className="min-w-0 flex-1">
+                            <p className="text-base font-bold text-foreground truncate">
+                                @{user?.username}
+                            </p>
+                            <div className="mt-1">
+                                <RoleBadge role={user?.role ?? "viewer"} />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Metadata items */}
+                    <div className="space-y-3 px-1 text-sm">
+                        <div className="grid grid-cols-3 py-1 border-b border-border/50">
+                            <span className="text-muted-foreground font-medium">Username</span>
+                            <span className="col-span-2 text-foreground font-semibold truncate">{user?.username}</span>
+                        </div>
+                        <div className="grid grid-cols-3 py-1 border-b border-border/50">
+                            <span className="text-muted-foreground font-medium">Email</span>
+                            <span className="col-span-2 text-foreground font-semibold truncate flex items-center gap-1.5">
+                                <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                {user?.email}
+                            </span>
+                        </div>
+                        <div className="grid grid-cols-3 py-1 border-b border-border/50">
+                            <span className="text-muted-foreground font-medium">Role</span>
+                            <span className="col-span-2 text-foreground font-semibold capitalize">{user?.role} Access</span>
+                        </div>
+                        <div className="grid grid-cols-3 py-1">
+                            <span className="text-muted-foreground font-medium">Date Joined</span>
+                            <span className="col-span-2 text-foreground font-semibold flex items-center gap-1.5">
+                                <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                {fmtDate(user?.createdAt)}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <DialogFooter className="pt-2">
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>
+                        Close Details
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
+// ── Edit User Dialog ──────────────────────────────────────────────────────────
+const EditUserDialog = ({
+    user,
+    open,
+    onOpenChange,
+    onSave,
+    isLoading,
+}: {
+    user: AppUser | null;
+    open: boolean;
+    onOpenChange: (v: boolean) => void;
+    onSave: (p: { username: string; email: string; role: "admin" | "viewer"; password?: string }) => void;
+    isLoading: boolean;
+}) => {
+    const currentUser = useSessionStore(s => s.user);
+    const isSelf = user?._id === currentUser?.id;
+
+    const [username, setUsername] = useState("");
+    const [email, setEmail]       = useState("");
+    const [role, setRole]         = useState<"admin" | "viewer">("viewer");
+    const [password, setPassword] = useState("");
+    const [showPw, setShowPw]     = useState(false);
+    const [formError, setFormError] = useState<string | null>(null);
+
+    const strength = getStrength(password);
+
+    useEffect(() => {
+        if (open && user) {
+            setUsername(user.username);
+            setEmail(user.email);
+            setRole(user.role);
+            setPassword("");
+            setFormError(null);
+        }
+    }, [open, user]);
+
+    const handleOpenChange = (v: boolean) => {
+        if (!isLoading) {
+            onOpenChange(v);
+        }
+    };
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        setFormError(null);
+        if (!username.trim() || !email.trim()) {
+            setFormError("Username and email are required");
+            return;
+        }
+        
+        onSave({
+            username: username.trim(),
+            email: email.trim(),
+            role,
+            ...(password ? { password } : {}),
+        });
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={handleOpenChange}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/10">
+                            <User className="h-4 w-4 text-violet-500" />
+                        </div>
+                        Edit User Account
+                    </DialogTitle>
+                    <DialogDescription>
+                        {isSelf
+                            ? "Modify your admin credentials. To change your role, contact another administrator."
+                            : "Modify this user account's credentials, role permission levels, and access status."}
+                    </DialogDescription>
+                </DialogHeader>
+
+                <form onSubmit={handleSubmit} className="space-y-4 pt-1">
+                    {/* Username */}
+                    <div className="space-y-1.5">
+                        <label htmlFor="eu-username" className="text-sm font-medium text-foreground">Username</label>
+                        <div className="relative">
+                            <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                            <Input id="eu-username" value={username} onChange={e => setUsername(e.target.value)}
+                                placeholder="username" autoComplete="off" className="pl-9" />
+                        </div>
+                    </div>
+
+                    {/* Email */}
+                    <div className="space-y-1.5">
+                        <label htmlFor="eu-email" className="text-sm font-medium text-foreground">Email</label>
+                        <div className="relative">
+                            <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                            <Input id="eu-email" type="email" value={email} onChange={e => setEmail(e.target.value)}
+                                placeholder="user@example.com" autoComplete="off" className="pl-9" />
+                        </div>
+                    </div>
+
+                    {/* Role */}
+                    <div className="space-y-1.5">
+                        <label htmlFor="eu-role" className="text-sm font-medium text-foreground flex items-center justify-between">
+                            <span>Role Permission</span>
+                            {isSelf && <span className="text-[10px] text-amber-500 font-semibold">(Self-role modification disabled)</span>}
+                        </label>
+                        <Select onValueChange={(v: "admin" | "viewer") => setRole(v)} value={role} disabled={isSelf}>
+                            <SelectTrigger id="eu-role" className="h-10 bg-background border-border">
+                                <SelectValue placeholder="Select role" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="admin">Admin (Full Access)</SelectItem>
+                                <SelectItem value="viewer">Viewer (Read-Only Access)</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    {/* Password */}
+                    <div className="space-y-1.5">
+                        <label htmlFor="eu-password" className="text-sm font-medium text-foreground flex items-center justify-between">
+                            <span>New Password</span>
+                            <span className="text-[10px] text-muted-foreground">(Leave blank to keep current)</span>
+                        </label>
+                        <div className="relative">
+                            <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                            <Input id="eu-password" type={showPw ? "text" : "password"} value={password}
+                                onChange={e => setPassword(e.target.value)} placeholder="Min. 8 characters"
+                                autoComplete="new-password" className="pl-9 pr-10" />
+                            <button type="button" onClick={() => setShowPw(v => !v)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
+                                {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                            </button>
+                        </div>
+
+                        {password && (
+                            <div className="space-y-1">
+                                <div className="flex gap-1">
+                                    {[1,2,3,4].map(s => (
+                                        <div key={s} className={cn("h-1.5 flex-1 rounded-full transition-all",
+                                            strength >= s ? STRENGTH_COLOR[strength] : "bg-muted")} />
+                                    ))}
+                                </div>
+                                <p className={cn("text-xs font-medium", STRENGTH_TEXT[strength])}>
+                                    {STRENGTH_LABEL[strength]}
+                                </p>
+                            </div>
+                        )}
+                    </div>
+
+                    {formError && (
+                        <div className="flex items-start gap-2.5 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2.5">
+                            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+                            <p className="text-sm text-destructive">{formError}</p>
+                        </div>
+                    )}
+
+                    <DialogFooter className="gap-2 pt-2 sm:gap-0">
+                        <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={isLoading}>
+                            Cancel
+                        </Button>
+                        <Button type="submit" id="edit-user-submit"
+                            disabled={isLoading}
+                            className="bg-primary text-white hover:opacity-90">
+                            {isLoading
+                                ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving Changes…</>
+                                : <><Check className="mr-2 h-4 w-4" />Save Changes</>}
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
 // ── Avatar initials ───────────────────────────────────────────────────────────
 const Avatar = ({ name, role }: { name: string; role: "admin" | "viewer" }) => (
     <div className={cn(
@@ -250,12 +510,18 @@ const Avatar = ({ name, role }: { name: string; role: "admin" | "viewer" }) => (
     </div>
 );
 
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export function UsersPageClient() {
     const queryClient = useQueryClient();
-    const [search, setSearch]         = useState("");
-    const [createOpen, setCreateOpen] = useState(false);
+    const currentUser = useSessionStore(s => s.user);
+    const updateUserInStore = useSessionStore(s => s.updateUser);
+
+    const [search, setSearch]             = useState("");
+    const [createOpen, setCreateOpen]     = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<AppUser | null>(null);
+    const [viewTarget, setViewTarget]     = useState<AppUser | null>(null);
+    const [editTarget, setEditTarget]     = useState<AppUser | null>(null);
 
     // Fetch users
     const { data: users = [], isLoading, isFetching } = useQuery<AppUser[]>({
@@ -279,6 +545,31 @@ export function UsersPageClient() {
             setDeleteTarget(null);
         },
     });
+
+    // Update mutation
+    const updateMutation = useMutation({
+        mutationFn: ({ id, data }: { id: string; data: { username: string; email: string; role: "admin" | "viewer"; password?: string } }) =>
+            apiClient.put(`/users/${id}`, data),
+        onSuccess: (res, variables) => {
+            toast.success("User updated successfully");
+            queryClient.invalidateQueries({ queryKey: ["users"] });
+            
+            // Sync local session store if editing self
+            if (variables.id === currentUser?.id) {
+                updateUserInStore({
+                    username: variables.data.username,
+                    email: variables.data.email,
+                    role: variables.data.role,
+                });
+            }
+            
+            setEditTarget(null);
+        },
+        onError: (err) => {
+            toast.error(getErrorMessage(err));
+        },
+    });
+
 
     // Filtered
     const filtered = users.filter(u =>
@@ -465,36 +756,50 @@ export function UsersPageClient() {
                                                     </span>
                                                 </TableCell>
                                                 <TableCell className="text-right pr-5">
-                                                    {user.role !== "admin" ? (
-                                                        <AdminOnly>
-                                                            <DropdownMenu>
-                                                                <DropdownMenuTrigger asChild>
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="icon"
-                                                                        className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                                        id={`user-actions-${user._id}`}
-                                                                    >
-                                                                        <MoreHorizontal className="h-4 w-4" />
-                                                                    </Button>
-                                                                </DropdownMenuTrigger>
-                                                                <DropdownMenuContent align="end" className="w-40">
-                                                                    <DropdownMenuItem
-                                                                        onClick={() => setDeleteTarget(user)}
-                                                                        className="gap-2 text-destructive focus:text-destructive cursor-pointer"
-                                                                        id={`delete-user-${user._id}`}
-                                                                    >
-                                                                        <Trash2 className="h-4 w-4" />
-                                                                        Delete user
-                                                                    </DropdownMenuItem>
-                                                                </DropdownMenuContent>
-                                                            </DropdownMenu>
-                                                        </AdminOnly>
-                                                    ) : (
-                                                        <span className="flex items-center justify-end gap-1 text-[11px] text-muted-foreground/50 pr-2">
-                                                            <Shield className="h-3 w-3" /> Protected
-                                                        </span>
-                                                    )}
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                id={`user-actions-${user._id}`}
+                                                            >
+                                                                <MoreHorizontal className="h-4 w-4" />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end" className="w-44">
+                                                            <DropdownMenuItem
+                                                                onClick={() => setViewTarget(user)}
+                                                                className="gap-2 cursor-pointer"
+                                                                id={`view-user-${user._id}`}
+                                                            >
+                                                                <Eye className="h-4 w-4 text-muted-foreground" />
+                                                                View details
+                                                            </DropdownMenuItem>
+
+                                                            {(user.role !== "admin" || user._id === currentUser?.id) && (
+                                                                <DropdownMenuItem
+                                                                    onClick={() => setEditTarget(user)}
+                                                                    className="gap-2 cursor-pointer"
+                                                                    id={`edit-user-${user._id}`}
+                                                                >
+                                                                    <User className="h-4 w-4 text-muted-foreground" />
+                                                                    Edit user
+                                                                </DropdownMenuItem>
+                                                            )}
+
+                                                            {user.role !== "admin" && (
+                                                                <DropdownMenuItem
+                                                                    onClick={() => setDeleteTarget(user)}
+                                                                    className="gap-2 text-destructive focus:text-destructive cursor-pointer"
+                                                                    id={`delete-user-${user._id}`}
+                                                                >
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                    Delete user
+                                                                </DropdownMenuItem>
+                                                            )}
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
                                                 </TableCell>
                                             </TableRow>
                                         ))}
@@ -528,16 +833,36 @@ export function UsersPageClient() {
                                             </p>
                                         </div>
 
-                                        {user.role !== "admin" && (
-                                            <AdminOnly>
+                                        <div className="flex items-center gap-1 shrink-0">
+                                            <button
+                                                onClick={() => setViewTarget(user)}
+                                                className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                                                title="View Details"
+                                                id={`mobile-view-user-${user._id}`}
+                                            >
+                                                <Eye className="h-4 w-4" />
+                                            </button>
+                                            {(user.role !== "admin" || user._id === currentUser?.id) && (
+                                                <button
+                                                    onClick={() => setEditTarget(user)}
+                                                    className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                                                    title="Edit User"
+                                                    id={`mobile-edit-user-${user._id}`}
+                                                >
+                                                    <User className="h-4 w-4" />
+                                                </button>
+                                            )}
+                                            {user.role !== "admin" && (
                                                 <button
                                                     onClick={() => setDeleteTarget(user)}
-                                                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                                                    className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                                                    title="Delete User"
+                                                    id={`mobile-delete-user-${user._id}`}
                                                 >
                                                     <Trash2 className="h-4 w-4" />
                                                 </button>
-                                            </AdminOnly>
-                                        )}
+                                            )}
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -575,6 +900,18 @@ export function UsersPageClient() {
 
             {/* ── Dialogs ───────────────────────────────────────────────────── */}
             <CreateViewerDialog open={createOpen} onOpenChange={setCreateOpen} />
+            <ViewUserDialog
+                user={viewTarget}
+                open={!!viewTarget}
+                onOpenChange={v => !v && setViewTarget(null)}
+            />
+            <EditUserDialog
+                user={editTarget}
+                open={!!editTarget}
+                onOpenChange={v => !v && setEditTarget(null)}
+                onSave={data => editTarget && updateMutation.mutate({ id: editTarget._id, data })}
+                isLoading={updateMutation.isPending}
+            />
             <DeleteDialog
                 user={deleteTarget}
                 open={!!deleteTarget}

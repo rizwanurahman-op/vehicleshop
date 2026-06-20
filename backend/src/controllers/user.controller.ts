@@ -75,3 +75,80 @@ export const deleteUser = async (req: AuthRequest, res: Response, next: NextFunc
         next(error);
     }
 };
+
+// GET /users/:id — admin gets a single user
+export const getUserById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+        const { id } = req.params;
+        const user = await User.findById(id).select("_id username email role createdAt");
+        if (!user) throw new NotFoundError("User");
+        res.status(200).json(apiResponse(200, "User fetched successfully", user));
+    } catch (error) {
+        next(error);
+    }
+};
+
+// PUT /users/:id — admin updates a user account (viewer or self)
+export const updateUser = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+        const { id } = req.params;
+        const { username, email, password, role } = req.body as {
+            username?: string;
+            email?: string;
+            password?: string;
+            role?: "admin" | "viewer";
+        };
+
+        const user = await User.findById(id);
+        if (!user) throw new NotFoundError("User");
+
+        // Security check: cannot modify another admin
+        if (user.role === "admin" && id !== req.user!.userId) {
+            throw new ForbiddenError("Cannot modify another admin account");
+        }
+
+        // Security check: cannot demote self from admin
+        if (id === req.user!.userId && role === "viewer" && user.role === "admin") {
+            throw new ForbiddenError("You cannot demote yourself from admin");
+        }
+
+        // Validate username uniqueness if changed
+        if (username && username.toLowerCase() !== user.username) {
+            const existing = await User.findOne({ username: username.toLowerCase() });
+            if (existing) throw new ConflictError("Username is already in use");
+            user.username = username.toLowerCase();
+        }
+
+        // Validate email uniqueness if changed
+        if (email && email.toLowerCase() !== user.email) {
+            const existing = await User.findOne({ email: email.toLowerCase() });
+            if (existing) throw new ConflictError("Email is already in use");
+            user.email = email.toLowerCase();
+        }
+
+        // Hash new password if provided and not empty
+        if (password && password.trim() !== "") {
+            user.passwordHash = await bcrypt.hash(password, 12);
+        }
+
+        // Update role if provided (and not self-demotion checked above)
+        if (role) {
+            user.role = role;
+        }
+
+        await user.save();
+
+        res.status(200).json(
+            apiResponse(200, "User updated successfully", {
+                _id: user._id,
+                username: user.username,
+                email: user.email,
+                role: user.role,
+                createdAt: user.createdAt,
+            })
+        );
+    } catch (error) {
+        next(error);
+    }
+};
+

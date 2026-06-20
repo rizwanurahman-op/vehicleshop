@@ -17,4 +17,16 @@ export const createViewerSchema = z.object({
     password: passwordSchema,
 });
 
+export const updateUserSchema = z.object({
+    username: z.string().min(3, "Username must be at least 3 characters").max(30)
+        .regex(/^[a-zA-Z0-9_-]+$/, "Username may only contain letters, numbers, hyphens, and underscores")
+        .trim()
+        .optional(),
+    email: z.string().email("Invalid email address").trim().optional(),
+    password: passwordSchema.optional().or(z.literal("")),
+    role: z.enum(["admin", "viewer"]).optional(),
+});
+
 export type CreateViewerInput = z.infer<typeof createViewerSchema>;
+export type UpdateUserInput = z.infer<typeof updateUserSchema>;
+
