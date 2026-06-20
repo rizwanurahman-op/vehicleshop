@@ -226,13 +226,13 @@ const InlineAmountEditor = ({
 
     if (!editing) {
         return (
-            <div className="flex items-center gap-1.5">
-                <span className={cn("font-bold text-sm", currentAmount > 0 ? "text-primary" : "text-muted-foreground")}>
+            <div className="flex items-center gap-1.5 shrink-0">
+                <span className={cn("font-bold text-sm shrink-0", currentAmount > 0 ? "text-primary" : "text-muted-foreground")}>
                     {formatCurrency(currentAmount)}
                 </span>
                 <button
                     onClick={() => { setEditing(true); setValue(currentAmount.toString()); }}
-                    className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 flex h-6 w-6 items-center justify-center rounded bg-muted sm:bg-transparent hover:bg-muted transition-all"
+                    className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 flex h-6 w-6 shrink-0 items-center justify-center rounded bg-muted sm:bg-transparent hover:bg-muted transition-all"
                     title="Edit amount"
                 >
                     <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
@@ -242,7 +242,7 @@ const InlineAmountEditor = ({
     }
 
     return (
-        <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
             <div className="relative">
                 <IndianRupee className="absolute left-1.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -262,13 +262,13 @@ const InlineAmountEditor = ({
             <button
                 onClick={() => mutate(parseFloat(value) || 0)}
                 disabled={isPending}
-                className="flex h-6 w-6 items-center justify-center rounded bg-primary text-white hover:opacity-90"
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-primary text-white hover:opacity-90"
             >
                 {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
             </button>
             <button
                 onClick={() => setEditing(false)}
-                className="flex h-6 w-6 items-center justify-center rounded bg-muted text-muted-foreground hover:bg-muted/80"
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground hover:bg-muted/80"
             >
                 <X className="h-3 w-3" />
             </button>
@@ -367,54 +367,56 @@ const CategoryRow = ({
                 )}
             >
                 {/* Category header row */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between gap-2 min-w-0 w-full">
                     {/* Expand toggle */}
                     <button
                         onClick={() => setExpanded((v) => !v)}
-                        className="flex items-center gap-2 flex-1 min-w-0 text-left"
+                        className="flex items-center gap-1.5 flex-1 min-w-0 text-left"
                     >
-                        <span className="text-sm font-medium text-foreground flex items-center gap-1.5">
-                            <span className="text-base">{cat.icon}</span>
+                        <span className="text-sm font-medium text-foreground flex items-center gap-1.5 min-w-0 flex-1">
+                            <span className="text-base shrink-0">{cat.icon}</span>
                             <span className="truncate">{cat.label}</span>
                         </span>
                         {hasItems && (
-                            <span className="ml-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
                                 {items.length}
                             </span>
                         )}
                         {hasItems && (
                             expanded
-                                ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground ml-1" />
-                                : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground ml-1" />
+                                ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                         )}
                     </button>
 
                     {/* Amount + edit (admin) / read-only (viewer) */}
-                    <AdminOnly
-                        fallback={
-                            <span className={cn("font-bold text-sm", amount > 0 ? "text-primary" : "text-muted-foreground")}>
-                                {formatCurrency(amount)}
-                            </span>
-                        }
-                    >
-                        <InlineAmountEditor
-                            vehicleId={vehicleId}
-                            categoryKey={cat.key}
-                            currentAmount={amount}
-                            onSaved={() => { }}
-                        />
-                    </AdminOnly>
-
-                    {/* Add item button — admin only */}
-                    <AdminOnly>
-                        <button
-                            onClick={() => { setAddDialogOpen(true); setExpanded(true); }}
-                            className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 flex h-7 w-7 items-center justify-center rounded bg-muted hover:bg-primary/10 hover:text-primary text-muted-foreground transition-all"
-                            title={`Add ${cat.label} item`}
+                    <div className="flex items-center gap-2 shrink-0">
+                        <AdminOnly
+                            fallback={
+                                <span className={cn("font-bold text-sm shrink-0", amount > 0 ? "text-primary" : "text-muted-foreground")}>
+                                    {formatCurrency(amount)}
+                                </span>
+                            }
                         >
-                            <Plus className="h-4 w-4" />
-                        </button>
-                    </AdminOnly>
+                            <InlineAmountEditor
+                                vehicleId={vehicleId}
+                                categoryKey={cat.key}
+                                currentAmount={amount}
+                                onSaved={() => { }}
+                            />
+                        </AdminOnly>
+
+                        {/* Add item button — admin only */}
+                        <AdminOnly>
+                            <button
+                                onClick={() => { setAddDialogOpen(true); setExpanded(true); }}
+                                className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 flex h-7 w-7 shrink-0 items-center justify-center rounded bg-muted hover:bg-primary/10 hover:text-primary text-muted-foreground transition-all"
+                                title={`Add ${cat.label} item`}
+                            >
+                                <Plus className="h-4 w-4" />
+                            </button>
+                        </AdminOnly>
+                    </div>
                 </div>
 
                 {/* Breakdown items */}
@@ -564,12 +566,12 @@ const CostsTab = ({ vehicle }: { vehicle: IVehicle }) => {
                 </div>
 
                 {/* Footer total */}
-                <div className="border-t-2 border-primary/20 px-5 py-4 flex justify-between items-center bg-primary/5">
-                    <div>
-                        <span className="font-bold text-foreground">Total Investment</span>
+                <div className="border-t-2 border-primary/20 px-5 py-4 flex justify-between items-center bg-primary/5 gap-4">
+                    <div className="min-w-0">
+                        <span className="font-bold text-foreground block sm:inline">Total Investment</span>
                         <p className="text-[10px] text-muted-foreground mt-0.5">Purchase + all reconditioning costs</p>
                     </div>
-                    <span className="text-2xl font-bold text-primary">{formatCurrency(vehicle.totalInvestment)}</span>
+                    <span className="text-2xl font-bold text-primary shrink-0">{formatCurrency(vehicle.totalInvestment)}</span>
                 </div>
             </div>
 

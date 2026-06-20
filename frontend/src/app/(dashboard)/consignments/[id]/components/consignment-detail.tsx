@@ -1503,13 +1503,15 @@ const ConsignmentDetail = ({ id, initialData }: { id: string; initialData: ICons
             {/* ── Costs Tab ── */}
             {activeTab === "costs" && (
                 <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="font-bold text-foreground">Reconditioning Costs</p>
+                    <div className="flex items-center justify-between gap-4">
+                        <div className="min-w-0">
+                            <p className="font-bold text-foreground truncate">Reconditioning Costs</p>
                             <p className="text-xs text-muted-foreground mt-0.5">Total: <strong>{formatCurrency(vehicle.totalReconCost)}</strong></p>
                         </div>
                         <AdminOnly>
-                            <AddCostBreakdownDialog vehicle={vehicle} />
+                            <div className="shrink-0">
+                                <AddCostBreakdownDialog vehicle={vehicle} />
+                            </div>
                         </AdminOnly>
                     </div>
                     <div className="rounded-xl border border-border bg-card overflow-hidden">
@@ -1529,16 +1531,16 @@ const ConsignmentDetail = ({ id, initialData }: { id: string; initialData: ICons
                             const breakdown = vehicle.costBreakdowns?.find(b => b.category === row.category);
                             return (
                                 <div key={row.field} className={cn("px-5 py-3", i > 0 ? "border-t border-border" : "")}>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-sm text-muted-foreground">{row.label}</span>
-                                        <span className={cn("text-sm font-semibold", amount > 0 ? "text-foreground" : "text-muted-foreground/40")}>{formatCurrency(amount)}</span>
+                                    <div className="flex justify-between items-center gap-4">
+                                        <span className="text-sm text-muted-foreground truncate min-w-0">{row.label}</span>
+                                        <span className={cn("text-sm font-semibold shrink-0", amount > 0 ? "text-foreground" : "text-muted-foreground/40")}>{formatCurrency(amount)}</span>
                                     </div>
                                     {breakdown && breakdown.items.length > 0 && (
                                         <div className="mt-2 space-y-1 pl-3 border-l-2 border-border">
                                             {breakdown.items.map(item => (
-                                                <div key={item._id} className="flex items-center justify-between text-xs text-muted-foreground">
-                                                    <span>{item.name} {item.date ? `(${formatDate(item.date)})` : ""}</span>
-                                                    <div className="flex items-center gap-2">
+                                                <div key={item._id} className="flex items-center justify-between gap-4 text-xs text-muted-foreground">
+                                                    <span className="truncate min-w-0">{item.name} {item.date ? `(${formatDate(item.date)})` : ""}</span>
+                                                    <div className="flex items-center gap-2 shrink-0">
                                                         <span>{formatCurrency(item.amount)}</span>
                                                         <AdminOnly>
                                                             <AlertDialog>
@@ -1577,13 +1579,13 @@ const ConsignmentDetail = ({ id, initialData }: { id: string; initialData: ICons
                                 </div>
                             );
                         })}
-                        <div className="border-t-2 border-border px-5 py-3 flex justify-between font-bold">
-                            <span className="text-sm text-foreground">Total Reconditioning</span>
-                            <span className="text-sm text-foreground">{formatCurrency(vehicle.totalReconCost)}</span>
+                        <div className="border-t-2 border-border px-5 py-3 flex justify-between gap-4 font-bold">
+                            <span className="text-sm text-foreground truncate min-w-0">Total Reconditioning</span>
+                            <span className="text-sm text-foreground shrink-0">{formatCurrency(vehicle.totalReconCost)}</span>
                         </div>
-                        <div className="border-t border-border px-5 py-3 flex justify-between font-bold bg-muted/20">
-                            <span className="text-sm text-foreground">Total Investment (incl. purchase)</span>
-                            <span className="text-sm text-primary">{formatCurrency(vehicle.totalInvestment)}</span>
+                        <div className="border-t border-border px-5 py-3 flex justify-between gap-4 font-bold bg-muted/20">
+                            <span className="text-sm text-foreground truncate min-w-0">Total Investment (incl. purchase)</span>
+                            <span className="text-sm text-primary shrink-0">{formatCurrency(vehicle.totalInvestment)}</span>
                         </div>
                     </div>
                 </div>
