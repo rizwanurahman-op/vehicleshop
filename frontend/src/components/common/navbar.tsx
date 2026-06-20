@@ -5,7 +5,7 @@ import { useSessionStore } from "@stores/session";
 import Link from "next/link";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { LogOut, User, Settings, Bell, Car } from "lucide-react";
+import { LogOut, Settings, Bell, Car } from "lucide-react";
 import { ThemeToggle } from ".";
 import { LogoutDialog } from ".";
 import { useState } from "react";
@@ -73,9 +73,6 @@ const Navbar = () => {
                                 <p className="text-xs text-muted-foreground">{user?.email}</p>
                             </DropdownMenuLabel>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => router.push("/settings")}>
-                                <User className="mr-2 h-4 w-4" /> Profile
-                            </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => router.push("/settings")}>
                                 <Settings className="mr-2 h-4 w-4" /> Settings
                             </DropdownMenuItem>
