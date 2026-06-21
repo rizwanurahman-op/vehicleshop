@@ -297,6 +297,10 @@ ConsignmentVehicleSchema.index({ buyerPaymentStatus: 1 });
 ConsignmentVehicleSchema.index({ payeePaymentStatus: 1 });
 ConsignmentVehicleSchema.index({ saleType: 1, status: 1 });
 ConsignmentVehicleSchema.index({ previousOwner: "text", make: "text", model: "text", soldTo: "text", registrationNo: "text" });
+// Report / analytics performance indexes
+ConsignmentVehicleSchema.index({ totalInvestment: -1 });                  // sort/filter by investment in reports
+ConsignmentVehicleSchema.index({ netProfit: -1 });                        // P&L report sorting
+ConsignmentVehicleSchema.index({ isActive: 1, status: 1, dateSold: -1 }); // compound for common report filter combo
 
 // ── Pre-save hook: auto-calculations ─────────────────────────────
 ConsignmentVehicleSchema.pre("save", function (next) {

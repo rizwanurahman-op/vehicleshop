@@ -87,6 +87,24 @@ export const getVehicleById = async (id: string): Promise<IVehicle | null> => {
     return Vehicle.findOne({ _id: id, isActive: true });
 };
 
+// Fields to track in the audit diff when a vehicle is edited.
+// Each entry: [fieldKey, displayLabel, optional formatter]
+type FieldFormatter = (v: unknown) => string;
+const AUDIT_FIELDS: [keyof IVehicle, string, FieldFormatter?][] = [
+    ["make",             "Make"],
+    ["model",            "Model"],
+    ["year",             "Year"],
+    ["registrationNo",   "Reg No"],
+    ["color",            "Color"],
+    ["purchasePrice",    "Purchase Price", (v) => `₹${Number(v).toLocaleString("en-IN")}`],
+    ["status",           "Status"],
+    ["fundingSource",    "Funding Source"],
+    ["purchasedFrom",    "Purchased From"],
+    ["datePurchased",    "Date Purchased", (v) => v ? new Date(v as string).toLocaleDateString("en-IN") : "—"],
+    ["remarks",          "Remarks"],
+    ["notes",            "Notes"],
+];
+
 export const updateVehicle = async (id: string, data: Partial<IVehicle>): Promise<IVehicle | null> => {
     if (!mongoose.Types.ObjectId.isValid(id)) return null;
     // Use findOne + save() so the pre-save hook fires and recalculates all
@@ -95,8 +113,34 @@ export const updateVehicle = async (id: string, data: Partial<IVehicle>): Promis
     // fields change via "Edit Basic Information".
     const vehicle = await Vehicle.findOne({ _id: id, isActive: true });
     if (!vehicle) return null;
+
+    // ── Build field-level diff before mutating the document ──────────
+    const diffs: string[] = [];
+    for (const [field, label, fmt] of AUDIT_FIELDS) {
+        const oldVal = vehicle[field];
+        const newVal = (data as Record<string, unknown>)[field as string];
+        // Only log when the field is explicitly provided AND the value changed
+        if (field in (data as object) && String(oldVal ?? "") !== String(newVal ?? "")) {
+            const display = fmt
+                ? `${fmt(oldVal)} → ${fmt(newVal)}`
+                : `${oldVal ?? "—"} → ${newVal ?? "—"}`;
+            diffs.push(`${label}: ${display}`);
+        }
+    }
+
     Object.assign(vehicle, data);
     await vehicle.save();
+
+    // Push a single consolidated audit entry (skip if nothing meaningful changed)
+    if (diffs.length > 0) {
+        vehicle.activityLog.push({
+            action: "updated",
+            description: `Vehicle details updated — ${diffs.join("; ")}`,
+            date: new Date(),
+        });
+        await vehicle.save();
+    }
+
     return vehicle;
 };
 

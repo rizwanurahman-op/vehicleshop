@@ -68,7 +68,10 @@ const register = async (data: RegisterInput): Promise<{ user: IUser; tokens: Tok
 
     const tokens = generateTokens(user._id.toString(), user.role);
     // Use updateOne — avoids a redundant findById round-trip and runs no validators
-    await User.updateOne({ _id: user._id }, { $set: { refreshToken: tokens.refreshToken } });
+    await User.updateOne(
+        { _id: user._id },
+        { $set: { refreshToken: tokens.refreshToken, refreshTokenFamily: crypto.randomUUID() } }
+    );
 
     return { user, tokens };
 };
@@ -88,12 +91,15 @@ const login = async (data: LoginInput): Promise<{ user: IUser; tokens: TokenPair
 
     const tokens = generateTokens(user._id.toString(), user.role);
     // Use updateOne instead of user.save() — avoids full validator pass and is atomic
-    await User.updateOne({ _id: user._id }, { $set: { refreshToken: tokens.refreshToken } });
+    await User.updateOne(
+        { _id: user._id },
+        { $set: { refreshToken: tokens.refreshToken, refreshTokenFamily: crypto.randomUUID() } }
+    );
 
     return { user, tokens };
 };
 
-const refreshAccessToken = async (refreshToken: string): Promise<string> => {
+const refreshAccessToken = async (refreshToken: string): Promise<TokenPair> => {
     let decoded: { userId: string };
     try {
         decoded = jwt.verify(refreshToken, env.JWT_REFRESH_SECRET) as { userId: string };
@@ -101,15 +107,38 @@ const refreshAccessToken = async (refreshToken: string): Promise<string> => {
         throw new UnauthorizedError("Invalid or expired refresh token");
     }
 
-    const user = await User.findById(decoded.userId).select("+refreshToken");
-    if (!user || user.refreshToken !== refreshToken) {
-        throw new UnauthorizedError("Refresh token revoked");
+    // Fetch user with both token fields (select:false fields must be explicitly requested)
+    const user = await User.findById(decoded.userId).select("+refreshToken +refreshTokenFamily");
+    if (!user) {
+        throw new UnauthorizedError("User not found");
     }
 
-    const accessToken = jwt.sign({ userId: user._id.toString(), role: user.role }, env.JWT_ACCESS_SECRET, {
-        expiresIn: env.JWT_ACCESS_EXPIRY as unknown as number,
-    });
-    return accessToken;
+    // ── Reuse detection ───────────────────────────────────────────────────────
+    // If the presented token does NOT match the stored one but the JWT decoded
+    // successfully (valid signature, not expired), it means a previously-rotated
+    // token is being replayed — classic refresh token theft scenario.
+    // Wipe the entire family to force a full re-login on all devices.
+    if (user.refreshToken !== refreshToken) {
+        console.warn(`[Auth] Refresh token reuse detected for userId=${user._id} — wiping session`);
+        await User.updateOne(
+            { _id: user._id },
+            { $set: { refreshToken: null, refreshTokenFamily: null } }
+        );
+        throw new UnauthorizedError("Refresh token reuse detected. Please log in again.");
+    }
+
+    // ── Rotate: issue a new token pair ────────────────────────────────────────
+    // Generate a fresh access + refresh token. The new refresh token inherits
+    // the same family ID so a future reuse of *this* token can still be traced.
+    const newTokens = generateTokens(user._id.toString(), user.role);
+
+    // Persist the new refresh token (same family, new value)
+    await User.updateOne(
+        { _id: user._id },
+        { $set: { refreshToken: newTokens.refreshToken } }
+    );
+
+    return newTokens;
 };
 
 const logout = async (userId: string): Promise<void> => {
@@ -227,7 +256,7 @@ const resetPassword = async (data: ResetPasswordInput): Promise<void> => {
     const user = await User.findOne({
         passwordResetToken: hashedToken,
         passwordResetExpires: { $gt: new Date() }, // token not expired
-    }).select("+passwordResetToken +passwordResetExpires +refreshToken");
+    }).select("+passwordResetToken +passwordResetExpires +refreshToken +refreshTokenFamily");
 
     if (!user) {
         throw new ApiError(400, "Password reset token is invalid or has expired");
@@ -236,8 +265,9 @@ const resetPassword = async (data: ResetPasswordInput): Promise<void> => {
     user.passwordHash = await bcrypt.hash(data.newPassword, 10);
     user.passwordResetToken = null;
     user.passwordResetExpires = null;
-    // Invalidate any existing sessions
+    // Invalidate any existing sessions — wipe both token and family
     user.refreshToken = null;
+    user.refreshTokenFamily = null;
     await user.save();
 };
 

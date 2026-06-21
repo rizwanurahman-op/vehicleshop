@@ -7,6 +7,13 @@ export interface IUser extends Document {
     passwordHash: string;
     role: "admin" | "viewer";
     refreshToken: string | null;
+    /**
+     * Refresh token family ID (UUID).
+     * All tokens in the same rotation chain share this family.
+     * If an old (already-rotated) refresh token is presented, the family
+     * mismatch triggers a full session wipe — reuse detected.
+     */
+    refreshTokenFamily: string | null;
     passwordResetToken: string | null;
     passwordResetExpires: Date | null;
     createdAt: Date;
@@ -47,6 +54,11 @@ const userSchema = new Schema<IUser>(
             default: null,
             select: false, // Never returned by default — sensitive session credential
         },
+        refreshTokenFamily: {
+            type: String,
+            default: null,
+            select: false, // Never returned by default
+        },
         passwordResetToken: {
             type: String,
             default: null,
@@ -67,3 +79,4 @@ userSchema.methods.comparePassword = async function (password: string): Promise<
 };
 
 export const User = mongoose.model<IUser>("User", userSchema);
+

@@ -82,10 +82,12 @@ export const refresh = async (req: Request, res: Response, next: NextFunction): 
             res.status(401).json({ success: false, statusCode: 401, message: "No refresh token" });
             return;
         }
-        const accessToken = await authService.refreshAccessToken(refreshToken);
-        // Renew the httpOnly access token cookie as well
-        res.cookie("vb_access_token", accessToken, accessCookieOptions(ACCESS_TOKEN_MAX_AGE_MS));
-        res.status(200).json(apiResponse(200, "Token refreshed", { accessToken }));
+        // refreshAccessToken now returns a full TokenPair (rotation: new refresh token each time)
+        const tokens = await authService.refreshAccessToken(refreshToken);
+        // Rotate BOTH cookies — old refresh token is invalidated in the DB by the service
+        res.cookie("vb_access_token", tokens.accessToken, accessCookieOptions(ACCESS_TOKEN_MAX_AGE_MS));
+        res.cookie("refreshToken", tokens.refreshToken, REFRESH_COOKIE_OPTIONS);
+        res.status(200).json(apiResponse(200, "Token refreshed", { accessToken: tokens.accessToken }));
     } catch (error) {
         next(error);
     }

@@ -121,12 +121,48 @@ export const getConsignmentById = async (id: string): Promise<IConsignmentVehicl
     return ConsignmentVehicle.findOne({ _id: id, isActive: true });
 };
 
+// Fields to audit-diff when a consignment is edited
+type ConsignmentFieldFormatter = (v: unknown) => string;
+const CONSIGNMENT_AUDIT_FIELDS: [keyof IConsignmentVehicle, string, ConsignmentFieldFormatter?][] = [
+    ["make",            "Make"],
+    ["model",           "Model"],
+    ["year",            "Year"],
+    ["registrationNo",  "Reg No"],
+    ["color",           "Color"],
+    ["purchasePrice",   "Purchase Price", (v) => `₹${Number(v).toLocaleString("en-IN")}`],
+    ["previousOwner",   "Previous Owner"],
+    ["expectedPrice",   "Expected Price", (v) => `₹${Number(v).toLocaleString("en-IN")}`],
+    ["financeCompany",  "Finance Company"],
+    ["remarks",         "Remarks"],
+    ["notes",           "Notes"],
+];
+
 export const updateConsignment = async (id: string, data: Partial<IConsignmentVehicle>): Promise<IConsignmentVehicle | null> => {
     if (!mongoose.Types.ObjectId.isValid(id)) return null;
     const vehicle = await ConsignmentVehicle.findOne({ _id: id, isActive: true });
     if (!vehicle) return null;
+
+    // ── Build field-level diff before mutating the document ──────────
+    const diffs: string[] = [];
+    for (const [field, label, fmt] of CONSIGNMENT_AUDIT_FIELDS) {
+        const oldVal = vehicle[field];
+        const newVal = (data as Record<string, unknown>)[field as string];
+        if (field in (data as object) && String(oldVal ?? "") !== String(newVal ?? "")) {
+            const display = fmt
+                ? `${fmt(oldVal)} → ${fmt(newVal)}`
+                : `${oldVal ?? "—"} → ${newVal ?? "—"}`;
+            diffs.push(`${label}: ${display}`);
+        }
+    }
+
     Object.assign(vehicle, data);
-    vehicle.activityLog.push({ action: "updated", description: "Consignment details updated", date: new Date() });
+    vehicle.activityLog.push({
+        action: "updated",
+        description: diffs.length > 0
+            ? `Consignment details updated — ${diffs.join("; ")}`
+            : "Consignment details updated",
+        date: new Date(),
+    });
     await vehicle.save();
     return vehicle;
 };

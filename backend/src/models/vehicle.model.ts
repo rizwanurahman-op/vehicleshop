@@ -223,6 +223,10 @@ VehicleSchema.index(
     { registrationNo: 1 },
     { unique: true, partialFilterExpression: { isActive: true }, name: "registrationNo_active_unique" }
 );
+// Report / analytics performance indexes
+VehicleSchema.index({ totalInvestment: -1 });                 // sort/filter by investment in reports
+VehicleSchema.index({ profitLoss: -1 });                      // P&L report sorting
+VehicleSchema.index({ isActive: 1, status: 1, dateSold: -1 }); // compound for common report filter combo
 
 // Pre-save hook: auto-calculations
 VehicleSchema.pre("save", function (next) {
