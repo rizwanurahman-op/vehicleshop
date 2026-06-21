@@ -42,24 +42,20 @@ function isSafeInternalPath(path: string): boolean {
 }
 
 /**
- * Build the Content-Security-Policy header value with per-request nonce.
+ * Build the Content-Security-Policy header value.
  *
- * SECURITY: Nonce-based CSP eliminates 'unsafe-inline' in production.
- * A unique nonce is generated per request and injected into script-src.
- * Next.js uses this nonce for its own inline scripts automatically when
- * the nonce is forwarded as the `x-nonce` request header.
- *
- * In development, 'unsafe-eval' is still needed for hot-reload (HMR).
+ * For static page optimization in Next.js, we must allow 'unsafe-inline'
+ * in script-src, otherwise pre-rendered static pages will fail to load scripts.
+ * In development, 'unsafe-eval' is also needed for hot-reload (HMR).
  */
-function buildCsp(nonce: string, isDev: boolean): string {
+function buildCsp(isDev: boolean): string {
     const apiOrigin = process.env.NEXT_PUBLIC_API_URL
         ? (() => { try { return new URL(process.env.NEXT_PUBLIC_API_URL).origin; } catch { return ""; } })()
         : "";
 
-    // Dev: keep unsafe-eval for HMR. Prod: nonce alone — no more 'unsafe-inline'.
     const scriptSrc = isDev
-        ? `'self' 'nonce-${nonce}' 'unsafe-eval'`
-        : `'self' 'nonce-${nonce}'`;
+        ? `'self' 'unsafe-inline' 'unsafe-eval'`
+        : `'self' 'unsafe-inline'`;
 
     const directives = [
         "default-src 'self'",
@@ -106,21 +102,11 @@ export function middleware(request: NextRequest) {
         }
     }
 
-    // ── Nonce-based CSP ──────────────────────────────────────────────────────
-    // Generate a fresh cryptographic nonce for every response.
-    // Forward it as x-nonce so server components can attach it to <script> tags.
-    // This removes the need for 'unsafe-inline' in production.
-    const randomId = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-        ? crypto.randomUUID()
-        : Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-    const nonce = btoa(randomId);
+    // ── Content-Security-Policy ──────────────────────────────────────────────
     const isDev = process.env.NODE_ENV !== "production";
-    const csp = buildCsp(nonce, isDev);
+    const csp = buildCsp(isDev);
 
-    const requestHeaders = new Headers(request.headers);
-    requestHeaders.set("x-nonce", nonce);
-
-    const response = NextResponse.next({ request: { headers: requestHeaders } });
+    const response = NextResponse.next();
     response.headers.set("Content-Security-Policy", csp);
 
     return response;
