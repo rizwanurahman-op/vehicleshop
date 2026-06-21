@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useDebounce } from "@/hooks/use-debounce";
-import { getClientSession } from "@/lib/auth";
+import { useSessionStore } from "@stores/session";
 import { toast } from "sonner";
 import VehicleTypeIcon from "../../vehicles/components/vehicle-type-icon";
 import { TablePagination } from "@components/shared";
@@ -186,7 +186,7 @@ const PurchasesList = () => {
             if (dateRange.dateTo) p.set("dateTo", dateRange.dateTo);
             const baseURL = (axios.defaults.baseURL ?? "").replace(/\/$/, "");
             const url = `${baseURL}/vehicles/reports/purchases/export?${p.toString()}`;
-            const token = getClientSession();
+            const token = useSessionStore.getState().accessToken;
             const res = await fetch(url, {
                 credentials: "include",
                 headers: token ? { Authorization: `Bearer ${token}` } : {},

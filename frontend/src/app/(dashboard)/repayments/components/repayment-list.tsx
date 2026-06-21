@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import axios from "@config/axios";
-import { getClientSession } from "@/lib/auth";
+import { useSessionStore } from "@stores/session";
 import { formatINR } from "@lib/currency";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -177,7 +177,7 @@ const RepaymentList = ({ initialData }: RepaymentListProps) => {
             const p = new URLSearchParams({ format, ...filterParams });
             const baseURL = (axios.defaults.baseURL ?? "").replace(/\/$/, "");
             const url = `${baseURL}/repayments/export?${p.toString()}`;
-            const token = getClientSession();
+            const token = useSessionStore.getState().accessToken;
             const res = await fetch(url, { credentials: "include", headers: token ? { Authorization: `Bearer ${token}` } : {} });
             if (!res.ok) throw new Error("Export failed");
             const blob = await res.blob();

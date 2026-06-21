@@ -23,11 +23,13 @@ interface TokenPair {
 }
 
 const generateTokens = (userId: string, role: string): TokenPair => {
+    // jwt.sign() expiresIn expects the branded StringValue type from the ms package.
+    // Zod parses env vars as plain string, so we cast to the accepted union type.
     const accessToken = jwt.sign({ userId, role }, env.JWT_ACCESS_SECRET, {
-        expiresIn: env.JWT_ACCESS_EXPIRY as unknown as number,
+        expiresIn: env.JWT_ACCESS_EXPIRY as jwt.SignOptions["expiresIn"],
     });
     const refreshToken = jwt.sign({ userId }, env.JWT_REFRESH_SECRET, {
-        expiresIn: env.JWT_REFRESH_EXPIRY as unknown as number,
+        expiresIn: env.JWT_REFRESH_EXPIRY as jwt.SignOptions["expiresIn"],
     });
     return { accessToken, refreshToken };
 };

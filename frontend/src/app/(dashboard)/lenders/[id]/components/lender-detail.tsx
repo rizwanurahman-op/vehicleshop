@@ -245,8 +245,8 @@ export function LenderDetail({ id, initialData }: LenderDetailProps) {
                 params: { format },
                 responseType: "blob",
             });
-            const mime   = res.headers["content-type"] ?? "application/octet-stream";
-            const cd     = res.headers["content-disposition"] ?? "";
+            const mime   = String(res.headers["content-type"] ?? "application/octet-stream");
+            const cd     = String(res.headers["content-disposition"] ?? "");
             const match  = cd.match(/filename="?([^"]+)"?/);
             const fname  = match?.[1] ?? `lender_export_${format}.${format === "pdf" ? "pdf" : "csv"}`;
             const url    = URL.createObjectURL(new Blob([res.data], { type: mime }));

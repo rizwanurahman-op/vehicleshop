@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import Link from "next/link";
-import { getClientSession } from "@/lib/auth";
+import { useSessionStore } from "@stores/session";
 import { toast } from "sonner";
 import { AdminOnly, TablePagination } from "@components/shared";
 
@@ -145,7 +145,7 @@ export const ConsignmentList = ({ initialData }: { initialData: ConsignmentPagin
             if (dateRange.dateTo) p.set("dateTo", dateRange.dateTo);
             const baseURL = (axios.defaults.baseURL ?? "").replace(/\/$/, "");
             const url = `${baseURL}/consignments/export?${p.toString()}`;
-            const token = getClientSession();
+            const token = useSessionStore.getState().accessToken;
             const res = await fetch(url, { credentials: "include", headers: token ? { Authorization: `Bearer ${token}` } : {} });
             if (!res.ok) throw new Error("Export failed");
             const blob = await res.blob();

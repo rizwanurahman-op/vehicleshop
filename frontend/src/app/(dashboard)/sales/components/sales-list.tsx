@@ -21,7 +21,7 @@ import {
 import VehicleTypeIcon from "../../vehicles/components/vehicle-type-icon";
 import { Badge } from "@/components/ui/badge";
 import { useDebounce } from "@/hooks/use-debounce";
-import { getClientSession } from "@/lib/auth";
+import { useSessionStore } from "@stores/session";
 import { toast } from "sonner";
 import { TablePagination } from "@components/shared";
 
@@ -192,7 +192,7 @@ const SalesList = ({ initialData }: SalesListProps) => {
             if (dateRange.dateTo) p.set("dateTo", dateRange.dateTo);
             const baseURL = (axios.defaults.baseURL ?? "").replace(/\/$/, "");
             const url = `${baseURL}/sales/export?${p.toString()}`;
-            const token = getClientSession();
+            const token = useSessionStore.getState().accessToken;
             const res = await fetch(url, {
                 credentials: "include",
                 headers: token ? { Authorization: `Bearer ${token}` } : {},

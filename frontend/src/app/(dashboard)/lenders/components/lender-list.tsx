@@ -4,7 +4,7 @@ import { useState, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import axios from "@config/axios";
 import { useRouter } from "next/navigation";
-import { getClientSession } from "@/lib/auth";
+import { useSessionStore } from "@stores/session";
 import { formatINR } from "@lib/currency";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -177,7 +177,7 @@ const LenderList = ({ initialData }: LenderListProps) => {
             const p = new URLSearchParams({ format, ...filterParams });
             const baseURL = (axios.defaults.baseURL ?? "").replace(/\/$/, "");
             const url = `${baseURL}/lenders/export?${p.toString()}`;
-            const token = getClientSession();
+            const token = useSessionStore.getState().accessToken;
             const res = await fetch(url, { credentials: "include", headers: token ? { Authorization: `Bearer ${token}` } : {} });
             if (!res.ok) throw new Error("Export failed");
             const blob = await res.blob();

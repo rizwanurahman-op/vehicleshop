@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { z } from "zod";
 import * as vs from "../services/vehicle.service";
 import {
     createVehicleSchema, updateVehicleSchema,
@@ -8,6 +9,11 @@ import {
     updateCostsSchema,
     addCostBreakdownItemSchema,
 } from "../schemas/vehicle.schema";
+
+// Static schema — defined once at module load, not recreated per request
+const updateNocStatusSchema = z.object({
+    nocStatus: z.enum(["pending", "received", "submitted", "completed"]),
+});
 
 // ── Vehicle CRUD ─────────────────────────────────────────────────
 export const createVehicle = async (req: Request, res: Response): Promise<void> => {
@@ -21,8 +27,13 @@ export const createVehicle = async (req: Request, res: Response): Promise<void> 
 };
 
 export const getVehicles = async (req: Request, res: Response): Promise<void> => {
-    const { vehicleType, status, saleStatus, fundingSource, isFromExchange, search, dateFrom, dateTo, page = "1", limit = "20" } = req.query as Record<string, string>;
-    const result = await vs.getVehicles({ vehicleType, status, saleStatus, fundingSource, isFromExchange, search, dateFrom, dateTo, page: +page, limit: +limit });
+    const { vehicleType, status, saleStatus, fundingSource, isFromExchange, dateFrom, dateTo } = req.query as Record<string, string>;
+    // Sanitize & clamp page/limit to prevent runaway queries
+    const page  = Math.max(1, parseInt((req.query.page  as string) ?? "1",  10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt((req.query.limit as string) ?? "20", 10) || 20));
+    // Limit search string length to prevent expensive regex/text queries
+    const search = ((req.query.search as string) ?? "").slice(0, 100) || undefined;
+    const result = await vs.getVehicles({ vehicleType, status, saleStatus, fundingSource, isFromExchange, search, dateFrom, dateTo, page, limit });
     res.json({ success: true, statusCode: 200, message: "Vehicles fetched", data: result });
 };
 
@@ -85,11 +96,7 @@ export const undoSale = async (req: Request, res: Response): Promise<void> => {
 };
 
 export const updateNocStatus = async (req: Request, res: Response): Promise<void> => {
-    const { z } = await import("zod");
-    const schema = z.object({
-        nocStatus: z.enum(["pending", "received", "submitted", "completed"]),
-    });
-    const parsed = schema.safeParse(req.body);
+    const parsed = updateNocStatusSchema.safeParse(req.body);
     if (!parsed.success) {
         res.status(400).json({ success: false, statusCode: 400, message: "Validation failed", errors: parsed.error.errors.map((e) => ({ field: e.path.join("."), message: e.message })) });
         return;
@@ -250,8 +257,11 @@ export const getInventoryReport = async (_req: Request, res: Response): Promise<
 };
 
 export const getPurchaseRegister = async (req: Request, res: Response): Promise<void> => {
-    const { vehicleType, paymentStatus, search, dateFrom, dateTo, page = "1", limit = "20" } = req.query as Record<string, string>;
-    const result = await vs.getPurchaseRegister({ vehicleType, paymentStatus, search, dateFrom, dateTo, page: +page, limit: +limit });
+    const { vehicleType, paymentStatus, dateFrom, dateTo } = req.query as Record<string, string>;
+    const page  = Math.max(1, parseInt((req.query.page  as string) ?? "1",  10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt((req.query.limit as string) ?? "20", 10) || 20));
+    const search = ((req.query.search as string) ?? "").slice(0, 100) || undefined;
+    const result = await vs.getPurchaseRegister({ vehicleType, paymentStatus, search, dateFrom, dateTo, page, limit });
     res.json({ success: true, statusCode: 200, message: "Purchase register fetched", data: result });
 };
 

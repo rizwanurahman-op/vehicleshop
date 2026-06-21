@@ -6,7 +6,7 @@ import { useState, useMemo } from "react";
 import { formatCurrency } from "@lib/currency";
 import { formatDate } from "@lib/date";
 import { cn } from "@/lib/utils";
-import { getClientSession } from "@/lib/auth";
+import { useSessionStore } from "@stores/session";
 import { toast } from "sonner";
 import {
     TrendingUp, TrendingDown, Store, CreditCard, Clock, AlertCircle,
@@ -107,7 +107,7 @@ export const ConsignmentReports = () => {
             const p = new URLSearchParams({ format, ...pageParams });
             const baseURL = (axios.defaults.baseURL ?? "").replace(/\/$/, "");
             const url = `${baseURL}/consignments/reports/export?${p.toString()}`;
-            const token = getClientSession();
+            const token = useSessionStore.getState().accessToken;
             const res = await fetch(url, { credentials: "include", headers: token ? { Authorization: `Bearer ${token}` } : {} });
             if (!res.ok) throw new Error("Export failed");
             const blob = await res.blob();

@@ -6,7 +6,7 @@ import axios from "@config/axios";
 import { formatINR } from "@lib/currency";
 import { formatDate } from "@lib/date";
 import { cn } from "@/lib/utils";
-import { getClientSession } from "@/lib/auth";
+import { useSessionStore } from "@stores/session";
 import { toast } from "sonner";
 import Link from "next/link";
 import {
@@ -272,7 +272,7 @@ export default function ExchangeList() {
             const p = new URLSearchParams({ format, ...apiParams });
             const baseURL = (axios.defaults.baseURL ?? "").replace(/\/$/, "");
             const url = `${baseURL}/exchanges/export?${p.toString()}`;
-            const token = getClientSession();
+            const token = useSessionStore.getState().accessToken;
             const res = await fetch(url, { credentials: "include", headers: token ? { Authorization: `Bearer ${token}` } : {} });
             if (!res.ok) throw new Error("Export failed");
             const blob = await res.blob();

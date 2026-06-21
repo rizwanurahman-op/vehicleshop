@@ -3,14 +3,14 @@ import { getSales } from "../services/sales.service";
 import { exportSalesCSV, exportSalesPDF } from "../services/sales_export";
 
 export const getSalesRegister = async (req: Request, res: Response): Promise<void> => {
-    const {
-        source, saleStatus, search, dateFrom, dateTo,
-        isExchange, page = "1", limit = "20",
-    } = req.query as Record<string, string>;
+    const { source, saleStatus, dateFrom, dateTo, isExchange } = req.query as Record<string, string>;
+    const page  = Math.max(1, parseInt((req.query.page  as string) ?? "1",  10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt((req.query.limit as string) ?? "20", 10) || 20));
+    const search = ((req.query.search as string) ?? "").slice(0, 100) || undefined;
 
     const result = await getSales({
         source, saleStatus, search, dateFrom, dateTo, isExchange,
-        page: +page, limit: +limit,
+        page, limit,
     });
 
     res.json({ success: true, statusCode: 200, message: "Sales register fetched", data: result });

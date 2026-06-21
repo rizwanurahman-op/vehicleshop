@@ -29,9 +29,11 @@ export const useSessionStore = create<SessionStore>()(
         }),
         {
             name: "vb-session",
-            // Only persist the user profile — NOT the accessToken.
-            // The accessToken lives in the httpOnly cookie (for SSR) and the js-cookie (for CSR).
-            // Storing it in localStorage creates stale-token bugs and is a security risk.
+            // SECURITY: Only persist the user profile — NEVER the accessToken.
+            // The accessToken is kept in Zustand memory only (not localStorage, not js-cookie).
+            // It is sent to the backend via the Authorization header (axios interceptor reads it
+            // from getState().accessToken). The httpOnly vb_access_token cookie is set by the
+            // backend and is completely inaccessible to JavaScript — XSS-safe.
             partialize: state => ({ user: state.user }),
         }
     )

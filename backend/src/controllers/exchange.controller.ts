@@ -3,8 +3,10 @@ import * as es from "../services/exchange.service";
 import { exportExchangesCSV, exportExchangesPDF } from "../services/exchange_export";
 
 export const getExchanges = async (req: Request, res: Response): Promise<void> => {
-    const { collection, dateFrom, dateTo, page = "1", limit = "20" } = req.query as Record<string, string>;
-    const result = await es.getExchanges({ collection, dateFrom, dateTo, page: +page, limit: +limit });
+    const { collection, dateFrom, dateTo } = req.query as Record<string, string>;
+    const page  = Math.max(1, parseInt((req.query.page  as string) ?? "1",  10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt((req.query.limit as string) ?? "20", 10) || 20));
+    const result = await es.getExchanges({ collection, dateFrom, dateTo, page, limit });
     res.json({ success: true, statusCode: 200, message: "Exchanges fetched", data: result });
 };
 

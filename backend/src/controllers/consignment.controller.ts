@@ -23,8 +23,11 @@ export const createConsignment = async (req: Request, res: Response): Promise<vo
 };
 
 export const getConsignments = async (req: Request, res: Response): Promise<void> => {
-    const { saleType, vehicleType, status, settlementStatus, buyerPaymentStatus, payeePaymentStatus, search, dateFrom, dateTo, page = "1", limit = "20" } = req.query as Record<string, string>;
-    const result = await cs.getConsignments({ saleType, vehicleType, status, settlementStatus, buyerPaymentStatus, payeePaymentStatus, search, dateFrom, dateTo, page: +page, limit: +limit });
+    const { saleType, vehicleType, status, settlementStatus, buyerPaymentStatus, payeePaymentStatus, dateFrom, dateTo } = req.query as Record<string, string>;
+    const page  = Math.max(1, parseInt((req.query.page  as string) ?? "1",  10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt((req.query.limit as string) ?? "20", 10) || 20));
+    const search = ((req.query.search as string) ?? "").slice(0, 100) || undefined;
+    const result = await cs.getConsignments({ saleType, vehicleType, status, settlementStatus, buyerPaymentStatus, payeePaymentStatus, search, dateFrom, dateTo, page, limit });
     res.json({ success: true, statusCode: 200, message: "Consignments fetched", data: result });
 };
 

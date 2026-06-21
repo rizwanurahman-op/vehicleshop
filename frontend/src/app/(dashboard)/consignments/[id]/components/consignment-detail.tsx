@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "@config/axios";
-import { getClientSession } from "@/lib/auth";
+import { useSessionStore } from "@stores/session";
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -889,7 +889,7 @@ const ExportDetailButton = ({ consignmentId, name }: { consignmentId: string; na
         try {
             const baseURL = (axios.defaults.baseURL ?? "").replace(/\/$/, "");
             const url = `${baseURL}/consignments/${consignmentId}/export?format=${format}`;
-            const token = getClientSession();
+            const token = useSessionStore.getState().accessToken;
             const res = await fetch(url, {
                 credentials: "include",
                 headers: token ? { Authorization: `Bearer ${token}` } : {},

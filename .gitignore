@@ -1,11 +1,23 @@
 node_modules
 .next
 .DS_Store
+
+# ─── Environment files (NEVER commit — contain secrets) ──────────────────────
 .env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+
 dist
 build
 coverage

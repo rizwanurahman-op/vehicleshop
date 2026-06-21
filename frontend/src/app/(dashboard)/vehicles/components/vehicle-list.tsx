@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import axios from "@config/axios";
-import { getClientSession } from "@/lib/auth";
+import { useSessionStore } from "@stores/session";
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -147,7 +147,7 @@ const VehicleList = ({ initialData }: VehicleListProps) => {
 
             const baseURL = (axios.defaults.baseURL ?? "").replace(/\/$/, "");
             const url = `${baseURL}/vehicles/export?${params.toString()}`;
-            const token = getClientSession();
+            const token = useSessionStore.getState().accessToken;
             const res = await fetch(url, {
                 credentials: "include",
                 headers: token ? { Authorization: `Bearer ${token}` } : {},

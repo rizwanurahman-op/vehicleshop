@@ -13,8 +13,10 @@ export const createVehicleOwner = async (req: Request, res: Response): Promise<v
 };
 
 export const getVehicleOwners = async (req: Request, res: Response): Promise<void> => {
-    const { search, page = "1", limit = "50" } = req.query as Record<string, string>;
-    const result = await vos.getVehicleOwners({ search, page: +page, limit: +limit });
+    const page  = Math.max(1, parseInt((req.query.page  as string) ?? "1",  10) || 1);
+    const limit = Math.min(200, Math.max(1, parseInt((req.query.limit as string) ?? "50", 10) || 50));
+    const search = ((req.query.search as string) ?? "").slice(0, 100) || undefined;
+    const result = await vos.getVehicleOwners({ search, page, limit });
     res.json({ success: true, statusCode: 200, message: "Vehicle owners fetched", data: result });
 };
 

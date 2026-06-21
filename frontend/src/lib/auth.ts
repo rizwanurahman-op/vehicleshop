@@ -1,35 +1,57 @@
-import Cookies from "js-cookie";
+/**
+ * Client-side auth utilities.
+ *
+ * SECURITY DESIGN:
+ * - The access token cookie (vb_access_token) is set as httpOnly by the backend.
+ *   This means JavaScript CANNOT read or write it — XSS attacks cannot steal it.
+ * - We store only the token EXPIRY TIME in localStorage (not the token itself)
+ *   so the proactive refresh logic knows when to call /auth/refresh.
+ * - The Zustand session store keeps the access token in memory (for the axios
+ *   Authorization header), but it is NOT persisted to localStorage/cookie.
+ *
+ * Flow:
+ *  Login/Register → backend sets httpOnly cookie → body returns accessToken
+ *  → Zustand stores it in memory → axios sends it as Authorization header
+ *  → on expiry, /auth/refresh renews both the httpOnly cookie AND the body token
+ *  → Zustand updates its in-memory copy
+ */
 
-const ACCESS_TOKEN_KEY = "vb_access_token";
 const EXPIRY_KEY = "vb_token_expiry";
 
-// Must match JWT_ACCESS_EXPIRY on the backend (currently 1d).
-// The refresh hook proactively renews 2 min before expiry, so users
-// never hit an expired token in normal usage.
-const TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 1 day
+// Must match JWT_ACCESS_EXPIRY on the backend (currently 15m).
+const TOKEN_TTL_MS = 15 * 60 * 1000; // 15 minutes
 
-export const setClientSession = (accessToken: string): void => {
+/**
+ * Record token expiry time so the proactive refresh hook knows when to renew.
+ * Called after login, register, or a successful token refresh.
+ * Does NOT write the token itself to any client-accessible storage.
+ */
+export const setClientSession = (_accessToken: string): void => {
     const expiresAt = Date.now() + TOKEN_TTL_MS;
-    Cookies.set(ACCESS_TOKEN_KEY, accessToken, {
-        expires: TOKEN_TTL_MS / (1000 * 60 * 60 * 24), // days
-        sameSite: "strict",
-        secure: process.env.NODE_ENV === "production",
-    });
-    // Store expiry epoch for proactive refresh logic
     if (typeof window !== "undefined") {
         localStorage.setItem(EXPIRY_KEY, String(expiresAt));
     }
+    // NOTE: The vb_access_token cookie is httpOnly — set by the backend, not here.
+    // The _accessToken parameter is kept for API compatibility (Zustand stores it in memory).
 };
 
+/**
+ * The httpOnly cookie cannot be read by JavaScript.
+ * This returns null — the axios interceptor uses the Zustand in-memory token instead.
+ * The Next.js middleware reads the cookie server-side (httpOnly cookies ARE readable there).
+ */
 export const getClientSession = (): string | null => {
-    return Cookies.get(ACCESS_TOKEN_KEY) ?? null;
+    // httpOnly cookie is not accessible to JS — return null.
+    // Axios uses the Authorization header populated from Zustand instead.
+    return null;
 };
 
+/** Clear the token expiry marker from localStorage on logout. */
 export const clearClientSession = (): void => {
-    Cookies.remove(ACCESS_TOKEN_KEY);
     if (typeof window !== "undefined") {
         localStorage.removeItem(EXPIRY_KEY);
     }
+    // The httpOnly cookie is cleared by the backend /auth/logout endpoint.
 };
 
 /** Returns ms until the token expires (negative if already expired). */
@@ -38,4 +60,3 @@ export const msUntilTokenExpiry = (): number => {
     const expiresAt = Number(localStorage.getItem(EXPIRY_KEY) ?? 0);
     return expiresAt - Date.now();
 };
-
