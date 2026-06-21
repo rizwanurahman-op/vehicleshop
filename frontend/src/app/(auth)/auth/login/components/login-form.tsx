@@ -38,7 +38,7 @@ const LoginForm = () => {
         try {
             const res = await axios.post<ApiResponse<{ user: AuthSession; accessToken: string }>>("/auth/login", values);
             const { user, accessToken } = res.data.data!;
-            setClientSession(accessToken);
+            await setClientSession(accessToken);
             setSession(user, accessToken);
             toast.success("Welcome back!", { id: toastId, description: `Logged in as ${user.username}` });
             const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";

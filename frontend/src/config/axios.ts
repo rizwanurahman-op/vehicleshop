@@ -39,8 +39,8 @@ const processQueue = (error: unknown, token: string | null = null) => {
 
 // Force a full logout: clear expiry marker + clear Zustand session store.
 // The httpOnly cookie is cleared by the backend /auth/logout endpoint.
-const forceLogout = () => {
-    clearClientSession();
+const forceLogout = async () => {
+    await clearClientSession();
     useSessionStore.getState().clearSession();
     if (typeof window !== "undefined") {
         window.location.href = "/auth/login";
@@ -80,7 +80,7 @@ apiClient.interceptors.response.use(
                 if (newToken) {
                     // Update in-memory store and record expiry for proactive refresh
                     useSessionStore.getState().setSession(useSessionStore.getState().user!, newToken);
-                    setClientSession(newToken); // records expiry in localStorage
+                    await setClientSession(newToken); // records expiry in localStorage
                     apiClient.defaults.headers.common.Authorization = `Bearer ${newToken}`;
                     originalRequest.headers.Authorization = `Bearer ${newToken}`;
                     processQueue(null, newToken);
@@ -88,10 +88,10 @@ apiClient.interceptors.response.use(
                 }
                 // Refresh succeeded but returned no token — force logout
                 processQueue(new Error("No token in refresh response"), null);
-                forceLogout();
+                await forceLogout();
             } catch (refreshError) {
                 processQueue(refreshError, null);
-                forceLogout();
+                await forceLogout();
                 return Promise.reject(refreshError);
             } finally {
                 isRefreshing = false;

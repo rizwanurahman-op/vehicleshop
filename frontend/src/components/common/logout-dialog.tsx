@@ -30,7 +30,7 @@ const LogoutDialog = ({ open, onOpenChange }: LogoutDialogProps) => {
         } catch {
             // Intentionally swallowed — frontend cleanup always runs
         } finally {
-            clearClientSession();   // removes the vb_token_expiry from localStorage
+            await clearClientSession();   // removes the vb_token_expiry from localStorage
             clearSession();         // clears Zustand in-memory accessToken
             onOpenChange(false);
             toast.success("Signed out!", { id: toastId, description: "You have been signed out successfully." });

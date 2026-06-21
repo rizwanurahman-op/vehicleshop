@@ -30,8 +30,8 @@ export function useTokenRefresh() {
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const isRefreshingRef = useRef(false);
 
-    const forceLogout = useCallback(() => {
-        clearClientSession();
+    const forceLogout = useCallback(async () => {
+        await clearClientSession();
         clearSession();
         window.location.href = "/auth/login";
     }, [clearSession]);
@@ -48,15 +48,15 @@ export function useTokenRefresh() {
                 if (user) {
                     setSession(user, newToken);
                 }
-                setClientSession(newToken); // records expiry in localStorage
+                await setClientSession(newToken); // records expiry in localStorage
                 // Keep axios default header in sync
                 apiClient.defaults.headers.common.Authorization = `Bearer ${newToken}`;
             } else {
-                forceLogout();
+                await forceLogout();
             }
         } catch {
             // Refresh token is expired or revoked — the user must log in again
-            forceLogout();
+            await forceLogout();
         } finally {
             isRefreshingRef.current = false;
         }

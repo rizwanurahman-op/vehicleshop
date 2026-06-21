@@ -2,18 +2,28 @@
  * Client-side auth utilities.
  *
  * SECURITY DESIGN:
- * - The access token cookie (vb_access_token) is set as httpOnly by the backend.
- *   This means JavaScript CANNOT read or write it — XSS attacks cannot steal it.
- * - We store only the token EXPIRY TIME in localStorage (not the token itself)
- *   so the proactive refresh logic knows when to call /auth/refresh.
- * - The Zustand session store keeps the access token in memory (for the axios
- *   Authorization header), but it is NOT persisted to localStorage/cookie.
+ * - The access token is returned in the login response BODY (JSON) by the backend.
+ * - We store only the token EXPIRY TIME in localStorage (not the token itself).
+ * - The Zustand session store keeps the access token in memory for the axios
+ *   Authorization header — NOT persisted to localStorage.
+ * - We call POST /api/session after every token update to set an httpOnly cookie
+ *   on the VERCEL domain so the Next.js middleware can read it for auth checks.
+ *
+ * WHY TWO COOKIES EXIST IN PRODUCTION:
+ *   vb_access_token (backend domain / Render) — sent automatically to backend APIs
+ *   vb_access_token (frontend domain / Vercel) — read by Next.js middleware for routing
+ *
+ * The backend (Render) still sets its own vb_access_token cookie (used by the
+ * refresh endpoint which reads it when axios sends withCredentials requests).
+ * The /api/session route sets the frontend-domain copy for middleware routing.
  *
  * Flow:
- *  Login/Register → backend sets httpOnly cookie → body returns accessToken
- *  → Zustand stores it in memory → axios sends it as Authorization header
- *  → on expiry, /auth/refresh renews both the httpOnly cookie AND the body token
- *  → Zustand updates its in-memory copy
+ *  Login/Register → backend returns accessToken in body
+ *  → setSession(user, accessToken) in Zustand (in-memory)
+ *  → setClientSession(accessToken):
+ *      - stores expiry in localStorage for proactive refresh
+ *      - calls POST /api/session to set httpOnly cookie on Vercel domain
+ *  → Next.js middleware reads vb_access_token cookie → allows access
  */
 
 const EXPIRY_KEY = "vb_token_expiry";
@@ -22,23 +32,37 @@ const EXPIRY_KEY = "vb_token_expiry";
 const TOKEN_TTL_MS = 15 * 60 * 1000; // 15 minutes
 
 /**
- * Record token expiry time so the proactive refresh hook knows when to renew.
+ * Record token expiry time and sync the Vercel-domain httpOnly cookie
+ * so the Next.js middleware can authenticate server-side renders.
+ *
  * Called after login, register, or a successful token refresh.
- * Does NOT write the token itself to any client-accessible storage.
  */
-export const setClientSession = (_accessToken: string): void => {
+export const setClientSession = async (accessToken: string): Promise<void> => {
     const expiresAt = Date.now() + TOKEN_TTL_MS;
     if (typeof window !== "undefined") {
         localStorage.setItem(EXPIRY_KEY, String(expiresAt));
+
+        // Sync the cookie on the Vercel (frontend) domain so the Next.js
+        // middleware can read it. We await this to prevent race conditions.
+        try {
+            await fetch("/api/session", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ accessToken }),
+                credentials: "same-origin",
+            });
+        } catch {
+            // Non-fatal — Zustand in-memory token still works for API calls.
+            // The cookie sync will retry on the next token refresh.
+            console.warn("[auth] Failed to sync session cookie to frontend domain");
+        }
     }
-    // NOTE: The vb_access_token cookie is httpOnly — set by the backend, not here.
-    // The _accessToken parameter is kept for API compatibility (Zustand stores it in memory).
 };
 
 /**
  * The httpOnly cookie cannot be read by JavaScript.
  * This returns null — the axios interceptor uses the Zustand in-memory token instead.
- * The Next.js middleware reads the cookie server-side (httpOnly cookies ARE readable there).
+ * The Next.js middleware reads the cookie server-side.
  */
 export const getClientSession = (): string | null => {
     // httpOnly cookie is not accessible to JS — return null.
@@ -46,12 +70,27 @@ export const getClientSession = (): string | null => {
     return null;
 };
 
-/** Clear the token expiry marker from localStorage on logout. */
-export const clearClientSession = (): void => {
+/**
+ * Clear the token expiry marker from localStorage on logout.
+ * Also clears the Vercel-domain session cookie via DELETE /api/session.
+ */
+export const clearClientSession = async (): Promise<void> => {
     if (typeof window !== "undefined") {
         localStorage.removeItem(EXPIRY_KEY);
+
+        // Clear the Vercel-domain cookie so the Next.js middleware
+        // immediately treats the user as logged out.
+        try {
+            await fetch("/api/session", {
+                method: "DELETE",
+                credentials: "same-origin",
+            });
+        } catch {
+            console.warn("[auth] Failed to clear session cookie from frontend domain");
+        }
     }
-    // The httpOnly cookie is cleared by the backend /auth/logout endpoint.
+    // The backend httpOnly cookie (Render domain) is cleared by the
+    // backend /auth/logout endpoint which the caller invokes separately.
 };
 
 /** Returns ms until the token expires (negative if already expired). */
