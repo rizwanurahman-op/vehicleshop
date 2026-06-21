@@ -2,6 +2,9 @@ import "express-async-errors";
 import dotenv from "dotenv";
 dotenv.config();
 
+// Set default timezone to Indian Standard Time if not configured
+process.env.TZ = process.env.TZ || "Asia/Kolkata";
+
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";

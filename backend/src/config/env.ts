@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+// Set default timezone to Indian Standard Time if not configured
+process.env.TZ = process.env.TZ || "Asia/Kolkata";
+
 const envSchema = z.object({
     PORT: z.string().default("5000"),
     MONGODB_URI: z.string().min(1, "MONGODB_URI is required"),
