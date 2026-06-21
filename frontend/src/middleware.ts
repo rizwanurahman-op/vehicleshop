@@ -87,8 +87,10 @@ export function middleware(request: NextRequest) {
     if (!isPublicPath && !token) {
         const loginUrl = new URL("/auth/login", request.url);
         // Only set callbackUrl for safe internal paths (prevents open redirect)
+        // Include query string so filters/params are restored after login
         if (isSafeInternalPath(pathname)) {
-            loginUrl.searchParams.set("callbackUrl", pathname);
+            const fullPath = pathname + (request.nextUrl.search || "");
+            loginUrl.searchParams.set("callbackUrl", fullPath);
         }
         return NextResponse.redirect(loginUrl);
     }

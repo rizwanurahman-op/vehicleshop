@@ -9,10 +9,10 @@ const nextConfig: NextConfig = {
     },
 
     // ─── Security Headers ─────────────────────────────────────────────────────
-    // NOTE: The Content-Security-Policy header is now set dynamically by
-    // src/middleware.ts on every request using a per-request nonce.
-    // This allows 'unsafe-inline' to be REMOVED in production — each
-    // inline script gets a cryptographic nonce instead.
+    // NOTE: The Content-Security-Policy header is set dynamically by
+    // src/middleware.ts based on environment (dev vs production).
+    // In development, 'unsafe-eval' is included for Next.js HMR (hot reload).
+    // In production, 'unsafe-eval' is omitted for tighter security.
     // The headers below cover all other security directives.
     async headers() {
         return [
