@@ -39,7 +39,7 @@ const lenderSchema = new Schema<ILender>(
         isActive: {
             type: Boolean,
             default: true,
-            index: true,
+            // index declared below via lenderSchema.index({ isActive: 1 })
         },
     },
     { timestamps: true }

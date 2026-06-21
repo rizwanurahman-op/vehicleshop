@@ -10,7 +10,7 @@ export interface IVehicleOwner extends Document {
 }
 
 const VehicleOwnerSchema = new Schema<IVehicleOwner>({
-    ownerId: { type: String, unique: true, index: true },
+    ownerId: { type: String, unique: true }, // unique:true already creates the index
     name: { type: String, required: true, trim: true },
     phone: { type: String, trim: true },
     address: { type: String, trim: true },

@@ -195,7 +195,7 @@ const ActivityLogSchema = new Schema({
 }, { _id: false });
 
 const ConsignmentVehicleSchema = new Schema<IConsignmentVehicle>({
-    consignmentId: { type: String, unique: true, index: true },
+    consignmentId: { type: String, unique: true }, // unique:true already creates the index
     saleType: { type: String, enum: ["park_sale", "finance_sale"], required: true, index: true },
     vehicleType: { type: String, enum: ["two_wheeler", "four_wheeler"], required: true },
 
@@ -246,7 +246,7 @@ const ConsignmentVehicleSchema = new Schema<IConsignmentVehicle>({
         type: String,
         enum: ["received", "reconditioning", "ready_for_sale", "sold", "sold_pending", "returned"],
         default: "received",
-        index: true,
+        // index declared below via ConsignmentVehicleSchema.index({ status: 1 })
     },
     nocStatus: { type: String, enum: ["not_applicable", "pending", "received", "submitted", "completed"], default: "not_applicable" },
 
@@ -283,7 +283,7 @@ const ConsignmentVehicleSchema = new Schema<IConsignmentVehicle>({
 
     remarks: String,
     notes: String,
-    isActive: { type: Boolean, default: true, index: true },
+    isActive: { type: Boolean, default: true }, // index via compound: isActive_1_status_1_dateSold_-1
 }, { timestamps: true });
 
 // ── Indexes ───────────────────────────────────────────────────────

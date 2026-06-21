@@ -148,7 +148,7 @@ const ActivityLogSchema = new Schema({
 }, { _id: false });
 
 const VehicleSchema = new Schema<IVehicle>({
-    vehicleId: { type: String, unique: true, index: true },
+    vehicleId: { type: String, unique: true }, // unique:true already creates the index
     vehicleType: { type: String, enum: ["two_wheeler", "four_wheeler"], required: true },
     make: { type: String, required: true, trim: true },
     model: { type: String, required: true, trim: true },
@@ -178,7 +178,7 @@ const VehicleSchema = new Schema<IVehicle>({
     purchasePaymentStatus: { type: String, enum: ["paid", "partial", "pending"], default: "pending" },
     purchasePendingAmount: { type: Number, default: 0 },
     totalInvestment: { type: Number, default: 0 },
-    status: { type: String, enum: ["in_stock", "reconditioning", "ready_for_sale", "sold", "sold_pending", "exchanged"], default: "in_stock", index: true },
+    status: { type: String, enum: ["in_stock", "reconditioning", "ready_for_sale", "sold", "sold_pending", "exchanged"], default: "in_stock" }, // index via schema.index({ vehicleType:1, status:1 }) below
     dateSold: Date,
     soldPrice: Number,
     soldTo: String,
@@ -204,11 +204,12 @@ const VehicleSchema = new Schema<IVehicle>({
     activityLog: { type: [ActivityLogSchema], default: [] },
     remarks: String,
     notes: String,
-    isActive: { type: Boolean, default: true, index: true },
+    isActive: { type: Boolean, default: true }, // index via compound: isActive_1_status_1_dateSold_-1
 }, { timestamps: true });
 
 // Indexes
 VehicleSchema.index({ vehicleType: 1 });
+VehicleSchema.index({ status: 1 });           // standalone for status-only queries
 VehicleSchema.index({ saleStatus: 1 });
 VehicleSchema.index({ datePurchased: -1 });
 VehicleSchema.index({ createdAt: -1 });   // primary list sort field
