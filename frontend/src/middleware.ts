@@ -110,7 +110,10 @@ export function middleware(request: NextRequest) {
     // Generate a fresh cryptographic nonce for every response.
     // Forward it as x-nonce so server components can attach it to <script> tags.
     // This removes the need for 'unsafe-inline' in production.
-    const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
+    const randomId = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    const nonce = btoa(randomId);
     const isDev = process.env.NODE_ENV !== "production";
     const csp = buildCsp(nonce, isDev);
 
