@@ -1,5 +1,16 @@
 import rateLimit from "express-rate-limit";
 
+// Health endpoint limiter — 30 requests per 15 minutes per IP
+// Prevents the /health endpoint from being abused for uptime-monitoring loops or DDoS.
+export const healthLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 30,
+    message: { success: false, statusCode: 429, message: "Too many health check requests." },
+    standardHeaders: true,
+    legacyHeaders: false,
+    skipSuccessfulRequests: true, // only count failures against the limit
+});
+
 // General API rate limiter — 100 requests per 15 minutes
 export const generalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,

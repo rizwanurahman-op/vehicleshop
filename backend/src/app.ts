@@ -15,7 +15,7 @@ import { env } from "./config/env";
 import { connectDB } from "./config/db";
 import { corsOptions } from "./config/cors";
 import { requestLogger } from "./middleware/logger.middleware";
-import { generalLimiter } from "./middleware/rate-limit.middleware";
+import { generalLimiter, healthLimiter } from "./middleware/rate-limit.middleware";
 import { errorHandler } from "./middleware/error.middleware";
 import { initializeCounters } from "./services/counter.service";
 
@@ -88,7 +88,7 @@ app.use(requestLogger);
 app.use("/api", generalLimiter);
 
 // ─── Health Check ─────────────────────────────────────────────
-app.get("/health", (_req, res) => {
+app.get("/health", healthLimiter, (_req, res) => {
     res.status(200).json({ success: true, message: "VehicleBook API is running 🚗", timestamp: new Date().toISOString() });
 });
 

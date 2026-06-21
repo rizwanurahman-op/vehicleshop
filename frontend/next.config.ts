@@ -1,18 +1,6 @@
 import type { NextConfig } from "next";
 
-// Derive the backend API origin from the env var so the CSP is always correct
-// regardless of dev (http://localhost:5001) vs production (https://vehicleshop-hk7l.onrender.com).
-function getApiOrigin(): string {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5001/api/v1";
-    try {
-        return new URL(apiUrl).origin; // e.g. "http://localhost:5001" or "https://vehicleshop-hk7l.onrender.com"
-    } catch {
-        return "http://localhost:5001"; // fallback
-    }
-}
-
 const isDev = process.env.NODE_ENV !== "production";
-const apiOrigin = getApiOrigin();
 
 const nextConfig: NextConfig = {
     reactStrictMode: true,
@@ -20,24 +8,13 @@ const nextConfig: NextConfig = {
         optimizePackageImports: ["lucide-react", "recharts"],
     },
 
-    // ─── Security Headers ─────────────────────────────────────────────
+    // ─── Security Headers ─────────────────────────────────────────────────────
+    // NOTE: The Content-Security-Policy header is now set dynamically by
+    // src/middleware.ts on every request using a per-request nonce.
+    // This allows 'unsafe-inline' to be REMOVED in production — each
+    // inline script gets a cryptographic nonce instead.
+    // The headers below cover all other security directives.
     async headers() {
-        const csp = [
-            "default-src 'self'",
-            // 'unsafe-eval' is required by Next.js hot-reload in dev; not needed in production
-            isDev
-                ? "script-src 'self' 'unsafe-eval' 'unsafe-inline'"
-                : "script-src 'self' 'unsafe-inline'",
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-            "font-src 'self' https://fonts.gstatic.com",
-            "img-src 'self' data: blob:",
-            // Allow API calls to whichever backend is configured via NEXT_PUBLIC_API_URL
-            `connect-src 'self' ${apiOrigin}`,
-            "frame-ancestors 'none'",
-            "base-uri 'self'",
-            "form-action 'self'",
-        ].join("; ");
-
         return [
             {
                 source: "/:path*",
@@ -52,9 +29,7 @@ const nextConfig: NextConfig = {
                     { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
                     // Limit browser features
                     { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), interest-cohort=()" },
-                    // Content Security Policy (dynamically built above)
-                    { key: "Content-Security-Policy", value: csp },
-                    // HSTS — only in production
+                    // HSTS — only in production (middleware sets CSP, not here)
                     ...(isDev ? [] : [{ key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" }]),
                 ],
             },

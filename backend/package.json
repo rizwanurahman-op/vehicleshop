@@ -29,12 +29,12 @@
         "express-mongo-sanitize": "^2.2.0",
         "express-rate-limit": "^7.5.0",
         "form-data": "^4.0.6",
-        "googleapis": "^144.0.0",
+        "googleapis": "^173.0.0",
         "helmet": "^8.0.0",
         "jsonwebtoken": "^9.0.3",
         "mongoose": "^8.13.2",
         "morgan": "^1.10.1",
-        "node-cron": "^3.0.3",
+        "node-cron": "^4.4.1",
         "nodemailer": "^9.0.1",
         "pdfkit": "^0.18.0",
         "zod": "^3.24.2"
@@ -53,5 +53,9 @@
         "nodemon": "^3.1.9",
         "tsx": "^4.19.3",
         "typescript": "5.8.3"
+    },
+    "allowScripts": {
+        "esbuild@0.27.7": true,
+        "fsevents@2.3.3": true
     }
 }

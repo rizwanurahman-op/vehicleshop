@@ -41,6 +41,17 @@ const formatFileSize = (bytes: number): string => {
     return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 };
 
+// ─── HTML escaping ────────────────────────────────────────────────────────────
+// Used when embedding dynamic content (e.g. error messages) in email HTML bodies
+// to prevent accidental HTML injection from stack-trace strings.
+const escapeHtml = (str: string): string =>
+    str
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#x27;");
+
 // ─── SHA-256 Checksum ─────────────────────────────────────────────────────────
 // Verifies backup file integrity — detects corruption or tampering
 
@@ -200,7 +211,7 @@ const sendBackupEmail = async (
   <p><strong>Backup ID:</strong> ${backupId}</p>
   <p><strong>Schedule:</strong> ${schedule}</p>
   <p><strong>Error:</strong></p>
-  <pre style="background:#fef2f2;padding:12px;border-radius:4px;color:#dc2626">${details.error}</pre>
+  <pre style="background:#fef2f2;padding:12px;border-radius:4px;color:#dc2626">${escapeHtml(details.error ?? "Unknown error")}</pre>
   <p>Please check the Backup Center in your dashboard.</p>
 </div>`;
 
