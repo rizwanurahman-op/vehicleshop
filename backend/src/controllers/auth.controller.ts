@@ -19,14 +19,15 @@ const accessCookieOptions = (maxAge: number) => ({
     maxAge,
 });
 
-// Refresh token: long-lived, httpOnly, used only on /auth/refresh
-const REFRESH_COOKIE_OPTIONS = {
+// Refresh token: 1-day, httpOnly, used only on /auth/refresh.
+// maxAge is set via REFRESH_TOKEN_MAX_AGE_MS (defined below) — must match JWT_REFRESH_EXPIRY=1d.
+const makeRefreshCookieOptions = () => ({
     httpOnly: true,
     secure: IS_PROD,
     sameSite: (IS_PROD ? "strict" : "lax") as "strict" | "lax",
     path: "/",
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days — matches JWT_REFRESH_EXPIRY
-};
+    maxAge: REFRESH_TOKEN_MAX_AGE_MS, // 1 day — matches JWT_REFRESH_EXPIRY
+});
 
 const CLEAR_COOKIE_OPTIONS = {
     httpOnly: true,
@@ -36,13 +37,17 @@ const CLEAR_COOKIE_OPTIONS = {
 };
 
 // Access token cookie TTL: 15m = 900_000 ms (matches JWT_ACCESS_EXPIRY=15m).
-// If the env value is changed, this should be updated to match.
+// If the env value is changed, this must be updated to match.
 const ACCESS_TOKEN_MAX_AGE_MS = 15 * 60 * 1000; // 15 minutes
+
+// Refresh token cookie TTL: 1d = 86_400_000 ms (matches JWT_REFRESH_EXPIRY=1d).
+// SINGLE SOURCE OF TRUTH — change this value if JWT_REFRESH_EXPIRY changes.
+const REFRESH_TOKEN_MAX_AGE_MS = 1 * 24 * 60 * 60 * 1000; // 1 day
 
 /** Set both tokens as httpOnly cookies and return user info + accessToken in body. */
 const setAuthCookies = (res: Response, accessToken: string, refreshToken: string) => {
     res.cookie("vb_access_token", accessToken, accessCookieOptions(ACCESS_TOKEN_MAX_AGE_MS));
-    res.cookie("refreshToken", refreshToken, REFRESH_COOKIE_OPTIONS);
+    res.cookie("refreshToken", refreshToken, makeRefreshCookieOptions());
 };
 
 export const register = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -86,7 +91,7 @@ export const refresh = async (req: Request, res: Response, next: NextFunction): 
         const tokens = await authService.refreshAccessToken(refreshToken);
         // Rotate BOTH cookies — old refresh token is invalidated in the DB by the service
         res.cookie("vb_access_token", tokens.accessToken, accessCookieOptions(ACCESS_TOKEN_MAX_AGE_MS));
-        res.cookie("refreshToken", tokens.refreshToken, REFRESH_COOKIE_OPTIONS);
+        res.cookie("refreshToken", tokens.refreshToken, makeRefreshCookieOptions());
         res.status(200).json(apiResponse(200, "Token refreshed", { accessToken: tokens.accessToken }));
     } catch (error) {
         next(error);

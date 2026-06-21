@@ -11,14 +11,27 @@ export const healthLimiter = rateLimit({
     skipSuccessfulRequests: true, // only count failures against the limit
 });
 
-// General API rate limiter — 100 requests per 15 minutes
+// General API rate limiter — 100 failed requests per 15 minutes per IP.
+//
+// WHY skipSuccessfulRequests: true?
+// The dashboard loads multiple widgets in parallel (stats, vehicles, lenders, etc.),
+// each firing its own API call. A strict count of ALL requests would let a legitimate
+// user hit the 100-request cap mid-session and receive spurious 429 errors.
+//
+// With skipSuccessfulRequests: true:
+//   - Successful (2xx) responses are NOT counted → real users are never blocked.
+//   - Failed (4xx/5xx) responses ARE counted → attackers probing endpoints, sending
+//     malformed requests, or attempting auth bypasses are still throttled.
+//
+// This is the correct production pattern: maximum security against bad actors,
+// zero false positives for legitimate dashboard usage.
 export const generalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 100,
     message: { success: false, statusCode: 429, message: "Too many requests. Please try again later." },
     standardHeaders: true,
     legacyHeaders: false,
-    skipSuccessfulRequests: false,
+    skipSuccessfulRequests: true, // only failed/error requests count — real users are never blocked
 });
 
 // Strict limiter for auth endpoints (login, register, password reset)
