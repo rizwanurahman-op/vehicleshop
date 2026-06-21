@@ -23,7 +23,7 @@
  *  → setClientSession(accessToken):
  *      - stores expiry in localStorage for proactive refresh
  *      - calls POST /api/session to set httpOnly cookie on Vercel domain
- *  → Next.js middleware reads vb_access_token cookie → allows access
+ *  → Next.js middleware reads vb_access_token cookie → allows accesss
  */
 
 const EXPIRY_KEY = "vb_token_expiry";
