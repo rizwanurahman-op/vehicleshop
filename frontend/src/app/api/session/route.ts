@@ -18,12 +18,19 @@ import { NextRequest, NextResponse } from "next/server";
  * Security:
  * - The token is NOT stored in JavaScript-accessible storage.
  * - It is set as httpOnly — browser JS cannot read it.
- * - It has the same TTL as the JWT (15 minutes).
+ * - TTL matches the refresh token (1 day), NOT the access token (15 min).
+ *   Reason: The middleware only needs to know the user is logged in.
+ *   Actual access-token validity is enforced by the backend on every API call.
+ *   Using a 15-minute TTL caused navigation-based logouts in production:
+ *   the middleware redirect fires before the client-side refresh hook can run.
  * - SameSite=Lax is required (Strict would break cross-site navigation flows).
  */
 
 const IS_PROD = process.env.NODE_ENV === "production";
-const ACCESS_TOKEN_MAX_AGE_SECONDS = 15 * 60; // 15 minutes — must match JWT_ACCESS_EXPIRY
+// 1 day — matches JWT_REFRESH_EXPIRY on the backend.
+// The middleware only checks "is the user logged in?" — not token validity.
+// Actual access-token expiry is enforced by the backend on every authenticated request.
+const SESSION_COOKIE_MAX_AGE_SECONDS = 24 * 60 * 60; // 1 day
 
 // POST /api/session — set the session cookie after login / token refresh
 export async function POST(request: NextRequest) {
@@ -43,7 +50,9 @@ export async function POST(request: NextRequest) {
             // but some navigation flows come from external redirects.
             sameSite: "lax",
             path: "/",
-            maxAge: ACCESS_TOKEN_MAX_AGE_SECONDS,
+            // 1-day TTL: middleware only needs to know user is logged in.
+            // The backend validates the actual access token on every API call.
+            maxAge: SESSION_COOKIE_MAX_AGE_SECONDS,
         });
         return response;
     } catch {
