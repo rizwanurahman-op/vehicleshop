@@ -8,13 +8,21 @@ const IS_PROD = env.NODE_ENV === "production";
 
 // ─── Cookie option factories ──────────────────────────────────────────────────
 // Must match exactly when clearing — browser won't clear cookie unless options align.
+//
+// WHY SameSite=None in production:
+// The frontend (Vercel) and backend (Render) are on DIFFERENT domains.
+// SameSite=Strict or Lax causes the browser to silently DROP cookies on
+// cross-origin requests, even with withCredentials:true. This makes
+// the refreshToken invisible to the backend → every /auth/refresh returns 401.
+// SameSite=None + Secure=true is the ONLY correct setting for cross-domain cookies.
 
 // Access token: httpOnly so JavaScript cannot read/steal it (XSS mitigation).
 // Kept short-lived (matches JWT_ACCESS_EXPIRY) — renewed silently by /auth/refresh.
 const accessCookieOptions = (maxAge: number) => ({
-    httpOnly: true,                                                // ← XSS protection: JS cannot read this
+    httpOnly: true,
     secure: IS_PROD,                                               // HTTPS-only in production
-    sameSite: (IS_PROD ? "strict" : "lax") as "strict" | "lax",  // CSRF mitigation
+    // SameSite=None required for cross-domain (Vercel → Render). Lax for localhost.
+    sameSite: (IS_PROD ? "none" : "lax") as "none" | "lax",
     path: "/",
     maxAge,
 });
@@ -24,7 +32,8 @@ const accessCookieOptions = (maxAge: number) => ({
 const makeRefreshCookieOptions = () => ({
     httpOnly: true,
     secure: IS_PROD,
-    sameSite: (IS_PROD ? "strict" : "lax") as "strict" | "lax",
+    // SameSite=None required for cross-domain (Vercel → Render). Lax for localhost.
+    sameSite: (IS_PROD ? "none" : "lax") as "none" | "lax",
     path: "/",
     maxAge: REFRESH_TOKEN_MAX_AGE_MS, // 1 day — matches JWT_REFRESH_EXPIRY
 });
@@ -32,9 +41,11 @@ const makeRefreshCookieOptions = () => ({
 const CLEAR_COOKIE_OPTIONS = {
     httpOnly: true,
     secure: IS_PROD,
-    sameSite: (IS_PROD ? "strict" : "lax") as "strict" | "lax",
+    // Must match the options used when setting — browser ignores mismatched clear requests.
+    sameSite: (IS_PROD ? "none" : "lax") as "none" | "lax",
     path: "/",
 };
+
 
 // Access token cookie TTL: 15m = 900_000 ms (matches JWT_ACCESS_EXPIRY=15m).
 // If the env value is changed, this must be updated to match.
