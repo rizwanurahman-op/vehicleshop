@@ -26,9 +26,21 @@ import apiClient from "@config/axios";
  * or the expiry timestamp stored in localStorage.
  */
 export function useTokenRefresh() {
-    const { clearSession, setSession, user, accessToken } = useSessionStore();
+    const { clearSession, setSession } = useSessionStore();
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const isRefreshingRef = useRef(false);
+
+    // Use refs to read the latest values without causing effect re-runs
+    const userRef = useRef(useSessionStore.getState().user);
+    const accessTokenRef = useRef(useSessionStore.getState().accessToken);
+
+    // Keep refs in sync with store changes (without adding to useCallback deps)
+    useEffect(() => {
+        return useSessionStore.subscribe((state) => {
+            userRef.current = state.user;
+            accessTokenRef.current = state.accessToken;
+        });
+    }, []);
 
     const forceLogout = useCallback(async () => {
         await clearClientSession();
@@ -45,8 +57,9 @@ export function useTokenRefresh() {
             const newToken = data?.data?.accessToken;
             if (newToken) {
                 // Store new token in Zustand memory and record expiry for next schedule
-                if (user) {
-                    setSession(user, newToken);
+                const currentUser = userRef.current;
+                if (currentUser) {
+                    setSession(currentUser, newToken);
                 }
                 await setClientSession(newToken); // records expiry in localStorage
                 // Keep axios default header in sync
@@ -60,7 +73,7 @@ export function useTokenRefresh() {
         } finally {
             isRefreshingRef.current = false;
         }
-    }, [forceLogout, setSession, user]);
+    }, [forceLogout, setSession]);
 
     /** Schedule a refresh to fire 2 minutes before the token expires. */
     const scheduleRefresh = useCallback(() => {
@@ -68,7 +81,7 @@ export function useTokenRefresh() {
 
         const msLeft = msUntilTokenExpiry();
         // If already expired or no in-memory token, try immediately
-        if (msLeft <= 0 || !accessToken) {
+        if (msLeft <= 0 || !accessTokenRef.current) {
             silentRefresh().then(scheduleRefresh);
             return;
         }
@@ -80,7 +93,7 @@ export function useTokenRefresh() {
         timerRef.current = setTimeout(() => {
             silentRefresh().then(scheduleRefresh);
         }, delay);
-    }, [silentRefresh, accessToken]);
+    }, [silentRefresh]); // accessToken removed — read via ref to avoid re-render loop
 
     useEffect(() => {
         // 1. Schedule a refresh for ~2 min before expiry on mount
@@ -89,7 +102,7 @@ export function useTokenRefresh() {
         // 2. On tab focus: if token has < 5 min left (or is missing), refresh now
         const FOCUS_THRESHOLD_MS = 5 * 60 * 1000;
         const handleFocus = () => {
-            if (msUntilTokenExpiry() < FOCUS_THRESHOLD_MS || !accessToken) {
+            if (msUntilTokenExpiry() < FOCUS_THRESHOLD_MS || !accessTokenRef.current) {
                 silentRefresh().then(scheduleRefresh);
             }
         };
@@ -100,5 +113,5 @@ export function useTokenRefresh() {
             window.removeEventListener("focus", handleFocus);
             if (timerRef.current) clearTimeout(timerRef.current);
         };
-    }, [scheduleRefresh, silentRefresh, accessToken]);
+    }, [scheduleRefresh, silentRefresh]); // accessToken removed from deps — stops infinite loop
 }
